@@ -57,25 +57,15 @@ function Session() {
     }
   }, [session?.iterations.length])
 
-  // Pre-fill subject: use last iteration's prompt extract, or suggested test prompt
+  // Pre-fill subject: use suggested test prompt (only when no iterations yet)
   useEffect(() => {
     if (!subject && session) {
-      // First, try to get subject from last iteration
-      if (session.iterations.length > 0) {
-        const lastIteration = session.iterations[session.iterations.length - 1]
-        if (lastIteration.prompt_used) {
-          // Extract a reasonable subject from the prompt (first sentence or 100 chars)
-          const extracted = lastIteration.prompt_used.split('.')[0].slice(0, 100)
-          setSubject(extracted)
-          return
-        }
-      }
-      // Otherwise, use suggested test prompt
+      // Use suggested test prompt for first iteration
       if (session.style_profile?.profile?.suggested_test_prompt) {
         setSubject(session.style_profile.profile.suggested_test_prompt)
       }
     }
-  }, [session?.iterations.length, session?.style_profile?.profile?.suggested_test_prompt])
+  }, [session?.style_profile?.profile?.suggested_test_prompt])
 
   const extractMutation = useMutation({
     mutationFn: () => extractStyle(sessionId!),
