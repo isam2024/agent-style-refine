@@ -10,6 +10,7 @@ import {
   applyProfileUpdate,
   finalizeStyle,
   runAutoImprove,
+  stopAutoImprove,
 } from '../api/client'
 import { StyleProfile, IterationStepResult } from '../types'
 import SideBySide from '../components/SideBySide'
@@ -151,6 +152,14 @@ function Session() {
       }
     },
     onError: () => setActiveStep(null),
+  })
+
+  const stopAutoImproveMutation = useMutation({
+    mutationFn: () => stopAutoImprove(sessionId!),
+    onSuccess: () => {
+      // Refresh session to see the updated state
+      queryClient.invalidateQueries({ queryKey: ['session', sessionId] })
+    },
   })
 
   // Handle feedback and auto-continue the loop
@@ -480,14 +489,26 @@ function Session() {
                     <span className="text-sm text-slate-700 font-medium w-12">{maxIterations}</span>
                   </div>
 
-                  {/* Auto-Improve Button */}
-                  <button
-                    onClick={() => autoImproveMutation.mutate()}
-                    disabled={!subject.trim() || autoImproveMutation.isPending}
-                    className="w-full px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 font-medium"
-                  >
-                    {autoImproveMutation.isPending ? 'Auto-Improving...' : '🚀 Auto-Improve'}
-                  </button>
+                  {/* Auto-Improve / Stop Buttons */}
+                  <div className="flex gap-2">
+                    {!autoImproveMutation.isPending ? (
+                      <button
+                        onClick={() => autoImproveMutation.mutate()}
+                        disabled={!subject.trim()}
+                        className="flex-1 px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 font-medium"
+                      >
+                        🚀 Auto-Improve
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => stopAutoImproveMutation.mutate()}
+                        disabled={stopAutoImproveMutation.isPending}
+                        className="flex-1 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 font-medium"
+                      >
+                        {stopAutoImproveMutation.isPending ? 'Stopping...' : '🛑 Stop Training'}
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
@@ -584,13 +605,14 @@ function Session() {
       </div>
 
       {/* Error Display */}
-      {(extractMutation.isError || iterateMutation.isError || reextractMutation.isError || finalizeMutation.isError || autoImproveMutation.isError) && (
+      {(extractMutation.isError || iterateMutation.isError || reextractMutation.isError || finalizeMutation.isError || autoImproveMutation.isError || stopAutoImproveMutation.isError) && (
         <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg">
           {(extractMutation.error as Error)?.message ||
             (iterateMutation.error as Error)?.message ||
             (reextractMutation.error as Error)?.message ||
             (finalizeMutation.error as Error)?.message ||
-            (autoImproveMutation.error as Error)?.message}
+            (autoImproveMutation.error as Error)?.message ||
+            (stopAutoImproveMutation.error as Error)?.message}
         </div>
       )}
 

@@ -233,6 +233,20 @@ export async function runAutoImprove(
   });
 }
 
+export async function stopAutoImprove(
+  sessionId: string
+): Promise<{
+  session_id: string;
+  message: string;
+}> {
+  return fetchJson(`${API_BASE}/iterate/stop`, {
+    method: 'POST',
+    body: JSON.stringify({
+      session_id: sessionId,
+    }),
+  });
+}
+
 // Health
 export async function checkHealth(): Promise<{
   status: string;

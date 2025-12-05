@@ -28,6 +28,10 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/iterate", tags=["iteration"])
 
+# In-memory store for stop requests (session_id -> bool)
+# This allows users to gracefully stop auto-improve loops via UI button
+_stop_requests = {}
+
 
 @router.post("/step")
 async def run_iteration_step(
@@ -596,6 +600,21 @@ async def run_auto_improve(
         await log(f"=== Iteration {iteration_num}/{data.max_iterations} ===", "info", "iteration")
         await manager.broadcast_progress(session_id, "auto-improve", int((i / data.max_iterations) * 100), f"Iteration {iteration_num}")
 
+        # Check if user requested stop
+        if _stop_requests.get(session_id, False):
+            await log(f"Training stopped by user at iteration {iteration_num}", "warning", "stop")
+            await write_debug(f"\n{'='*60}\nTRAINING STOPPED BY USER at iteration {iteration_num}\n{'='*60}\n")
+            _stop_requests.pop(session_id, None)  # Clear the flag
+            session.status = SessionStatus.READY.value
+            await db.commit()
+            return {
+                "iterations_run": len(results),
+                "results": results,
+                "final_score": results[-1].get("overall_score") if results else None,
+                "stopped_by_user": True,
+                "message": f"Training stopped by user at iteration {iteration_num}",
+            }
+
         # Refresh session data
         await db.refresh(session)
         result = await db.execute(
@@ -1060,4 +1079,39 @@ async def run_auto_improve(
         "final_score": results[-1].get("overall_score") if results else None,
         "best_score": best_score,
         "target_reached": (best_score >= data.target_score) if best_score else False,
+    }
+
+
+@router.post("/stop")
+async def stop_auto_improve(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Request graceful stop of auto-improve loop for a session.
+    The loop will finish the current iteration and exit cleanly.
+    """
+    # Verify session exists
+    result = await db.execute(
+        select(Session).where(Session.id == session_id)
+    )
+    session = result.scalar_one_or_none()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    # Set stop flag
+    _stop_requests[session_id] = True
+
+    logger.info(f"Stop requested for session {session_id}")
+    await manager.broadcast_log(
+        session_id,
+        "Stop requested - training will halt after current iteration completes",
+        "warning",
+        "stop"
+    )
+
+    return {
+        "session_id": session_id,
+        "message": "Stop requested - training will halt after current iteration completes",
     }
