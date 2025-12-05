@@ -17,6 +17,30 @@ NC='\033[0m' # No Color
 BACKEND_PORT=1443
 FRONTEND_PORT=1442
 
+# Stop any existing services on our ports
+stop_services() {
+    echo -e "${YELLOW}Stopping existing services...${NC}"
+
+    # Kill processes on backend port
+    local backend_pid=$(lsof -ti:$BACKEND_PORT 2>/dev/null)
+    if [ -n "$backend_pid" ]; then
+        echo -e "  Stopping backend (PID: $backend_pid)..."
+        kill $backend_pid 2>/dev/null || kill -9 $backend_pid 2>/dev/null
+        sleep 1
+    fi
+
+    # Kill processes on frontend port
+    local frontend_pid=$(lsof -ti:$FRONTEND_PORT 2>/dev/null)
+    if [ -n "$frontend_pid" ]; then
+        echo -e "  Stopping frontend (PID: $frontend_pid)..."
+        kill $frontend_pid 2>/dev/null || kill -9 $frontend_pid 2>/dev/null
+        sleep 1
+    fi
+
+    echo -e "  ${GREEN}✓ Ports cleared${NC}"
+    echo ""
+}
+
 # Log file
 LOG_DIR="$PROJECT_DIR/logs"
 mkdir -p "$LOG_DIR"
@@ -150,6 +174,7 @@ check_services() {
 
 # Run backend only
 run_backend() {
+    stop_services
     echo -e "${BLUE}Starting backend on http://localhost:${BACKEND_PORT}${NC}"
     echo -e "${YELLOW}Logs: ${BACKEND_LOG}${NC}"
     echo ""
@@ -166,6 +191,7 @@ run_backend() {
 
 # Run frontend only
 run_frontend() {
+    stop_services
     echo -e "${BLUE}Starting frontend on http://localhost:${FRONTEND_PORT}${NC}"
     echo -e "${YELLOW}Logs: ${FRONTEND_LOG}${NC}"
     echo ""
@@ -175,6 +201,7 @@ run_frontend() {
 
 # Run both in parallel
 run_all() {
+    stop_services
     echo -e "${BLUE}Starting services...${NC}"
     echo -e "  Backend log:  ${BACKEND_LOG}"
     echo -e "  Frontend log: ${FRONTEND_LOG}"
@@ -283,6 +310,10 @@ case "${1:-}" in
         ;;
     frontend)
         run_frontend
+        ;;
+    stop)
+        stop_services
+        echo -e "${GREEN}Services stopped.${NC}"
         ;;
     check)
         check_services
