@@ -137,17 +137,24 @@ function Session() {
 
   // Handle feedback and auto-continue the loop
   const handleApprove = async (notes?: string) => {
-    if (!latestResult) return
+    // Use latestResult if available, otherwise use selectedIteration
+    const iterationId = latestResult?.iteration_id || selectedIteration?.id
+    if (!iterationId) return
 
     // Submit feedback
     await feedbackMutation.mutateAsync({
-      iterationId: latestResult.iteration_id,
+      iterationId,
       approved: true,
       notes,
     })
 
-    // Apply the updated profile
-    await applyUpdateMutation.mutateAsync(latestResult.updated_profile)
+    // Apply the updated profile if available from latestResult
+    if (latestResult?.updated_profile) {
+      await applyUpdateMutation.mutateAsync(latestResult.updated_profile)
+    }
+
+    // Refresh session data
+    queryClient.invalidateQueries({ queryKey: ['session', sessionId] })
 
     // Auto-trigger next iteration
     setLatestResult(null)
@@ -155,14 +162,19 @@ function Session() {
   }
 
   const handleReject = async (notes?: string) => {
-    if (!latestResult) return
+    // Use latestResult if available, otherwise use selectedIteration
+    const iterationId = latestResult?.iteration_id || selectedIteration?.id
+    if (!iterationId) return
 
     // Submit feedback (don't apply profile update)
     await feedbackMutation.mutateAsync({
-      iterationId: latestResult.iteration_id,
+      iterationId,
       approved: false,
       notes,
     })
+
+    // Refresh session data
+    queryClient.invalidateQueries({ queryKey: ['session', sessionId] })
 
     // Auto-trigger next iteration with same subject
     setLatestResult(null)
@@ -438,6 +450,12 @@ function Session() {
             <div className="bg-white rounded-xl border border-slate-200 p-4">
               <h3 className="text-sm font-medium text-slate-700 mb-3">
                 Iteration #{selectedIteration.iteration_num}
+                {selectedIteration.approved === true && (
+                  <span className="ml-2 text-xs text-green-600">✓ Approved</span>
+                )}
+                {selectedIteration.approved === false && (
+                  <span className="ml-2 text-xs text-red-500">✗ Rejected</span>
+                )}
               </h3>
               {selectedIteration.scores && (
                 <div className="space-y-2 mb-4">
@@ -459,11 +477,33 @@ function Session() {
                 </div>
               )}
               {selectedIteration.prompt_used && (
-                <div>
+                <div className="mb-4">
                   <p className="text-xs text-slate-500 uppercase mb-1">Prompt Used</p>
                   <p className="text-xs text-slate-600 bg-slate-50 p-2 rounded">
                     {selectedIteration.prompt_used}
                   </p>
+                </div>
+              )}
+              {/* Show approve/reject for unvoted iterations */}
+              {selectedIteration.approved === null && (
+                <div className="border-t border-slate-200 pt-4 mt-4">
+                  <p className="text-xs text-slate-500 uppercase mb-3">Feedback Required</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleApprove()}
+                      disabled={feedbackMutation.isPending || iterateMutation.isPending}
+                      className="flex-1 px-3 py-2 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600 disabled:opacity-50"
+                    >
+                      ✓ Approve
+                    </button>
+                    <button
+                      onClick={() => handleReject()}
+                      disabled={feedbackMutation.isPending || iterateMutation.isPending}
+                      className="flex-1 px-3 py-2 bg-red-500 text-white text-sm font-medium rounded-lg hover:bg-red-600 disabled:opacity-50"
+                    >
+                      ✗ Reject
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
