@@ -146,6 +146,50 @@ IMPORTANT:
             for inv in profile_dict["core_invariants"]:
                 await log(f"  • {inv}")
 
+        # MECHANICAL BASELINE CONSTRUCTION - Override VLM's suggested_test_prompt
+        # VLM-generated prompts contain style contamination (colors, moods, textures)
+        # Build a PURE IDENTITY baseline from extracted structural fields
+        await log("Building mechanical identity baseline (suggested_test_prompt)...")
+
+        original_subject = profile_dict.get("original_subject", "")
+        composition = profile_dict.get("composition", {})
+
+        # Build baseline from structural components only
+        baseline_parts = []
+
+        if original_subject:
+            baseline_parts.append(original_subject)
+
+        if composition.get("framing"):
+            baseline_parts.append(composition["framing"])
+
+        if composition.get("structural_notes"):
+            baseline_parts.append(composition["structural_notes"])
+
+        # Assemble mechanical baseline
+        if baseline_parts:
+            mechanical_baseline = ", ".join(baseline_parts)
+
+            # Store VLM's original attempt (for debugging/comparison)
+            vlm_suggested = profile_dict.get("suggested_test_prompt", "")
+            if vlm_suggested:
+                await log(f"VLM baseline (discarded): {vlm_suggested[:80]}...", "warning")
+
+            # Replace with mechanical baseline
+            profile_dict["suggested_test_prompt"] = mechanical_baseline
+            await log(f"Mechanical baseline: {mechanical_baseline[:100]}...", "success")
+
+            # OPTION 3 ENHANCEMENT (future): Validation VLM call
+            # Uncomment to add secondary identity-only VLM refinement:
+            #
+            # validation_prompt = f"Describe ONLY the structural identity: {mechanical_baseline}. Add any pose/orientation details. NO style words."
+            # vlm_validation = await vlm_service.analyze(validation_prompt, [image_b64])
+            # if not contains_style_words(vlm_validation):
+            #     profile_dict["suggested_test_prompt"] = vlm_validation
+            #     await log(f"VLM-refined baseline: {vlm_validation[:100]}...", "success")
+        else:
+            await log("Insufficient structural data for mechanical baseline, keeping VLM baseline", "warning")
+
         # Extract natural language image description (reverse prompt)
         await log("Extracting natural language image description...")
         try:

@@ -50,7 +50,7 @@ Analyze the provided image and extract its characteristics. Output ONLY valid JS
     "forbidden_elements": []
   },
   "original_subject": "LITERAL IDENTITY: Describe exactly WHAT is shown using specific, concrete terms. Not 'a character' but 'a black cat'. Not 'flowing elements' but 'whiskers extending from face'. Be precise about the actual subject matter in 15-30 words.",
-  "suggested_test_prompt": "Write a CONCRETE image generation prompt (40-60 words) that describes the SAME scene you see in this image. Describe it as if instructing an artist to recreate it: specific subject, exact setting, objects present, lighting conditions, mood, colors. Do NOT use vague terms like 'similar to' or 'different angle' - describe the actual visual content you see."
+  "suggested_test_prompt": "STRUCTURAL IDENTITY BASELINE (30-50 words): Describe ONLY structure/position/arrangement. NO style words (colors, moods, textures, lighting quality). ONLY: subject type, pose, orientation, position, spatial arrangement, framing, background elements. Example: 'Black cat facing left, centered in frame, whiskers extending horizontally from face, circular framing, abstract shapes positioned in background layer'. Do NOT include: 'flowing', 'organic', 'vivid', 'deep navy', 'painterly', or any aesthetic/style descriptions."
 }
 ```
 
@@ -93,8 +93,11 @@ CRITICAL INSTRUCTIONS - IDENTITY LOCK PROTOCOL:
 
 6. **Suggested Test Prompt = REPLICATION BASELINE:**
    - This prompt should regenerate THIS specific image, not a variation
-   - Include literal subject, exact pose, spatial arrangement
-   - This is the zero-drift baseline for measuring iterations
+   - CRITICAL: Use ONLY structural language (NO style adjectives)
+   - Wrong: "flowing organic shapes with deep navy colors" ← style contamination
+   - Right: "abstract shapes positioned in background layer" ← structure only
+   - NOTE: This field will be mechanically reconstructed from other fields as safety measure
+   - Your structural-only description serves as validation/fallback
 
 7. **What Happens After Extraction:**
    - The extracted profile will be used to REPLICATE this exact image
