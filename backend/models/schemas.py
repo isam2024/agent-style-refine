@@ -68,6 +68,10 @@ class StyleProfile(BaseModel):
     lighting: LightingSchema
     composition: CompositionSchema
     motifs: MotifsSchema
+    suggested_test_prompt: str | None = Field(
+        default=None,
+        description="A suggested prompt/subject to test this style with"
+    )
 
 
 # Critique Result

@@ -44,6 +44,7 @@ export interface StyleProfile {
   lighting: LightingSchema;
   composition: CompositionSchema;
   motifs: MotifsSchema;
+  suggested_test_prompt?: string | null;
 }
 
 export interface CritiqueResult {

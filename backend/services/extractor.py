@@ -187,7 +187,8 @@ IMPORTANT:
             "motifs": {
                 "recurring_elements": [],
                 "forbidden_elements": []
-            }
+            },
+            "suggested_test_prompt": "A solitary figure in a misty landscape"
         }
 
         # Try to extract style name

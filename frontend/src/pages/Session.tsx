@@ -44,6 +44,17 @@ function Session() {
     }
   }, [session?.iterations.length])
 
+  // Pre-fill subject with suggested test prompt when style is first extracted
+  useEffect(() => {
+    if (
+      session?.style_profile?.profile?.suggested_test_prompt &&
+      !subject &&
+      session.iterations.length === 0
+    ) {
+      setSubject(session.style_profile.profile.suggested_test_prompt)
+    }
+  }, [session?.style_profile?.profile?.suggested_test_prompt])
+
   const extractMutation = useMutation({
     mutationFn: () => extractStyle(sessionId!),
     onMutate: () => setActiveStep('extracting'),
