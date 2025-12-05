@@ -2,6 +2,7 @@ import base64
 import io
 import logging
 from collections import Counter
+import colorsys
 
 from PIL import Image
 
@@ -11,10 +12,7 @@ logger = logging.getLogger(__name__)
 def extract_colors_from_b64(image_b64: str, num_colors: int = 5) -> dict:
     """
     Extract dominant colors from a base64 encoded image using PIL.
-    Uses k-means style clustering for better color representation.
-
-    Returns:
-        dict with dominant_colors, accents, and color_descriptions
+    Uses direct pixel sampling and clustering for accurate color representation.
     """
     # Remove data URL prefix if present
     if "," in image_b64:
@@ -25,108 +23,130 @@ def extract_colors_from_b64(image_b64: str, num_colors: int = 5) -> dict:
     image = Image.open(io.BytesIO(image_data))
 
     # Convert to RGB if necessary
-    if image.mode != "RGB":
-        image = image.convert("RGB")
+    if image.mode in ("RGBA", "P", "LA", "L"):
+        # Create white background for transparency
+        if image.mode in ("RGBA", "LA", "P"):
+            background = Image.new("RGB", image.size, (255, 255, 255))
+            if image.mode == "P":
+                image = image.convert("RGBA")
+            background.paste(image, mask=image.split()[-1] if image.mode == "RGBA" else None)
+            image = background
+        else:
+            image = image.convert("RGB")
 
     logger.info(f"Image size: {image.size}, mode: {image.mode}")
 
-    # Resize for faster processing - but not too small
-    max_size = 200
-    image.thumbnail((max_size, max_size))
+    # Resize for processing - keep reasonable size for accuracy
+    max_size = 256
+    if max(image.size) > max_size:
+        image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
 
-    # Get all pixels
+    width, height = image.size
     pixels = list(image.getdata())
-    logger.info(f"Total pixels: {len(pixels)}")
+    total_pixels = len(pixels)
 
-    # Use PIL's built-in quantize for better color clustering
-    # This uses median cut algorithm for better color selection
-    try:
-        # Quantize to a small palette
-        quantized_img = image.quantize(colors=16, method=Image.Quantize.MEDIANCUT)
-        palette = quantized_img.getpalette()
+    logger.info(f"Processing {total_pixels} pixels")
 
-        # Extract RGB tuples from palette (first 16 colors * 3 channels)
-        palette_colors = []
-        for i in range(16):
-            r = palette[i * 3]
-            g = palette[i * 3 + 1]
-            b = palette[i * 3 + 2]
-            palette_colors.append((r, g, b))
+    # Sample pixels evenly across the image for better representation
+    # Instead of just counting, we'll bin colors in HSV space
+    color_bins = {}
 
-        # Count how many pixels use each palette color
-        quantized_pixels = list(quantized_img.getdata())
-        color_counts = Counter(quantized_pixels)
+    for pixel in pixels:
+        r, g, b = pixel[:3]
 
-        # Map palette indices to actual colors with their counts
-        colors_with_counts = []
-        for idx, count in color_counts.most_common():
-            if idx < len(palette_colors):
-                colors_with_counts.append((palette_colors[idx], count))
+        # Convert to HSV for better color grouping
+        h, s, v = colorsys.rgb_to_hsv(r/255, g/255, b/255)
 
-        logger.info(f"Quantized palette colors: {[c[0] for c in colors_with_counts[:5]]}")
+        # Quantize in HSV space (more perceptually uniform)
+        # Hue: 12 bins (30 degrees each)
+        # Saturation: 4 bins
+        # Value: 4 bins
+        h_bin = int(h * 12) % 12
+        s_bin = min(int(s * 4), 3)
+        v_bin = min(int(v * 4), 3)
 
-    except Exception as e:
-        logger.warning(f"Quantize failed: {e}, falling back to manual clustering")
-        # Fallback: Use manual quantization with smaller steps
-        def quantize(color):
-            # Round to nearest 8 (less aggressive than 16)
-            return tuple((c // 8) * 8 for c in color)
+        bin_key = (h_bin, s_bin, v_bin)
 
-        quantized = [quantize(p) for p in pixels]
-        color_counts_raw = Counter(quantized)
-        colors_with_counts = [(color, count) for color, count in color_counts_raw.most_common(50)]
+        if bin_key not in color_bins:
+            color_bins[bin_key] = {"count": 0, "r_sum": 0, "g_sum": 0, "b_sum": 0}
 
-    # Filter to get diverse colors
-    filtered_colors = []
-    for color, count in colors_with_counts:
-        if len(filtered_colors) >= num_colors:
+        color_bins[bin_key]["count"] += 1
+        color_bins[bin_key]["r_sum"] += r
+        color_bins[bin_key]["g_sum"] += g
+        color_bins[bin_key]["b_sum"] += b
+
+    # Sort bins by count and get average color for each
+    sorted_bins = sorted(color_bins.items(), key=lambda x: x[1]["count"], reverse=True)
+
+    logger.info(f"Found {len(sorted_bins)} color bins")
+
+    # Extract diverse colors
+    extracted_colors = []
+
+    for bin_key, bin_data in sorted_bins:
+        if len(extracted_colors) >= num_colors:
             break
 
-        # Skip very dark colors (likely shadows/borders) unless we have few colors
-        h, s, v = rgb_to_hsv(color)
-        if v < 0.1 and len(filtered_colors) > 0:
+        count = bin_data["count"]
+        # Skip if less than 1% of image
+        if count < total_pixels * 0.01 and len(extracted_colors) > 0:
             continue
 
-        # Check if too similar to existing colors
+        # Calculate average color for this bin
+        avg_r = int(bin_data["r_sum"] / count)
+        avg_g = int(bin_data["g_sum"] / count)
+        avg_b = int(bin_data["b_sum"] / count)
+
+        color = (avg_r, avg_g, avg_b)
+
+        # Check for uniqueness
         is_unique = True
-        for existing in filtered_colors:
-            if color_distance(color, existing) < 40:  # Reduced threshold
+        for existing in extracted_colors:
+            if color_distance(color, existing) < 60:
                 is_unique = False
                 break
 
         if is_unique:
-            filtered_colors.append(color)
-            logger.info(f"Added color: {rgb_to_hex(color)} - {describe_color(color)}")
+            extracted_colors.append(color)
+            hex_color = rgb_to_hex(color)
+            desc = describe_color(color)
+            logger.info(f"Extracted: {hex_color} ({desc}) - {count} pixels ({count*100/total_pixels:.1f}%)")
 
-    # If we still don't have enough colors, be less picky
-    if len(filtered_colors) < 3:
-        logger.info("Not enough unique colors, relaxing constraints...")
-        for color, count in colors_with_counts:
-            if len(filtered_colors) >= num_colors:
+    # If we still need more colors, relax constraints
+    if len(extracted_colors) < 3:
+        logger.info("Relaxing uniqueness constraints...")
+        for bin_key, bin_data in sorted_bins:
+            if len(extracted_colors) >= num_colors:
                 break
-            if color not in filtered_colors:
+            count = bin_data["count"]
+            avg_r = int(bin_data["r_sum"] / count)
+            avg_g = int(bin_data["g_sum"] / count)
+            avg_b = int(bin_data["b_sum"] / count)
+            color = (avg_r, avg_g, avg_b)
+
+            if color not in extracted_colors:
                 is_unique = True
-                for existing in filtered_colors:
-                    if color_distance(color, existing) < 20:
+                for existing in extracted_colors:
+                    if color_distance(color, existing) < 30:
                         is_unique = False
                         break
                 if is_unique:
-                    filtered_colors.append(color)
+                    extracted_colors.append(color)
 
     # Convert to hex
-    hex_colors = [rgb_to_hex(c) for c in filtered_colors]
-    logger.info(f"Final hex colors: {hex_colors}")
+    hex_colors = [rgb_to_hex(c) for c in extracted_colors]
+    logger.info(f"Final colors: {hex_colors}")
 
     # Split into dominant (first 3) and accents (rest)
     dominant = hex_colors[:3] if len(hex_colors) >= 3 else hex_colors
     accents = hex_colors[3:5] if len(hex_colors) > 3 else []
 
     # Generate color descriptions
-    descriptions = [describe_color(c) for c in filtered_colors[:3]]
+    descriptions = [describe_color(c) for c in extracted_colors[:3]]
 
     # Calculate overall saturation and value
-    avg_saturation = calculate_avg_saturation(filtered_colors[:5])
-    value_range = calculate_value_range(filtered_colors[:5])
+    avg_saturation = calculate_avg_saturation(extracted_colors[:5])
+    value_range = calculate_value_range(extracted_colors[:5])
 
     return {
         "dominant_colors": dominant,
@@ -139,7 +159,7 @@ def extract_colors_from_b64(image_b64: str, num_colors: int = 5) -> dict:
 
 def rgb_to_hex(rgb: tuple) -> str:
     """Convert RGB tuple to hex string."""
-    return "#{:02x}{:02x}{:02x}".format(*rgb)
+    return "#{:02x}{:02x}{:02x}".format(rgb[0], rgb[1], rgb[2])
 
 
 def hex_to_rgb(hex_str: str) -> tuple:
@@ -150,127 +170,86 @@ def hex_to_rgb(hex_str: str) -> tuple:
 
 def color_distance(c1: tuple, c2: tuple) -> float:
     """Calculate Euclidean distance between two RGB colors."""
-    return sum((a - b) ** 2 for a, b in zip(c1, c2)) ** 0.5
+    return ((c1[0]-c2[0])**2 + (c1[1]-c2[1])**2 + (c1[2]-c2[2])**2) ** 0.5
 
 
 def rgb_to_hsv(rgb: tuple) -> tuple:
-    """Convert RGB to HSV."""
+    """Convert RGB to HSV (0-360, 0-1, 0-1)."""
     r, g, b = rgb[0] / 255, rgb[1] / 255, rgb[2] / 255
-    max_c = max(r, g, b)
-    min_c = min(r, g, b)
-    diff = max_c - min_c
-
-    # Value
-    v = max_c
-
-    # Saturation
-    s = 0 if max_c == 0 else diff / max_c
-
-    # Hue
-    if diff == 0:
-        h = 0
-    elif max_c == r:
-        h = 60 * ((g - b) / diff % 6)
-    elif max_c == g:
-        h = 60 * ((b - r) / diff + 2)
-    else:
-        h = 60 * ((r - g) / diff + 4)
-
-    return (h, s, v)
+    h, s, v = colorsys.rgb_to_hsv(r, g, b)
+    return (h * 360, s, v)
 
 
 def describe_color(rgb: tuple) -> str:
     """Generate a human-readable color description."""
     h, s, v = rgb_to_hsv(rgb)
 
-    # Determine lightness/darkness
-    if v < 0.15:
-        lightness = "very dark"
-    elif v < 0.35:
-        lightness = "dark"
-    elif v < 0.65:
-        lightness = "medium"
-    elif v < 0.85:
-        lightness = "light"
-    else:
-        lightness = "very light"
-
-    # Determine saturation descriptor
-    if s < 0.15:
-        sat_desc = "gray"
-    elif s < 0.35:
-        sat_desc = "muted"
-    elif s < 0.65:
-        sat_desc = "moderate"
-    else:
-        sat_desc = "vibrant"
-
-    # Determine hue name
-    if s < 0.15:
-        # Grayscale
+    # Check for grayscale first
+    if s < 0.12:
         if v < 0.15:
             return "black"
-        elif v < 0.35:
+        elif v < 0.30:
             return "charcoal"
-        elif v < 0.65:
+        elif v < 0.50:
+            return "dark gray"
+        elif v < 0.70:
             return "gray"
         elif v < 0.85:
-            return "silver"
+            return "light gray"
         else:
             return "white"
 
-    # Color names by hue
-    if h < 15 or h >= 345:
-        hue_name = "red"
-    elif h < 35:
-        hue_name = "orange"
-    elif h < 55:
-        hue_name = "gold"
-    elif h < 75:
-        hue_name = "yellow"
-    elif h < 95:
-        hue_name = "lime"
-    elif h < 150:
-        hue_name = "green"
-    elif h < 175:
-        hue_name = "teal"
-    elif h < 200:
-        hue_name = "cyan"
-    elif h < 230:
-        hue_name = "blue"
-    elif h < 260:
-        hue_name = "indigo"
-    elif h < 290:
-        hue_name = "purple"
-    elif h < 320:
-        hue_name = "magenta"
-    elif h < 345:
-        hue_name = "pink"
-    else:
-        hue_name = "red"
+    # Determine hue name with more granularity
+    hue_names = [
+        (15, "red"),
+        (35, "vermillion"),
+        (50, "orange"),
+        (65, "amber"),
+        (80, "yellow"),
+        (95, "lime"),
+        (140, "green"),
+        (170, "teal"),
+        (195, "cyan"),
+        (220, "azure"),
+        (250, "blue"),
+        (275, "violet"),
+        (300, "purple"),
+        (330, "magenta"),
+        (345, "rose"),
+        (360, "red"),
+    ]
 
-    # Combine descriptors based on what's most notable
-    if sat_desc == "vibrant":
-        if lightness in ["very dark", "dark"]:
-            return f"deep {hue_name}"
-        elif lightness in ["very light", "light"]:
+    hue_name = "red"
+    for threshold, name in hue_names:
+        if h < threshold:
+            hue_name = name
+            break
+
+    # Build description based on saturation and value
+    if s > 0.7:
+        # Vivid/saturated colors
+        if v > 0.7:
             return f"bright {hue_name}"
-        else:
+        elif v > 0.4:
             return f"vivid {hue_name}"
-    elif sat_desc == "muted":
-        if lightness in ["very dark", "dark"]:
-            return f"dark muted {hue_name}"
-        elif lightness in ["very light", "light"]:
-            return f"pale {hue_name}"
         else:
-            return f"dusty {hue_name}"
-    else:
-        if lightness in ["very dark", "dark"]:
-            return f"dark {hue_name}"
-        elif lightness in ["very light", "light"]:
-            return f"light {hue_name}"
-        else:
+            return f"deep {hue_name}"
+    elif s > 0.4:
+        # Moderate saturation
+        if v > 0.7:
+            return f"soft {hue_name}"
+        elif v > 0.4:
             return hue_name
+        else:
+            return f"dark {hue_name}"
+    else:
+        # Muted/desaturated
+        if v > 0.7:
+            return f"pale {hue_name}"
+        elif v > 0.4:
+            return f"dusty {hue_name}"
+        else:
+            return f"muted dark {hue_name}"
 
 
 def calculate_avg_saturation(colors: list) -> str:
@@ -314,8 +293,8 @@ def calculate_value_range(colors: list) -> str:
             return "mid-tones"
     else:
         if min_v < 0.3 and max_v > 0.7:
-            return "high contrast, dark to bright"
+            return "high contrast"
         elif min_v < 0.3:
-            return "dark base with highlights"
+            return "dark with highlights"
         else:
-            return "mid-tones to highlights"
+            return "mid to bright"

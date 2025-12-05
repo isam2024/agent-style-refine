@@ -5,6 +5,7 @@ from pathlib import Path
 from backend.services.vlm import vlm_service
 from backend.services.color_extractor import extract_colors_from_b64
 from backend.models.schemas import StyleProfile
+from backend.websocket import manager
 
 logger = logging.getLogger(__name__)
 
@@ -70,28 +71,35 @@ IMPORTANT:
 - Focus on reproducible visual characteristics.
 - Output ONLY the JSON, no explanation or markdown code blocks."""
 
-    async def extract(self, image_b64: str) -> StyleProfile:
+    async def extract(self, image_b64: str, session_id: str | None = None) -> StyleProfile:
         """
         Extract style profile from an image.
         Uses PIL for accurate color extraction and VLM for style analysis.
 
         Args:
             image_b64: Base64 encoded image
+            session_id: Optional session ID for WebSocket logging
 
         Returns:
             StyleProfile object
         """
+        async def log(msg: str, level: str = "info"):
+            logger.info(msg)
+            if session_id:
+                await manager.broadcast_log(session_id, msg, level, "extract")
+
         # Extract colors using PIL (accurate)
-        logger.info("Extracting colors using PIL...")
+        await log("Extracting colors using PIL...")
         try:
             pil_colors = extract_colors_from_b64(image_b64)
-            logger.info(f"PIL extracted colors: {pil_colors['dominant_colors']}")
+            color_list = ", ".join(pil_colors["color_descriptions"][:3])
+            await log(f"Found colors: {color_list}", "success")
         except Exception as e:
-            logger.warning(f"PIL color extraction failed: {e}")
+            await log(f"PIL color extraction failed: {e}", "warning")
             pil_colors = None
 
         # Get style analysis from VLM
-        logger.info("Analyzing style with VLM...")
+        await log("Sending image to VLM for analysis...")
         prompt = self._load_prompt()
 
         response = await vlm_service.analyze(
@@ -99,17 +107,26 @@ IMPORTANT:
             images=[image_b64],
         )
 
+        await log("Parsing VLM response...")
+
         # Parse JSON from response
         profile_dict = self._parse_json_response(response)
 
+        await log(f"Style identified: {profile_dict.get('style_name', 'Unknown')}", "success")
+
         # Override palette with PIL-extracted colors (more accurate)
         if pil_colors:
-            logger.info("Overriding VLM colors with PIL-extracted colors")
+            await log("Applying accurate PIL color data...")
             profile_dict["palette"]["dominant_colors"] = pil_colors["dominant_colors"]
             profile_dict["palette"]["accents"] = pil_colors["accents"]
             profile_dict["palette"]["color_descriptions"] = pil_colors["color_descriptions"]
             profile_dict["palette"]["saturation"] = pil_colors["saturation"]
             profile_dict["palette"]["value_range"] = pil_colors["value_range"]
+
+        # Log core invariants
+        if profile_dict.get("core_invariants"):
+            for inv in profile_dict["core_invariants"][:3]:
+                await log(f"Core trait: {inv}")
 
         return StyleProfile(**profile_dict)
 
@@ -188,7 +205,7 @@ IMPORTANT:
                 "recurring_elements": [],
                 "forbidden_elements": []
             },
-            "suggested_test_prompt": "A solitary figure in a misty landscape"
+            "suggested_test_prompt": "A weathered wooden boat resting on a pebble beach at golden hour, with gentle waves lapping at its hull, seabirds circling overhead, and a distant lighthouse silhouetted against the warm evening sky"
         }
 
         # Try to extract style name

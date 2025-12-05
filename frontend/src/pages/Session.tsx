@@ -14,7 +14,7 @@ import { StyleProfile, IterationStepResult } from '../types'
 import SideBySide from '../components/SideBySide'
 import StyleProfileView from '../components/StyleProfileView'
 import FeedbackPanel from '../components/FeedbackPanel'
-import ProgressIndicator from '../components/ProgressIndicator'
+import LogWindow from '../components/LogWindow'
 
 function Session() {
   const { sessionId } = useParams<{ sessionId: string }>()
@@ -183,8 +183,11 @@ function Session() {
         </div>
       </div>
 
-      {/* Progress Indicator */}
-      {activeStep && <ProgressIndicator step={activeStep} />}
+      {/* Log Window - shows during any active operation */}
+      <LogWindow
+        sessionId={sessionId!}
+        isActive={!!activeStep}
+      />
 
       {/* Main Content */}
       <div className="grid grid-cols-12 gap-6">

@@ -8,6 +8,7 @@ from backend.models.schemas import ExtractionRequest, StyleProfile, SessionStatu
 from backend.models.db_models import Session, StyleProfileDB
 from backend.services.storage import storage_service
 from backend.services.extractor import style_extractor
+from backend.websocket import manager
 
 router = APIRouter(prefix="/api/extract", tags=["extraction"])
 
@@ -18,14 +19,19 @@ async def extract_style(
     db: AsyncSession = Depends(get_db),
 ):
     """Extract style profile from a session's original image."""
+    session_id = data.session_id
+
     # Get session
-    result = await db.execute(select(Session).where(Session.id == data.session_id))
+    await manager.broadcast_log(session_id, "Looking up session...", "info", "extract")
+    result = await db.execute(select(Session).where(Session.id == session_id))
     session = result.scalar_one_or_none()
 
     if not session:
+        await manager.broadcast_log(session_id, "Session not found", "error", "extract")
         raise HTTPException(status_code=404, detail="Session not found")
 
     if not session.original_image_path:
+        await manager.broadcast_log(session_id, "No original image found", "error", "extract")
         raise HTTPException(status_code=400, detail="Session has no original image")
 
     # Update status
@@ -33,11 +39,29 @@ async def extract_style(
     await db.commit()
 
     try:
-        # Load image and extract style
+        # Load image
+        await manager.broadcast_log(session_id, "Loading original image...", "info", "extract")
+        await manager.broadcast_progress(session_id, "extract", 10, "Loading image")
         image_b64 = await storage_service.load_image_raw(session.original_image_path)
-        style_profile = await style_extractor.extract(image_b64)
 
-        # Save to database as version 1
+        # Extract colors
+        await manager.broadcast_log(session_id, "Extracting color palette with PIL...", "info", "extract")
+        await manager.broadcast_progress(session_id, "extract", 20, "Extracting colors")
+
+        # Extract style via VLM
+        await manager.broadcast_log(session_id, "Connecting to Ollama VLM...", "info", "extract")
+        await manager.broadcast_progress(session_id, "extract", 30, "Connecting to VLM")
+
+        await manager.broadcast_log(session_id, "Sending image to VLM for style analysis...", "info", "extract")
+        await manager.broadcast_progress(session_id, "extract", 40, "Analyzing style")
+
+        style_profile = await style_extractor.extract(image_b64, session_id)
+
+        await manager.broadcast_log(session_id, f"Extracted style: {style_profile.style_name}", "success", "extract")
+        await manager.broadcast_progress(session_id, "extract", 80, "Style extracted")
+
+        # Save to database
+        await manager.broadcast_log(session_id, "Saving style profile to database...", "info", "extract")
         profile_db = StyleProfileDB(
             session_id=session.id,
             version=1,
@@ -48,9 +72,15 @@ async def extract_style(
         session.status = SessionStatus.READY.value
         await db.commit()
 
+        await manager.broadcast_log(session_id, "Style extraction complete!", "success", "extract")
+        await manager.broadcast_progress(session_id, "extract", 100, "Complete")
+        await manager.broadcast_complete(session_id)
+
         return style_profile
 
     except Exception as e:
+        await manager.broadcast_log(session_id, f"Error: {str(e)}", "error", "extract")
+        await manager.broadcast_error(session_id, str(e))
         session.status = SessionStatus.ERROR.value
         await db.commit()
         raise HTTPException(status_code=500, detail=str(e))

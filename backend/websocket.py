@@ -1,5 +1,6 @@
 import json
 import asyncio
+import time
 from typing import Dict, Set
 from fastapi import WebSocket, WebSocketDisconnect
 
@@ -54,6 +55,26 @@ class ConnectionManager:
                 "step": step,
                 "progress": progress,
                 "message": message,
+                "timestamp": time.time(),
+            },
+        )
+
+    async def broadcast_log(
+        self,
+        session_id: str,
+        message: str,
+        level: str = "info",
+        step: str = None,
+    ):
+        """Broadcast a detailed log message."""
+        await self.send_to_session(
+            session_id,
+            "log",
+            {
+                "message": message,
+                "level": level,  # info, success, warning, error
+                "step": step,
+                "timestamp": time.time(),
             },
         )
 
@@ -62,7 +83,7 @@ class ConnectionManager:
         await self.send_to_session(
             session_id,
             "error",
-            {"error": error},
+            {"error": error, "timestamp": time.time()},
         )
 
     async def broadcast_complete(self, session_id: str, result: dict = None):
@@ -70,7 +91,7 @@ class ConnectionManager:
         await self.send_to_session(
             session_id,
             "complete",
-            result,
+            {"result": result, "timestamp": time.time()},
         )
 
 
