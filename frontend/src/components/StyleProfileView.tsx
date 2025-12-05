@@ -22,6 +22,14 @@ function StyleProfileView({ profile }: StyleProfileViewProps) {
 
       <h4 className="font-medium text-slate-800 mb-2">{profile.style_name}</h4>
 
+      {/* Original Subject */}
+      {profile.original_subject && (
+        <div className="mb-3 p-2 bg-slate-50 rounded-lg">
+          <p className="text-xs text-slate-500 uppercase mb-1">Original Subject</p>
+          <p className="text-sm text-slate-700">{profile.original_subject}</p>
+        </div>
+      )}
+
       {/* Core Invariants */}
       <div className="mb-3">
         <p className="text-xs text-slate-500 uppercase mb-1">Core Invariants</p>

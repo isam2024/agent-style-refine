@@ -41,7 +41,8 @@ Analyze the provided image and extract its visual style characteristics. Output 
     "recurring_elements": ["visual elements that characterize this style, not specific subjects"],
     "forbidden_elements": ["elements that would break this style's coherence"]
   },
-  "suggested_test_prompt": "A DETAILED scene description (30-50 words) perfect for testing this style. Include: specific subject, setting details, time of day, weather/atmosphere, and 2-3 style-appropriate details. Must be DIFFERENT from the original image content but match its visual aesthetic perfectly."
+  "original_subject": "Describe WHAT is depicted in this image (the subject matter, scene, characters, objects) in 10-20 words",
+  "suggested_test_prompt": "A DETAILED scene description (30-50 words) featuring the SAME or very similar subject matter as the original image. Describe the same type of subject/scene/character but with slight variations (different pose, angle, or minor details). This allows direct style comparison. Include setting, atmosphere, and style-appropriate details."
 }
 ```
 

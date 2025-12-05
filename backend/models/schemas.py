@@ -68,9 +68,13 @@ class StyleProfile(BaseModel):
     lighting: LightingSchema
     composition: CompositionSchema
     motifs: MotifsSchema
+    original_subject: str | None = Field(
+        default=None,
+        description="What is depicted in the original image (subject matter)"
+    )
     suggested_test_prompt: str | None = Field(
         default=None,
-        description="A suggested prompt/subject to test this style with"
+        description="A suggested prompt featuring similar subject matter for style comparison"
     )
 
 
