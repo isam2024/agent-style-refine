@@ -458,36 +458,53 @@ async def run_auto_improve(
         await log("No original image found", "error")
         raise HTTPException(status_code=400, detail="No original image found")
 
-    # Initialize debug log file
+    # Initialize debug log file - write header immediately
     debug_log_path = storage_service.get_session_dir(session.id) / "auto_improve_debug.txt"
-    debug_lines = []
-    debug_lines.append("=" * 80)
-    debug_lines.append(f"AUTO-IMPROVE DEBUG LOG")
-    debug_lines.append(f"Session: {session.id} - {session.name}")
-    debug_lines.append(f"Subject: {data.subject}")
-    debug_lines.append(f"Target Score: {data.target_score}, Max Iterations: {data.max_iterations}")
-    debug_lines.append(f"Started: {datetime.utcnow().isoformat()}")
-    debug_lines.append("=" * 80)
-    debug_lines.append("")
+
+    async def write_debug(content: str, mode: str = 'a'):
+        """Helper to write debug info incrementally"""
+        try:
+            import aiofiles
+            async with aiofiles.open(debug_log_path, mode) as f:
+                await f.write(content + '\n')
+        except Exception as e:
+            logger.error(f"Failed to write debug log: {e}")
+
+    # Write header immediately
+    header = []
+    header.append("=" * 80)
+    header.append(f"AUTO-IMPROVE DEBUG LOG")
+    header.append(f"Session: {session.id} - {session.name}")
+    header.append(f"Subject: {data.subject}")
+    header.append(f"Target Score: {data.target_score}, Max Iterations: {data.max_iterations}")
+    header.append(f"Started: {datetime.utcnow().isoformat()}")
+    header.append("=" * 80)
+    header.append("")
+
+    await write_debug('\n'.join(header), mode='w')  # Overwrite existing file
 
     # Load original image once
     original_b64 = await storage_service.load_image_raw(session.original_image_path)
 
     # Compute training insights from existing iterations
     training_insights = auto_improver.compute_training_insights(session.iterations)
+
+    insights = []
     if training_insights.get("historical_best"):
         await log(f"Historical best score: {training_insights['historical_best']:.1f}", "info", "insights")
-        debug_lines.append(f"\n--- Training Insights ---")
-        debug_lines.append(f"Historical Best Score: {training_insights['historical_best']:.1f}")
+        insights.append(f"\n--- Training Insights ---")
+        insights.append(f"Historical Best Score: {training_insights['historical_best']:.1f}")
     if training_insights.get("dimension_averages"):
-        debug_lines.append(f"Dimension Averages: {', '.join([f'{k}={v:.1f}' for k, v in training_insights['dimension_averages'].items() if k != 'overall'])}")
+        insights.append(f"Dimension Averages: {', '.join([f'{k}={v:.1f}' for k, v in training_insights['dimension_averages'].items() if k != 'overall'])}")
     if training_insights.get("frequently_lost_traits"):
         await log(f"Frequently lost traits: {', '.join(training_insights['frequently_lost_traits'][:3])}", "warning", "insights")
-        debug_lines.append(f"Frequently Lost Traits: {', '.join(training_insights['frequently_lost_traits'][:5])}")
+        insights.append(f"Frequently Lost Traits: {', '.join(training_insights['frequently_lost_traits'][:5])}")
 
-    debug_lines.append(f"\nPrevious Iterations: {len(session.iterations)}")
-    debug_lines.append(f"Latest Style Profile Version: {max((sp.version for sp in session.style_profiles), default=0)}")
-    debug_lines.append("")
+    insights.append(f"\nPrevious Iterations: {len(session.iterations)}")
+    insights.append(f"Latest Style Profile Version: {max((sp.version for sp in session.style_profiles), default=0)}")
+    insights.append("")
+
+    await write_debug('\n'.join(insights))
 
     results = []
     baseline_scores = None  # Track scores from current iteration for weak dimension detection
@@ -558,51 +575,52 @@ async def run_auto_improve(
             )
 
             # DEBUG: Log comprehensive VLM metadata and decision analysis (to console AND file)
-            debug_lines.append(f"\n{'='*60}")
-            debug_lines.append(f"ITERATION {iteration_num}")
-            debug_lines.append(f"{'='*60}")
+            iter_debug = []
+            iter_debug.append(f"\n{'='*60}")
+            iter_debug.append(f"ITERATION {iteration_num}")
+            iter_debug.append(f"{'='*60}")
 
             # Feedback history context
-            debug_lines.append(f"\nFeedback History: {len(feedback_history)} approved iterations")
+            iter_debug.append(f"\nFeedback History: {len(feedback_history)} approved iterations")
             if feedback_history:
                 recent = feedback_history[-3:]  # Last 3 approved iterations
-                debug_lines.append(f"Recent feedback context:")
+                iter_debug.append(f"Recent feedback context:")
                 for fb in recent:
                     approval = "✓" if fb.get("approved") else "✗"
                     notes = fb.get("notes", "")[:50]
-                    debug_lines.append(f"  Iteration {fb['iteration']}: {approval} - {notes}")
+                    iter_debug.append(f"  Iteration {fb['iteration']}: {approval} - {notes}")
 
             # Weak dimensions and focus areas
             if iteration_result["weak_dimensions"]:
-                debug_lines.append(f"\nWeak Dimensions Targeted: {', '.join(iteration_result['weak_dimensions'])}")
+                iter_debug.append(f"\nWeak Dimensions Targeted: {', '.join(iteration_result['weak_dimensions'])}")
             if iteration_result["focused_areas"]:
-                debug_lines.append(f"Focused Areas: {', '.join(iteration_result['focused_areas'])}")
+                iter_debug.append(f"Focused Areas: {', '.join(iteration_result['focused_areas'])}")
 
             # Image generation prompt
-            debug_lines.append(f"\n--- Image Generation Prompt ({len(iteration_result['prompt_used'])} chars) ---")
-            debug_lines.append(iteration_result['prompt_used'][:500] + ("..." if len(iteration_result['prompt_used']) > 500 else ""))
+            iter_debug.append(f"\n--- Image Generation Prompt ({len(iteration_result['prompt_used'])} chars) ---")
+            iter_debug.append(iteration_result['prompt_used'][:500] + ("..." if len(iteration_result['prompt_used']) > 500 else ""))
 
             # VLM Critique Analysis
-            debug_lines.append(f"\n--- VLM Critique Analysis ---")
-            debug_lines.append(f"Overall Score: {new_scores.get('overall', 0)}")
-            debug_lines.append(f"Dimension Scores: {', '.join([f'{k}={v}' for k, v in new_scores.items() if k != 'overall'])}")
+            iter_debug.append(f"\n--- VLM Critique Analysis ---")
+            iter_debug.append(f"Overall Score: {new_scores.get('overall', 0)}")
+            iter_debug.append(f"Dimension Scores: {', '.join([f'{k}={v}' for k, v in new_scores.items() if k != 'overall'])}")
 
             if iteration_result["critique"].preserved_traits:
-                debug_lines.append(f"\n✓ Preserved Traits ({len(iteration_result['critique'].preserved_traits)}):")
+                iter_debug.append(f"\n✓ Preserved Traits ({len(iteration_result['critique'].preserved_traits)}):")
                 for trait in iteration_result["critique"].preserved_traits[:10]:
-                    debug_lines.append(f"  - {trait}")
+                    iter_debug.append(f"  - {trait}")
                 if len(iteration_result["critique"].preserved_traits) > 10:
-                    debug_lines.append(f"  ... and {len(iteration_result['critique'].preserved_traits) - 10} more")
+                    iter_debug.append(f"  ... and {len(iteration_result['critique'].preserved_traits) - 10} more")
 
             if iteration_result["critique"].lost_traits:
-                debug_lines.append(f"\n✗ Lost Traits ({len(iteration_result['critique'].lost_traits)}):")
+                iter_debug.append(f"\n✗ Lost Traits ({len(iteration_result['critique'].lost_traits)}):")
                 for trait in iteration_result["critique"].lost_traits:
-                    debug_lines.append(f"  - {trait}")
+                    iter_debug.append(f"  - {trait}")
 
             if iteration_result["critique"].interesting_mutations:
-                debug_lines.append(f"\n~ Interesting Mutations ({len(iteration_result['critique'].interesting_mutations)}):")
+                iter_debug.append(f"\n~ Interesting Mutations ({len(iteration_result['critique'].interesting_mutations)}):")
                 for mutation in iteration_result["critique"].interesting_mutations[:5]:
-                    debug_lines.append(f"  - {mutation}")
+                    iter_debug.append(f"  - {mutation}")
 
             await log(f"[DEBUG] Overall Score: {new_scores.get('overall', 0)}", "info", "debug")
             await log(f"[DEBUG] Dimension Scores: {', '.join([f'{k}={v}' for k, v in new_scores.items() if k != 'overall'])}", "info", "debug")
@@ -611,21 +629,21 @@ async def run_auto_improve(
             if eval_analysis.get("dimension_improvements"):
                 improved = [f"{d}({'+' if delta > 0 else ''}{delta:.0f})" for d, delta in eval_analysis["dimension_improvements"].items() if abs(delta) > 2]
                 if improved:
-                    debug_lines.append(f"Dimension Changes vs History: {', '.join(improved)}")
+                    iter_debug.append(f"Dimension Changes vs History: {', '.join(improved)}")
                     await log(f"[DEBUG] Dimension Changes vs History: {', '.join(improved)}", "info", "debug")
 
             # DEBUG: Log vs best approved
             if eval_analysis.get("best_approved_score"):
                 vs_best = f"vs Best Approved: {eval_analysis.get('improvement', 0):+.0f} ({eval_analysis['best_approved_score']} → {new_scores.get('overall', 0)})"
-                debug_lines.append(vs_best)
+                iter_debug.append(vs_best)
                 await log(f"[DEBUG] {vs_best}", "info", "debug")
 
             # DEBUG: Log approval decision details
-            debug_lines.append(f"\n--- Decision Analysis ---")
-            debug_lines.append(f"  - Meets targets (Tier 1): {eval_analysis.get('meets_targets', False)}")
-            debug_lines.append(f"  - Incremental improvement (Tier 2): {eval_analysis.get('improves_incrementally', False)} (need +3)")
-            debug_lines.append(f"  - Net progress (Tier 2b): {eval_analysis.get('net_progress', False)}")
-            debug_lines.append(f"  - First iteration: {best_approved_score is None}")
+            iter_debug.append(f"\n--- Decision Analysis ---")
+            iter_debug.append(f"  - Meets targets (Tier 1): {eval_analysis.get('meets_targets', False)}")
+            iter_debug.append(f"  - Incremental improvement (Tier 2): {eval_analysis.get('improves_incrementally', False)} (need +3)")
+            iter_debug.append(f"  - Net progress (Tier 2b): {eval_analysis.get('net_progress', False)}")
+            iter_debug.append(f"  - First iteration: {best_approved_score is None}")
 
             await log(f"[DEBUG] Decision Analysis:", "info", "debug")
             await log(f"  - Meets targets (Tier 1): {eval_analysis.get('meets_targets', False)}", "info", "debug")
@@ -635,42 +653,45 @@ async def run_auto_improve(
 
             if eval_analysis.get('subject_drift_failures'):
                 drift_msg = f"  - Subject drift detected: {eval_analysis['subject_drift_failures'][:1]}"
-                debug_lines.append(drift_msg)
+                iter_debug.append(drift_msg)
                 await log(drift_msg, "warning", "debug")
             if eval_analysis.get('catastrophic_failures'):
                 cat_msg = f"  - Catastrophic failures: {eval_analysis['catastrophic_failures']}"
-                debug_lines.append(cat_msg)
+                iter_debug.append(cat_msg)
                 await log(cat_msg, "error", "debug")
 
             # Log evaluation
             decision_status = "✓ APPROVED" if should_approve else "✗ REJECTED"
-            debug_lines.append(f"\n{decision_status}: {eval_reason}")
+            iter_debug.append(f"\n{decision_status}: {eval_reason}")
 
             # DEBUG: Log current style profile being used
-            debug_lines.append(f"\n--- Style Profile (v{latest_profile_db.version}) ---")
-            debug_lines.append(f"Style Name: {style_profile.style_name}")
-            debug_lines.append(f"Core Invariants: {', '.join(style_profile.core_invariants[:5])}")
-            debug_lines.append(f"Palette: {', '.join(style_profile.palette.color_descriptions[:3])} (saturation: {style_profile.palette.saturation})")
-            debug_lines.append(f"Lighting: {style_profile.lighting.lighting_type}, shadows: {style_profile.lighting.shadows}")
-            debug_lines.append(f"Texture: {style_profile.texture.surface}, noise: {style_profile.texture.noise_level}")
-            debug_lines.append(f"Composition: {style_profile.composition.camera}, {style_profile.composition.framing}")
-            debug_lines.append(f"Line Quality: {style_profile.line_and_shape.line_quality}")
+            iter_debug.append(f"\n--- Style Profile (v{latest_profile_db.version}) ---")
+            iter_debug.append(f"Style Name: {style_profile.style_name}")
+            iter_debug.append(f"Core Invariants: {', '.join(style_profile.core_invariants[:5])}")
+            iter_debug.append(f"Palette: {', '.join(style_profile.palette.color_descriptions[:3])} (saturation: {style_profile.palette.saturation})")
+            iter_debug.append(f"Lighting: {style_profile.lighting.lighting_type}, shadows: {style_profile.lighting.shadows}")
+            iter_debug.append(f"Texture: {style_profile.texture.surface}, noise: {style_profile.texture.noise_level}")
+            iter_debug.append(f"Composition: {style_profile.composition.camera}, {style_profile.composition.framing}")
+            iter_debug.append(f"Line Quality: {style_profile.line_and_shape.line_quality}")
 
             # DEBUG: Log VLM's updated style profile suggestions
             if iteration_result["critique"].updated_style_profile:
                 updated = iteration_result["critique"].updated_style_profile
-                debug_lines.append(f"\n--- VLM Updated Style Profile (suggested changes) ---")
+                iter_debug.append(f"\n--- VLM Updated Style Profile (suggested changes) ---")
                 # Check for changes in key areas
                 if updated.palette.color_descriptions != style_profile.palette.color_descriptions:
-                    debug_lines.append(f"Palette change: {', '.join(updated.palette.color_descriptions[:3])}")
+                    iter_debug.append(f"Palette change: {', '.join(updated.palette.color_descriptions[:3])}")
                 if updated.lighting.lighting_type != style_profile.lighting.lighting_type:
-                    debug_lines.append(f"Lighting change: {updated.lighting.lighting_type}")
+                    iter_debug.append(f"Lighting change: {updated.lighting.lighting_type}")
                 if updated.texture.surface != style_profile.texture.surface:
-                    debug_lines.append(f"Texture change: {updated.texture.surface}")
+                    iter_debug.append(f"Texture change: {updated.texture.surface}")
                 if updated.composition.camera != style_profile.composition.camera:
-                    debug_lines.append(f"Composition change: {updated.composition.camera}")
+                    iter_debug.append(f"Composition change: {updated.composition.camera}")
                 if updated.line_and_shape.line_quality != style_profile.line_and_shape.line_quality:
-                    debug_lines.append(f"Line quality change: {updated.line_and_shape.line_quality}")
+                    iter_debug.append(f"Line quality change: {updated.line_and_shape.line_quality}")
+
+            # Write this iteration's debug info to file immediately
+            await write_debug('\n'.join(iter_debug))
 
             if should_approve:
                 await log(f"✓ {eval_reason}", "success", "evaluation")
@@ -820,41 +841,37 @@ async def run_auto_improve(
 
     # DEBUG: Log score progression summary
     await log("=== SCORE PROGRESSION SUMMARY ===", "info", "summary")
-    debug_lines.append("\n" + "=" * 80)
-    debug_lines.append("SCORE PROGRESSION SUMMARY")
-    debug_lines.append("=" * 80)
+
+    summary = []
+    summary.append("\n" + "=" * 80)
+    summary.append("SCORE PROGRESSION SUMMARY")
+    summary.append("=" * 80)
 
     for idx, result in enumerate(results, 1):
         status = "✓ APPROVED" if result.get("approved") else "✗ REJECTED"
         overall = result.get("overall_score", "N/A")
         await log(f"Iteration {idx}: Overall {overall} - {status}", "info", "summary")
-        debug_lines.append(f"\nIteration {idx}: Overall {overall} - {status}")
+        summary.append(f"\nIteration {idx}: Overall {overall} - {status}")
 
         if result.get("scores"):
             dim_str = ", ".join([f"{k}={v}" for k, v in result["scores"].items() if k != "overall"])
             await log(f"  Dimensions: {dim_str}", "info", "summary")
-            debug_lines.append(f"  Dimensions: {dim_str}")
+            summary.append(f"  Dimensions: {dim_str}")
         if result.get("eval_reason"):
             await log(f"  Reason: {result['eval_reason']}", "info", "summary")
-            debug_lines.append(f"  Reason: {result['eval_reason']}")
+            summary.append(f"  Reason: {result['eval_reason']}")
 
-    # Write debug log to disk
-    debug_lines.append("\n" + "=" * 80)
-    debug_lines.append(f"Completed: {datetime.utcnow().isoformat()}")
-    debug_lines.append(f"Total: {len(results)} iterations ({approved_count} approved, {rejected_count} rejected)")
-    debug_lines.append(f"Best score: {best_score if best_score else 'N/A'}")
-    debug_lines.append(f"Target reached: {(best_score >= data.target_score) if best_score else False}")
-    debug_lines.append("=" * 80)
+    # Write final summary to debug log
+    summary.append("\n" + "=" * 80)
+    summary.append(f"Completed: {datetime.utcnow().isoformat()}")
+    summary.append(f"Total: {len(results)} iterations ({approved_count} approved, {rejected_count} rejected)")
+    summary.append(f"Best score: {best_score if best_score else 'N/A'}")
+    summary.append(f"Target reached: {(best_score >= data.target_score) if best_score else False}")
+    summary.append("=" * 80)
 
-    try:
-        import aiofiles
-        async with aiofiles.open(debug_log_path, 'w') as f:
-            await f.write('\n'.join(debug_lines))
-        await log(f"Debug log written to: {debug_log_path}", "success", "debug")
-        logger.info(f"DEBUG LOG WRITTEN TO: {debug_log_path}")
-    except Exception as e:
-        await log(f"ERROR writing debug log: {e}", "error", "debug")
-        logger.error(f"Failed to write debug log to {debug_log_path}: {e}")
+    await write_debug('\n'.join(summary))
+    await log(f"Debug log written to: {debug_log_path}", "success", "debug")
+    logger.info(f"DEBUG LOG WRITTEN TO: {debug_log_path}")
 
     await manager.broadcast_progress(session_id, "complete", 100, "Auto-Improve complete")
     await manager.broadcast_complete(session_id)
