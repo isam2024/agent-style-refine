@@ -195,6 +195,38 @@ export async function runAutoMode(
   });
 }
 
+export async function runAutoImprove(
+  sessionId: string,
+  subject: string,
+  targetScore: number = 85,
+  maxIterations: number = 10,
+  creativityLevel: number = 50
+): Promise<{
+  iterations_run: number;
+  results: Array<{
+    iteration_num: number;
+    overall_score?: number;
+    weak_dimensions?: string[];
+    focused_areas?: string[];
+    scores?: Record<string, number>;
+    error?: string;
+  }>;
+  final_score: number | null;
+  target_reached: boolean;
+}> {
+  return fetchJson(`${API_BASE}/iterate/auto-improve`, {
+    method: 'POST',
+    timeout: LONG_TIMEOUT, // Can take a long time
+    body: JSON.stringify({
+      session_id: sessionId,
+      subject,
+      target_score: targetScore,
+      max_iterations: maxIterations,
+      creativity_level: creativityLevel,
+    }),
+  });
+}
+
 // Health
 export async function checkHealth(): Promise<{
   status: string;

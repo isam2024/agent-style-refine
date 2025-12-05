@@ -3,12 +3,11 @@ import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   listStyles,
-  getStyle,
   writePrompt,
   writeAndGenerate,
   getGenerationHistory,
 } from '../api/client'
-import { PromptWriteResponse, PromptGenerateResponse, GenerationHistoryResponse } from '../types'
+import { PromptWriteResponse, PromptGenerateResponse } from '../types'
 
 function PromptWriter() {
   const { styleId: urlStyleId } = useParams<{ styleId?: string }>()
@@ -34,12 +33,6 @@ function PromptWriter() {
   const { data: styles } = useQuery({
     queryKey: ['styles'],
     queryFn: () => listStyles(),
-  })
-
-  const { data: selectedStyle } = useQuery({
-    queryKey: ['style', selectedStyleId],
-    queryFn: () => getStyle(selectedStyleId!),
-    enabled: !!selectedStyleId,
   })
 
   const { data: history, isLoading: historyLoading } = useQuery({

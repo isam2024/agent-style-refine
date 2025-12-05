@@ -177,6 +177,15 @@ class AutoModeRequest(BaseModel):
     creativity_level: int = Field(default=50, ge=0, le=100)
 
 
+class AutoImproveRequest(BaseModel):
+    """Request for intelligent auto-iteration that focuses on weak dimensions."""
+    session_id: str
+    subject: str
+    target_score: int = Field(default=85, ge=0, le=100, description="Stop when overall score reaches this")
+    max_iterations: int = Field(default=10, ge=1, le=30, description="Maximum iterations to run")
+    creativity_level: int = Field(default=50, ge=0, le=100, description="Creativity level for generation")
+
+
 # WebSocket Messages
 class WSMessage(BaseModel):
     event: str

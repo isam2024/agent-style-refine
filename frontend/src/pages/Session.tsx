@@ -9,6 +9,7 @@ import {
   submitFeedback,
   applyProfileUpdate,
   finalizeStyle,
+  runAutoImprove,
 } from '../api/client'
 import { StyleProfile, IterationStepResult } from '../types'
 import SideBySide from '../components/SideBySide'
@@ -36,6 +37,8 @@ function Session() {
   const [showFinalizeModal, setShowFinalizeModal] = useState(false)
   const [styleName, setStyleName] = useState('')
   const [styleDescription, setStyleDescription] = useState('')
+  const [targetScore, setTargetScore] = useState(85)
+  const [maxIterations, setMaxIterations] = useState(10)
 
   const { data: session, isLoading } = useQuery({
     queryKey: ['session', sessionId],
@@ -133,6 +136,21 @@ function Session() {
       queryClient.invalidateQueries({ queryKey: ['session', sessionId] })
       setLatestResult(null)
     },
+  })
+
+  const autoImproveMutation = useMutation({
+    mutationFn: () =>
+      runAutoImprove(sessionId!, subject, targetScore, maxIterations, creativityLevel),
+    onMutate: () => setActiveStep('auto-improving'),
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['session', sessionId] })
+      setActiveStep(null)
+      // Show the latest iteration
+      if (session?.iterations.length) {
+        setCurrentIteration(session.iterations.length + result.iterations_run)
+      }
+    },
+    onError: () => setActiveStep(null),
   })
 
   // Handle feedback and auto-continue the loop
@@ -419,6 +437,59 @@ function Session() {
                 />
                 <span className="text-sm text-slate-500 w-8">{creativityLevel}</span>
               </div>
+
+              {/* Auto-Improve Controls */}
+              <div className="mt-4 pt-4 border-t border-slate-200">
+                <div className="flex items-center justify-between mb-3">
+                  <div>
+                    <h4 className="text-sm font-medium text-slate-700">Auto-Improve Mode</h4>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Run multiple iterations, focusing on weak dimensions
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  {/* Target Score */}
+                  <div className="flex items-center gap-4">
+                    <label className="text-sm text-slate-600 w-24">Target Score:</label>
+                    <input
+                      type="range"
+                      min="60"
+                      max="95"
+                      step="5"
+                      value={targetScore}
+                      onChange={(e) => setTargetScore(Number(e.target.value))}
+                      className="flex-1"
+                    />
+                    <span className="text-sm text-slate-700 font-medium w-12">{targetScore}%</span>
+                  </div>
+
+                  {/* Max Iterations */}
+                  <div className="flex items-center gap-4">
+                    <label className="text-sm text-slate-600 w-24">Max Iterations:</label>
+                    <input
+                      type="range"
+                      min="3"
+                      max="20"
+                      step="1"
+                      value={maxIterations}
+                      onChange={(e) => setMaxIterations(Number(e.target.value))}
+                      className="flex-1"
+                    />
+                    <span className="text-sm text-slate-700 font-medium w-12">{maxIterations}</span>
+                  </div>
+
+                  {/* Auto-Improve Button */}
+                  <button
+                    onClick={() => autoImproveMutation.mutate()}
+                    disabled={!subject.trim() || autoImproveMutation.isPending}
+                    className="w-full px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 font-medium"
+                  >
+                    {autoImproveMutation.isPending ? 'Auto-Improving...' : '🚀 Auto-Improve'}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
         </div>
@@ -513,12 +584,13 @@ function Session() {
       </div>
 
       {/* Error Display */}
-      {(extractMutation.isError || iterateMutation.isError || reextractMutation.isError || finalizeMutation.isError) && (
+      {(extractMutation.isError || iterateMutation.isError || reextractMutation.isError || finalizeMutation.isError || autoImproveMutation.isError) && (
         <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg">
           {(extractMutation.error as Error)?.message ||
             (iterateMutation.error as Error)?.message ||
             (reextractMutation.error as Error)?.message ||
-            (finalizeMutation.error as Error)?.message}
+            (finalizeMutation.error as Error)?.message ||
+            (autoImproveMutation.error as Error)?.message}
         </div>
       )}
 

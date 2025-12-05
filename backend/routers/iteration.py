@@ -11,6 +11,7 @@ from backend.models.schemas import (
     IterationRequest,
     FeedbackRequest,
     AutoModeRequest,
+    AutoImproveRequest,
     StyleProfile,
     SessionStatus,
 )
@@ -19,6 +20,7 @@ from backend.services.storage import storage_service
 from backend.services.agent import style_agent
 from backend.services.comfyui import comfyui_service
 from backend.services.critic import style_critic
+from backend.services.auto_improver import auto_improver
 from backend.websocket import manager
 
 logger = logging.getLogger(__name__)
@@ -414,4 +416,192 @@ async def run_auto_mode(
         "iterations_run": len(results),
         "results": results,
         "final_score": results[-1].get("overall_score") if results else None,
+    }
+
+
+@router.post("/auto-improve")
+async def run_auto_improve(
+    data: AutoImproveRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Run intelligent auto-iteration that focuses on improving weak dimensions.
+    Analyzes each iteration's scores and adjusts focus to address weaknesses.
+    """
+    session_id = data.session_id
+
+    async def log(msg: str, level: str = "info", step: str = "auto-improve"):
+        logger.info(f"[{step}] {msg}")
+        await manager.broadcast_log(session_id, msg, level, step)
+
+    await log(f"Starting Auto-Improve mode (target: {data.target_score}, max: {data.max_iterations})", "info")
+
+    # Get session with all related data
+    result = await db.execute(
+        select(Session)
+        .options(selectinload(Session.style_profiles), selectinload(Session.iterations))
+        .where(Session.id == data.session_id)
+    )
+    session = result.scalar_one_or_none()
+
+    if not session:
+        await log("Session not found", "error")
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if not session.style_profiles:
+        await log("No style profile found - extract style first", "error")
+        raise HTTPException(status_code=400, detail="No style profile found")
+
+    if not session.original_image_path:
+        await log("No original image found", "error")
+        raise HTTPException(status_code=400, detail="No original image found")
+
+    # Load original image once
+    original_b64 = await storage_service.load_image_raw(session.original_image_path)
+
+    results = []
+    previous_scores = None
+
+    for i in range(data.max_iterations):
+        iteration_num = i + 1
+        await log(f"=== Iteration {iteration_num}/{data.max_iterations} ===", "info", "iteration")
+        await manager.broadcast_progress(session_id, "auto-improve", int((i / data.max_iterations) * 100), f"Iteration {iteration_num}")
+
+        # Refresh session data
+        await db.refresh(session)
+        result = await db.execute(
+            select(Session)
+            .options(
+                selectinload(Session.style_profiles),
+                selectinload(Session.iterations),
+            )
+            .where(Session.id == data.session_id)
+        )
+        session = result.scalar_one()
+
+        # Get latest style profile
+        latest_profile_db = max(session.style_profiles, key=lambda sp: sp.version)
+        style_profile = StyleProfile(**latest_profile_db.profile_json)
+
+        # Gather feedback history
+        feedback_history = []
+        for it in session.iterations:
+            if it.approved is not None or it.feedback:
+                entry = {
+                    "iteration": it.iteration_num,
+                    "approved": it.approved,
+                    "notes": it.feedback,
+                }
+                if it.critique_json:
+                    entry["preserved_traits"] = it.critique_json.get("preserved_traits", [])
+                    entry["lost_traits"] = it.critique_json.get("lost_traits", [])
+                feedback_history.append(entry)
+
+        try:
+            # Run focused iteration
+            session.status = SessionStatus.GENERATING.value
+            await db.commit()
+
+            iteration_result = await auto_improver.run_focused_iteration(
+                session_id=session_id,
+                subject=data.subject,
+                style_profile=style_profile,
+                original_image_b64=original_b64,
+                feedback_history=feedback_history,
+                previous_scores=previous_scores,
+                creativity_level=data.creativity_level,
+                log_fn=log,
+            )
+
+            # Save iteration
+            iteration_num_db = len(session.iterations) + 1
+            filename = storage_service.get_iteration_filename(iteration_num_db)
+            image_path = await storage_service.save_image(
+                session.id, iteration_result["image_b64"], filename
+            )
+
+            iteration = Iteration(
+                session_id=session.id,
+                iteration_num=iteration_num_db,
+                image_path=str(image_path),
+                prompt_used=iteration_result["prompt_used"],
+                scores_json=iteration_result["critique"].match_scores,
+                critique_json={
+                    "preserved_traits": iteration_result["critique"].preserved_traits,
+                    "lost_traits": iteration_result["critique"].lost_traits,
+                    "interesting_mutations": iteration_result["critique"].interesting_mutations,
+                },
+                approved=True,  # Auto-approved
+            )
+            db.add(iteration)
+            await db.flush()
+
+            # Apply updated profile
+            new_version = latest_profile_db.version + 1
+            new_profile_db = StyleProfileDB(
+                session_id=session.id,
+                version=new_version,
+                profile_json=iteration_result["critique"].updated_style_profile.model_dump(),
+            )
+            db.add(new_profile_db)
+
+            await db.commit()
+            await db.refresh(iteration)
+
+            # Store results
+            overall_score = iteration_result["critique"].match_scores.get("overall", 0)
+            previous_scores = iteration_result["critique"].match_scores
+
+            results.append({
+                "iteration_num": iteration_num_db,
+                "overall_score": overall_score,
+                "weak_dimensions": iteration_result["weak_dimensions"],
+                "focused_areas": iteration_result["focused_areas"],
+                "scores": iteration_result["critique"].match_scores,
+            })
+
+            # Check stopping conditions
+            should_continue, reason = auto_improver.should_continue(
+                current_score=overall_score,
+                target_score=data.target_score,
+                iteration=iteration_num,
+                max_iterations=data.max_iterations,
+            )
+
+            await log(reason, "success" if not should_continue else "info", "decision")
+
+            if not should_continue:
+                session.status = SessionStatus.COMPLETED.value
+                await db.commit()
+                break
+
+        except Exception as e:
+            error_msg = str(e)
+            error_tb = traceback.format_exc()
+            logger.error(f"Auto-improve iteration failed: {error_msg}\n{error_tb}")
+
+            await log(f"ERROR: {error_msg}", "error")
+            await manager.broadcast_error(session_id, error_msg)
+
+            session.status = SessionStatus.ERROR.value
+            await db.commit()
+
+            results.append({
+                "iteration_num": iteration_num,
+                "error": error_msg,
+            })
+            break
+
+    session.status = SessionStatus.READY.value
+    await db.commit()
+
+    await log(f"Auto-Improve complete! Ran {len(results)} iterations", "success")
+    await manager.broadcast_progress(session_id, "complete", 100, "Auto-Improve complete")
+    await manager.broadcast_complete(session_id)
+
+    return {
+        "iterations_run": len(results),
+        "results": results,
+        "final_score": results[-1].get("overall_score") if results else None,
+        "target_reached": results[-1].get("overall_score", 0) >= data.target_score if results else False,
     }
