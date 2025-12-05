@@ -516,13 +516,15 @@ async def run_auto_improve(
     extraction_info.append(f"\nComposition:")
     extraction_info.append(f"  Camera: {original_profile.composition.camera}")
     extraction_info.append(f"  Framing: {original_profile.composition.framing}")
-    extraction_info.append(f"  Depth: {original_profile.composition.depth}")
+    extraction_info.append(f"  Depth: {getattr(original_profile.composition, 'depth', 'not extracted')}")
+    if hasattr(original_profile.composition, 'structural_notes') and original_profile.composition.structural_notes:
+        extraction_info.append(f"  Structural Notes: {original_profile.composition.structural_notes}")
     extraction_info.append(f"\nLine & Shape:")
     extraction_info.append(f"  Line Quality: {original_profile.line_and_shape.line_quality}")
     extraction_info.append(f"  Shape Language: {original_profile.line_and_shape.shape_language}")
     extraction_info.append(f"\nMotifs:")
     extraction_info.append(f"  Recurring Elements: {', '.join(original_profile.motifs.recurring_elements) if original_profile.motifs.recurring_elements else 'none'}")
-    extraction_info.append(f"  Themes: {', '.join(original_profile.motifs.themes) if original_profile.motifs.themes else 'none'}")
+    extraction_info.append(f"  Forbidden Elements: {', '.join(original_profile.motifs.forbidden_elements) if original_profile.motifs.forbidden_elements else 'none'}")
 
     await write_debug('\n'.join(extraction_info))
 
