@@ -660,14 +660,23 @@ async def run_auto_improve(
             iter_debug.append(f"{'='*60}")
 
             # Feedback history context
-            iter_debug.append(f"\nFeedback History: {len(feedback_history)} approved iterations")
+            approved_count_history = sum(1 for fb in feedback_history if fb.get("approved"))
+            rejected_count_history = sum(1 for fb in feedback_history if not fb.get("approved"))
+            iter_debug.append(f"\nFeedback History: {approved_count_history} approved, {rejected_count_history} rejected iterations")
             if feedback_history:
-                recent = feedback_history[-3:]  # Last 3 approved iterations
+                recent = feedback_history[-3:]  # Last 3 iterations (approved or rejected)
                 iter_debug.append(f"Recent feedback context:")
                 for fb in recent:
                     approval = "✓" if fb.get("approved") else "✗"
-                    notes = fb.get("notes", "")[:50]
-                    iter_debug.append(f"  Iteration {fb['iteration']}: {approval} - {notes}")
+                    notes = fb.get("notes", "")
+                    # Show full notes for recovery guidance, truncated for others
+                    if "RECOVERY NEEDED" in notes:
+                        iter_debug.append(f"  Iteration {fb['iteration']}: {approval} - {notes}")
+                        if fb.get("failure_analysis"):
+                            for detail in fb["failure_analysis"][:3]:  # First 3 details
+                                iter_debug.append(f"    {detail}")
+                    else:
+                        iter_debug.append(f"  Iteration {fb['iteration']}: {approval} - {notes[:80]}")
 
             # Weak dimensions and focus areas
             if iteration_result["weak_dimensions"]:
@@ -742,6 +751,13 @@ async def run_auto_improve(
             # Log evaluation
             decision_status = "✓ APPROVED" if should_approve else "✗ REJECTED"
             iter_debug.append(f"\n{decision_status}: {eval_reason}")
+
+            # If rejected, note that recovery guidance will be generated
+            if not should_approve:
+                iter_debug.append(f"\n⚠ REJECTION HANDLING:")
+                iter_debug.append(f"  - Style profile will revert to v{latest_profile_db.version} (last approved)")
+                iter_debug.append(f"  - Baseline scores will NOT update (keeping last approved state)")
+                iter_debug.append(f"  - Recovery guidance will be added to next iteration's feedback")
 
             # DEBUG: Log current style profile being used
             iter_debug.append(f"\n--- Style Profile (v{latest_profile_db.version}) ---")
@@ -846,11 +862,68 @@ async def run_auto_improve(
                 if best_approved_score is None or overall_score > best_approved_score:
                     best_approved_score = overall_score
                     await log(f"New best approved score: {best_approved_score}", "success", "milestone")
+
+                # Update baseline_scores only from approved iterations
+                baseline_scores = new_scores
+                await log("Baseline scores updated from approved iteration", "success", "update")
             else:
                 await log("Profile not updated (iteration rejected)", "info", "update")
+                await log("Baseline scores NOT updated (keeping last approved state)", "info", "update")
 
-            # Always update baseline_scores for weak dimension detection (regardless of approval)
-            baseline_scores = new_scores
+                # CRITICAL: Add recovery guidance to feedback history for next iteration
+                # Build specific recovery instructions based on what failed
+                recovery_guidance = {
+                    "iteration": iteration_num_db,
+                    "approved": False,
+                    "notes": f"RECOVERY NEEDED: Previous iteration REJECTED. {eval_reason}",
+                }
+
+                # Add specific failure analysis
+                failure_details = []
+
+                # Catastrophic failures
+                if eval_analysis.get('catastrophic_failures'):
+                    cat_failures = eval_analysis['catastrophic_failures']
+                    failure_details.append(f"CATASTROPHIC: {', '.join(cat_failures)}")
+                    for failure in cat_failures:
+                        dim = failure.split('=')[0]
+                        failure_details.append(f"  → {dim}: Must restore from last approved iteration")
+
+                # Subject drift
+                if eval_analysis.get('subject_drift_failures'):
+                    drift = eval_analysis['subject_drift_failures']
+                    failure_details.append(f"SUBJECT DRIFT: {', '.join(drift[:2])}")
+                    failure_details.append(f"  → Restore subject/composition from original")
+
+                # Lost traits
+                if iteration_result["critique"].lost_traits:
+                    lost = iteration_result["critique"].lost_traits[:3]
+                    failure_details.append(f"LOST TRAITS: {', '.join(lost)}")
+                    failure_details.append(f"  → These must be restored in next iteration")
+
+                # What to avoid (interesting mutations that broke things)
+                if iteration_result["critique"].interesting_mutations:
+                    mutations = iteration_result["critique"].interesting_mutations[:2]
+                    failure_details.append(f"AVOID: {', '.join(mutations)}")
+                    failure_details.append(f"  → These introduced incompatible elements")
+
+                recovery_guidance["failure_analysis"] = failure_details
+                recovery_guidance["action"] = "Revert to last approved state and correct the specific failures listed above"
+
+                # Add to feedback history so next iteration knows what to fix
+                feedback_history.append(recovery_guidance)
+
+                await log(f"Recovery guidance added: {len(failure_details)} specific issues identified", "warning", "recovery")
+
+                # Log recovery guidance to debug file
+                recovery_debug = []
+                recovery_debug.append(f"\n--- RECOVERY GUIDANCE GENERATED ---")
+                recovery_debug.append(f"Action: {recovery_guidance['action']}")
+                recovery_debug.append(f"\nFailure Analysis ({len(failure_details)} issues):")
+                for detail in failure_details:
+                    recovery_debug.append(f"  {detail}")
+                recovery_debug.append(f"\nThis guidance will be included in the next iteration's feedback history.")
+                await write_debug('\n'.join(recovery_debug))
 
             await db.commit()
             await db.refresh(iteration)

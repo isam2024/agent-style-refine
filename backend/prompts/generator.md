@@ -15,7 +15,15 @@ These are non-negotiable. Every prompt you write MUST preserve these characteris
 ## FEEDBACK FROM PREVIOUS ITERATIONS:
 {{FEEDBACK_HISTORY}}
 
-Use this feedback to improve. Emphasize what worked, avoid what was criticized.
+**How to Use Feedback:**
+- ✅ **Approved iterations**: Build on what worked. Emphasize preserved traits.
+- ❌ **Rejected iterations (marked "RECOVERY NEEDED")**: These contain CRITICAL recovery instructions.
+  - **LOST TRAITS**: Must be restored in your next prompt
+  - **CATASTROPHIC failures**: Specific dimensions that broke - restore from approved state
+  - **AVOID**: Elements that introduced incompatible mutations - do NOT include these
+  - **Action**: Revert to the characteristics from the last approved iteration, then fix the specific failures listed
+
+**Recovery Priority**: If feedback includes "RECOVERY NEEDED", prioritize fixing those specific issues over everything else. The previous iteration failed catastrophically - you must restore what was lost.
 
 ## PROMPT WRITING RULES:
 

@@ -31,6 +31,32 @@ class AutoImprover:
         self.min_improvement = 3  # Must improve by at least this much to approve
         self.allow_incremental = True  # Allow gradual improvement from bad starting points
 
+        # DIMENSION CATEGORIZATION - Not all dimensions are equally critical
+        # Structural dimensions affect subject/composition identity - catastrophic = instant reject
+        self.structural_dimensions = ["composition", "line_and_shape"]
+
+        # Technique dimensions affect rendering quality - catastrophic = check net progress
+        self.technique_dimensions = ["texture", "lighting"]
+
+        # Stylistic dimensions affect aesthetics - catastrophic = gated by net progress
+        self.stylistic_dimensions = ["palette", "motifs"]
+
+        # WEIGHTED NET PROGRESS - Dimensions have different importance
+        # Why: Composition improvement > Motif improvement in terms of overall direction
+        # Fixing composition is harder and more valuable than adjusting colors
+        self.dimension_weights = {
+            "composition": 2.0,      # Critical - affects subject identity
+            "line_and_shape": 2.0,   # Critical - affects subject structure
+            "texture": 1.5,          # Important - affects rendering quality
+            "lighting": 1.5,         # Important - affects rendering quality
+            "palette": 1.0,          # Moderate - affects aesthetics
+            "motifs": 0.8,           # Lower - can be adjusted easily
+        }
+
+        # Weighted net progress thresholds
+        self.strong_net_progress_threshold = 3.0  # Clear improvement across weighted dimensions
+        self.weak_net_progress_threshold = 1.0    # Minimal positive movement
+
     async def run_focused_iteration(
         self,
         session_id: str,
@@ -215,24 +241,33 @@ class AutoImprover:
         style_profile: StyleProfile | None = None,  # For checking original_subject
         best_approved_score: int | None = None,
         training_insights: dict | None = None,
+        previous_scores: dict[str, int] | None = None,  # NEW: For weighted delta calculation
     ) -> tuple[bool, str, dict]:
         """
         Determine if iteration should be approved (pass) or rejected (fail).
 
-        Two-tier approval system:
-        1. IDEAL: Meets absolute quality targets (70 overall, 55 dimensions)
-        2. INCREMENTAL: Improves on best approved score by min_improvement (allows climbing from bad starts)
+        WEIGHTED MULTI-DIMENSIONAL EVALUATION:
+        Not all dimensions are equally important. We optimize a 6D gradient vector, not a scalar.
 
-        Returns: (should_approve, reason, analysis)
+        Dimension Categories:
+        - Structural (composition, line_and_shape): Catastrophic = instant reject
+        - Technique (texture, lighting): Catastrophic = check net progress
+        - Stylistic (palette, motifs): Catastrophic = gated by net progress
 
-        Pass criteria (EITHER):
-        - Tier 1: Overall >= target_overall AND all dimensions >= target_dimension
-        - Tier 2: Overall improves by >= min_improvement over best_approved
-        - Always: No catastrophic failures (dimension < 40)
+        Weighted Net Progress:
+        Structural dimensions have 2.0x weight (composition fixes are harder/more valuable)
+        Stylistic dimensions have 0.8-1.0x weight (easier to adjust)
+
+        Pass criteria:
+        - Tier 1: Meets absolute quality targets (70 overall, 55 dimensions)
+        - Tier 2: Strong weighted net progress (>= 3.0)
+        - Tier 3: Positive weighted net progress despite stylistic catastrophic
 
         Fail criteria:
-        - Catastrophic failure in any dimension
-        - Doesn't meet Tier 1 AND doesn't improve in Tier 2
+        - Structural catastrophic failure
+        - Negative weighted net progress
+
+        Returns: (should_approve, reason, analysis)
         """
         overall_score = new_scores.get("overall", 0)
 
