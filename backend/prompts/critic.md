@@ -87,15 +87,38 @@ CRITICAL INSTRUCTIONS:
 8. interesting_mutations should only include things that ENHANCE the style, not random changes.
 
 PROFILE UPDATE RULES (CRITICAL - FOLLOW EXACTLY):
-1. **NEVER DELETE core_invariants**: The core_invariants array defines the fundamental traits that MUST be preserved to recreate the original image. You may REFINE the wording to be more specific, but you MUST preserve the COUNT and INTENT of all invariants. If the original has 3 core invariants, your updated profile MUST have 3 core invariants (even if slightly reworded).
 
-2. **PRESERVE ARRAY STRUCTURE**: Do not remove items from arrays unless they are factually wrong. If the original profile lists 5 colors in palette.color_descriptions, your update should maintain approximately the same number (you may refine the color names, but don't reduce from 5 to 2).
+1. **CORE INVARIANTS ARE FROZEN - DO NOT MODIFY:**
+   - Core invariants define the STRUCTURAL IDENTITY of the original image
+   - They are HARD LOCKS on WHAT/WHERE/HOW - NOT style preferences
+   - You MUST copy core_invariants EXACTLY from the current profile to updated_style_profile
+   - Do NOT refine them, do NOT reword them, do NOT delete any
+   - Example: If core_invariants include "Black cat facing left, centered", that EXACT text must appear in your update
+   - These are identity constraints, not suggestions
 
-3. **CONSERVATIVE EDITS ONLY**: Only update fields where you observed a specific difference between IMAGE 1 and IMAGE 2 that needs correction. Do not randomly rewrite or simplify fields that are working correctly.
+2. **WHAT YOU CAN UPDATE (Refinable Style):**
+   - Palette: color descriptions, saturation levels (but NOT dominant_colors/accents - those are accurate)
+   - Lighting: lighting_type, shadow descriptions, highlight descriptions
+   - Texture: surface quality, noise level, special effects
+   - Line & Shape: line quality, shape language descriptions
+   - Composition: You may refine descriptions BUT preserve structural_notes
 
-4. **FORBIDDEN ELEMENTS**: The "forbidden_elements" list should contain elements that would BREAK the style (e.g., "photorealistic rendering" for an ink drawing style). Do NOT list the original subject matter as forbidden (e.g., if the original is a cat, don't forbid cats). When scoring motifs, penalize heavily if forbidden elements appear in the generated image.
+3. **WHAT YOU CANNOT UPDATE (Frozen Identity):**
+   - core_invariants (copy exactly)
+   - composition.structural_notes (these define spatial identity)
+   - original_subject (this is literal identity from extraction)
+   - suggested_test_prompt (this is the replication baseline)
 
-5. **PRIORITY PRESERVATION**: If core_invariants contain "PRIORITY 1" and "PRIORITY 2" labels, these MUST be preserved in the updated profile. These priorities are structural guidance that should never be removed.
+4. **MOTIFS - DISCOVERY PROTOCOL:**
+   - recurring_elements: Only ADD if you see the SAME element in BOTH original AND generated image
+   - Do NOT invent motifs from single-image artifacts
+   - forbidden_elements: Only ADD if generated image introduced incompatible elements
+   - Example: If generated has "photorealistic rendering" but original is "ink drawing", add to forbidden
+
+5. **CONSERVATIVE EDITS ONLY:**
+   - Only update fields where you observed a specific visual difference
+   - Do not randomly rewrite descriptions
+   - Preserve what's working
 
 LOST TRAITS FORMAT:
 - "lost_traits" should describe specific visual characteristics from the ORIGINAL IMAGE that are MISSING or DEGRADED in the generated image
