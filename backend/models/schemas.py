@@ -46,6 +46,8 @@ class LightingSchema(BaseModel):
 
 
 class CompositionSchema(BaseModel):
+    model_config = {"extra": "allow"}  # Allow extra fields from old profiles
+
     camera: str = Field(default="", description="e.g., 'mid shot, slight low angle'")
     framing: str = Field(default="", description="e.g., 'subject centered or slightly off-center'")
     depth: str = Field(default="", description="Spatial layers and their relationships")
