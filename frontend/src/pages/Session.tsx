@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
-import { useParams } from 'react-router-dom'
+import { useParams, useNavigate } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   getSession,
   extractStyle,
+  reextractStyle,
   runIterationStep,
   submitFeedback,
   applyProfileUpdate,
+  finalizeStyle,
 } from '../api/client'
 import { StyleProfile, IterationStepResult } from '../types'
 import SideBySide from '../components/SideBySide'
@@ -17,12 +19,16 @@ import ProgressIndicator from '../components/ProgressIndicator'
 function Session() {
   const { sessionId } = useParams<{ sessionId: string }>()
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
 
   const [subject, setSubject] = useState('')
   const [creativityLevel, setCreativityLevel] = useState(50)
   const [currentIteration, setCurrentIteration] = useState<number | null>(null)
   const [latestResult, setLatestResult] = useState<IterationStepResult | null>(null)
   const [activeStep, setActiveStep] = useState<string | null>(null)
+  const [showFinalizeModal, setShowFinalizeModal] = useState(false)
+  const [styleName, setStyleName] = useState('')
+  const [styleDescription, setStyleDescription] = useState('')
 
   const { data: session, isLoading } = useQuery({
     queryKey: ['session', sessionId],
@@ -46,6 +52,26 @@ function Session() {
       setActiveStep(null)
     },
     onError: () => setActiveStep(null),
+  })
+
+  const reextractMutation = useMutation({
+    mutationFn: () => reextractStyle(sessionId!),
+    onMutate: () => setActiveStep('extracting'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['session', sessionId] })
+      setActiveStep(null)
+    },
+    onError: () => setActiveStep(null),
+  })
+
+  const finalizeMutation = useMutation({
+    mutationFn: () =>
+      finalizeStyle(sessionId!, styleName, styleDescription || undefined),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['styles'] })
+      setShowFinalizeModal(false)
+      navigate('/styles')
+    },
   })
 
   const iterateMutation = useMutation({
@@ -111,7 +137,27 @@ function Session() {
               : 'Style not yet extracted'}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
+          {hasStyleProfile && (
+            <>
+              <button
+                onClick={() => reextractMutation.mutate()}
+                disabled={reextractMutation.isPending}
+                className="px-3 py-1.5 text-sm border border-slate-300 text-slate-600 rounded-lg hover:bg-slate-50 disabled:opacity-50"
+              >
+                Re-extract
+              </button>
+              <button
+                onClick={() => {
+                  setStyleName(session.style_profile?.profile.style_name || session.name)
+                  setShowFinalizeModal(true)
+                }}
+                className="px-3 py-1.5 text-sm bg-purple-600 text-white rounded-lg hover:bg-purple-700"
+              >
+                Finalize Style
+              </button>
+            </>
+          )}
           <span
             className={`px-2 py-1 text-xs rounded-full ${
               session.status === 'ready'
@@ -303,10 +349,69 @@ function Session() {
       </div>
 
       {/* Error Display */}
-      {(extractMutation.isError || iterateMutation.isError) && (
+      {(extractMutation.isError || iterateMutation.isError || reextractMutation.isError || finalizeMutation.isError) && (
         <div className="bg-red-50 border border-red-200 text-red-700 p-4 rounded-lg">
           {(extractMutation.error as Error)?.message ||
-            (iterateMutation.error as Error)?.message}
+            (iterateMutation.error as Error)?.message ||
+            (reextractMutation.error as Error)?.message ||
+            (finalizeMutation.error as Error)?.message}
+        </div>
+      )}
+
+      {/* Finalize Style Modal */}
+      {showFinalizeModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl p-6 w-full max-w-md shadow-xl">
+            <h3 className="text-lg font-semibold text-slate-800 mb-4">
+              Finalize Style
+            </h3>
+            <p className="text-sm text-slate-500 mb-4">
+              Save this trained style to your library for use in prompt writing.
+            </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Style Name
+                </label>
+                <input
+                  type="text"
+                  value={styleName}
+                  onChange={(e) => setStyleName(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+                  placeholder="e.g., Moody Watercolor"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">
+                  Description (optional)
+                </label>
+                <textarea
+                  value={styleDescription}
+                  onChange={(e) => setStyleDescription(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-purple-500 resize-none h-20"
+                  placeholder="Describe when to use this style..."
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setShowFinalizeModal(false)}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-100 rounded-lg"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => finalizeMutation.mutate()}
+                disabled={!styleName.trim() || finalizeMutation.isPending}
+                className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
+              >
+                {finalizeMutation.isPending ? 'Saving...' : 'Save to Library'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

@@ -164,3 +164,134 @@ class WSMessage(BaseModel):
     event: str
     data: dict | None = None
     error: str | None = None
+
+
+# ============================================================
+# Trained Style & Prompt Writer Schemas
+# ============================================================
+
+class StyleRules(BaseModel):
+    """Rules extracted from training for prompt writing."""
+    # Positive style descriptors - always include these
+    always_include: list[str] = Field(
+        default=[],
+        description="Style descriptors that should always be in the prompt"
+    )
+    # Negative style descriptors - always exclude these
+    always_avoid: list[str] = Field(
+        default=[],
+        description="Elements that break the style, use as negative prompt"
+    )
+    # Quality/technique keywords
+    technique_keywords: list[str] = Field(
+        default=[],
+        description="Technical style terms (e.g., 'oil painting', 'soft lighting')"
+    )
+    # Mood/atmosphere keywords
+    mood_keywords: list[str] = Field(
+        default=[],
+        description="Mood and atmosphere descriptors"
+    )
+    # Learned from feedback
+    emphasize: list[str] = Field(
+        default=[],
+        description="Aspects to emphasize based on training feedback"
+    )
+    de_emphasize: list[str] = Field(
+        default=[],
+        description="Aspects to tone down based on training feedback"
+    )
+
+
+class TrainedStyleCreate(BaseModel):
+    """Request to create a trained style from a session."""
+    session_id: str
+    name: str
+    description: str | None = None
+    tags: list[str] = Field(default=[])
+
+
+class TrainedStyleResponse(BaseModel):
+    """Response for a trained style."""
+    id: str
+    name: str
+    description: str | None
+    style_profile: StyleProfile
+    style_rules: StyleRules
+    thumbnail_b64: str | None
+    source_session_id: str | None
+    iterations_trained: int
+    final_score: int | None
+    tags: list[str]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class TrainedStyleSummary(BaseModel):
+    """Summary view of a trained style for listing."""
+    id: str
+    name: str
+    description: str | None
+    thumbnail_b64: str | None
+    iterations_trained: int
+    final_score: int | None
+    tags: list[str]
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+# Prompt Writer Schemas
+class PromptWriteRequest(BaseModel):
+    """Request to write/rewrite a prompt in a style."""
+    style_id: str = Field(description="ID of the trained style to use")
+    subject: str = Field(description="The subject/scene to generate")
+    additional_context: str | None = Field(
+        default=None,
+        description="Optional additional context or requirements"
+    )
+    include_negative: bool = Field(
+        default=True,
+        description="Whether to include negative prompt"
+    )
+
+
+class PromptWriteResponse(BaseModel):
+    """Response with styled prompt."""
+    positive_prompt: str = Field(description="The styled positive prompt")
+    negative_prompt: str | None = Field(description="Negative prompt if requested")
+    style_name: str = Field(description="Name of the style used")
+    # Optional: breakdown of how the prompt was constructed
+    prompt_breakdown: dict | None = Field(
+        default=None,
+        description="Breakdown showing subject + style components"
+    )
+
+
+class PromptGenerateRequest(BaseModel):
+    """Request to write a prompt AND generate an image."""
+    style_id: str
+    subject: str
+    additional_context: str | None = None
+
+
+class PromptGenerateResponse(BaseModel):
+    """Response with styled prompt and generated image."""
+    positive_prompt: str
+    negative_prompt: str | None
+    image_b64: str
+    style_name: str
+
+
+class IterationStepResult(BaseModel):
+    """Result from running one iteration step."""
+    iteration_id: str
+    iteration_num: int
+    image_b64: str
+    prompt_used: str
+    critique: CritiqueResult
+    updated_profile: StyleProfile

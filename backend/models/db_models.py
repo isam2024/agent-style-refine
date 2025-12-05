@@ -87,3 +87,42 @@ class Iteration(Base):
     @property
     def scores(self) -> dict[str, int] | None:
         return self.scores_json
+
+
+class TrainedStyle(Base):
+    """A finalized style extracted from training, ready for prompt writing."""
+    __tablename__ = "trained_styles"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=generate_uuid
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # The finalized style profile
+    style_profile_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+    # Style rules learned from training (positive/negative descriptors)
+    style_rules_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+    # Reference image thumbnail (base64, small)
+    thumbnail_b64: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Source training session (optional link)
+    source_session_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("sessions.id", ondelete="SET NULL"), nullable=True
+    )
+
+    # Training stats
+    iterations_trained: Mapped[int] = mapped_column(Integer, default=0)
+    final_score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    # Tags for organization
+    tags_json: Mapped[list] = mapped_column(JSON, default=list)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )

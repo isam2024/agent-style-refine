@@ -4,6 +4,10 @@ import {
   StyleProfile,
   IterationStepResult,
   CritiqueResult,
+  TrainedStyleSummary,
+  TrainedStyle,
+  PromptWriteResponse,
+  PromptGenerateResponse,
 } from '../types';
 
 const API_BASE = '/api';
@@ -181,4 +185,94 @@ export function createWebSocket(sessionId: string): WebSocket {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const host = window.location.host;
   return new WebSocket(`${protocol}//${host}/ws/${sessionId}`);
+}
+
+// ============================================================
+// Trained Styles
+// ============================================================
+
+export async function listStyles(tag?: string): Promise<TrainedStyleSummary[]> {
+  const params = tag ? `?tag=${encodeURIComponent(tag)}` : '';
+  return fetchJson<TrainedStyleSummary[]>(`${API_BASE}/styles/${params}`);
+}
+
+export async function getStyle(styleId: string): Promise<TrainedStyle> {
+  return fetchJson<TrainedStyle>(`${API_BASE}/styles/${styleId}`);
+}
+
+export async function finalizeStyle(
+  sessionId: string,
+  name: string,
+  description?: string,
+  tags?: string[]
+): Promise<TrainedStyle> {
+  return fetchJson<TrainedStyle>(`${API_BASE}/styles/finalize`, {
+    method: 'POST',
+    body: JSON.stringify({
+      session_id: sessionId,
+      name,
+      description,
+      tags: tags || [],
+    }),
+  });
+}
+
+export async function deleteStyle(styleId: string): Promise<void> {
+  await fetchJson(`${API_BASE}/styles/${styleId}`, { method: 'DELETE' });
+}
+
+export async function reextractStyle(sessionId: string): Promise<StyleProfile> {
+  return fetchJson<StyleProfile>(`${API_BASE}/extract/reextract`, {
+    method: 'POST',
+    body: JSON.stringify({ session_id: sessionId }),
+  });
+}
+
+// ============================================================
+// Prompt Writer
+// ============================================================
+
+export async function writePrompt(
+  styleId: string,
+  subject: string,
+  additionalContext?: string,
+  includeNegative: boolean = true
+): Promise<PromptWriteResponse> {
+  return fetchJson<PromptWriteResponse>(`${API_BASE}/styles/write-prompt`, {
+    method: 'POST',
+    body: JSON.stringify({
+      style_id: styleId,
+      subject,
+      additional_context: additionalContext,
+      include_negative: includeNegative,
+    }),
+  });
+}
+
+export async function writeAndGenerate(
+  styleId: string,
+  subject: string,
+  additionalContext?: string
+): Promise<PromptGenerateResponse> {
+  return fetchJson<PromptGenerateResponse>(`${API_BASE}/styles/write-and-generate`, {
+    method: 'POST',
+    body: JSON.stringify({
+      style_id: styleId,
+      subject,
+      additional_context: additionalContext,
+    }),
+  });
+}
+
+export async function batchWritePrompts(
+  styleId: string,
+  subjects: string[]
+): Promise<PromptWriteResponse[]> {
+  return fetchJson<PromptWriteResponse[]>(
+    `${API_BASE}/styles/batch-write?style_id=${styleId}`,
+    {
+      method: 'POST',
+      body: JSON.stringify(subjects),
+    }
+  );
 }

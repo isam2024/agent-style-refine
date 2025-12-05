@@ -108,3 +108,64 @@ export interface WSMessage {
   data?: Record<string, unknown>;
   error?: string;
 }
+
+// ============================================================
+// Trained Styles & Prompt Writer Types
+// ============================================================
+
+export interface StyleRules {
+  always_include: string[];
+  always_avoid: string[];
+  technique_keywords: string[];
+  mood_keywords: string[];
+  emphasize: string[];
+  de_emphasize: string[];
+}
+
+export interface TrainedStyleSummary {
+  id: string;
+  name: string;
+  description: string | null;
+  thumbnail_b64: string | null;
+  iterations_trained: number;
+  final_score: number | null;
+  tags: string[];
+  created_at: string;
+}
+
+export interface TrainedStyle extends TrainedStyleSummary {
+  style_profile: StyleProfile;
+  style_rules: StyleRules;
+  source_session_id: string | null;
+  updated_at: string;
+}
+
+export interface PromptWriteRequest {
+  style_id: string;
+  subject: string;
+  additional_context?: string;
+  include_negative?: boolean;
+}
+
+export interface PromptWriteResponse {
+  positive_prompt: string;
+  negative_prompt: string | null;
+  style_name: string;
+  prompt_breakdown: {
+    subject: string;
+    additional_context: string | null;
+    technique: string[];
+    palette: string | null;
+    lighting: string;
+    texture: string;
+    mood: string[];
+    style_rules_applied: number;
+  } | null;
+}
+
+export interface PromptGenerateResponse {
+  positive_prompt: string;
+  negative_prompt: string | null;
+  image_b64: string;
+  style_name: string;
+}

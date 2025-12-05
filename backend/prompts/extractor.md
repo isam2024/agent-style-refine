@@ -61,4 +61,12 @@ CRITICAL INSTRUCTIONS:
 4. Focus on reproducible visual characteristics that could be applied to ANY subject.
 5. The "core_invariants" are the most important - these define the essence of the style.
 
-Output ONLY the JSON object, no explanation, no markdown code blocks, just raw JSON.
+RESPONSE FORMAT:
+- Output ONLY a valid JSON object
+- Do NOT include markdown formatting (no ```)
+- Do NOT include explanatory text before or after
+- Do NOT use headers like "Style Analysis"
+- Start your response with { and end with }
+- The response must be parseable by JSON.parse()
+
+BEGIN JSON OUTPUT:

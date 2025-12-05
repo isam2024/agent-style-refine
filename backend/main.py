@@ -13,6 +13,7 @@ from backend.routers import (
     critique_router,
     iteration_router,
 )
+from backend.routers.styles import router as styles_router
 from backend.websocket import websocket_endpoint
 from backend.services.vlm import vlm_service
 from backend.services.comfyui import comfyui_service
@@ -93,6 +94,7 @@ app.include_router(extraction_router)
 app.include_router(generation_router)
 app.include_router(critique_router)
 app.include_router(iteration_router)
+app.include_router(styles_router)
 
 
 @app.get("/")
