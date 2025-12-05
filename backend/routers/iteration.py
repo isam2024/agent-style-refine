@@ -534,6 +534,31 @@ async def run_auto_improve(
                 training_insights=training_insights,
             )
 
+            # DEBUG: Log detailed score breakdown and decision analysis
+            await log(f"[DEBUG] Overall Score: {new_scores.get('overall', 0)}", "info", "debug")
+            await log(f"[DEBUG] Dimension Scores: {', '.join([f'{k}={v}' for k, v in new_scores.items() if k != 'overall'])}", "info", "debug")
+
+            # DEBUG: Log dimension changes vs historical average
+            if eval_analysis.get("dimension_improvements"):
+                improved = [f"{d}({'+' if delta > 0 else ''}{delta:.0f})" for d, delta in eval_analysis["dimension_improvements"].items() if abs(delta) > 2]
+                if improved:
+                    await log(f"[DEBUG] Dimension Changes vs History: {', '.join(improved)}", "info", "debug")
+
+            # DEBUG: Log vs best approved
+            if eval_analysis.get("best_approved_score"):
+                await log(f"[DEBUG] vs Best Approved: {eval_analysis.get('improvement', 0):+.0f} ({eval_analysis['best_approved_score']} → {new_scores.get('overall', 0)})", "info", "debug")
+
+            # DEBUG: Log approval decision details
+            await log(f"[DEBUG] Decision Analysis:", "info", "debug")
+            await log(f"  - Meets targets (Tier 1): {eval_analysis.get('meets_targets', False)}", "info", "debug")
+            await log(f"  - Incremental improvement (Tier 2): {eval_analysis.get('improves_incrementally', False)} (need +3)", "info", "debug")
+            await log(f"  - Net progress (Tier 2b): {eval_analysis.get('net_progress', False)}", "info", "debug")
+            await log(f"  - First iteration: {best_approved_score is None}", "info", "debug")
+            if eval_analysis.get('subject_drift_failures'):
+                await log(f"  - Subject drift detected: {eval_analysis['subject_drift_failures'][:1]}", "warning", "debug")
+            if eval_analysis.get('catastrophic_failures'):
+                await log(f"  - Catastrophic failures: {eval_analysis['catastrophic_failures']}", "error", "debug")
+
             # Log evaluation
             if should_approve:
                 await log(f"✓ {eval_reason}", "success", "evaluation")
@@ -549,7 +574,33 @@ async def run_auto_improve(
                 session.id, iteration_result["image_b64"], filename
             )
 
-            feedback_msg = eval_reason
+            # Build detailed feedback message with debug info
+            feedback_parts = [eval_reason]
+
+            # Add score details
+            feedback_parts.append(f"\nScores: Overall={new_scores.get('overall', 0)}")
+            dimension_scores = [f"{k}={v}" for k, v in new_scores.items() if k != 'overall']
+            feedback_parts.append(f"Dimensions: {', '.join(dimension_scores)}")
+
+            # Add decision analysis
+            if eval_analysis.get("dimension_improvements"):
+                improved = [f"{d}({'+' if delta > 0 else ''}{delta:.0f})" for d, delta in eval_analysis["dimension_improvements"].items() if abs(delta) > 2]
+                if improved:
+                    feedback_parts.append(f"Changes vs history: {', '.join(improved)}")
+
+            if eval_analysis.get("best_approved_score"):
+                feedback_parts.append(f"vs Best approved: {eval_analysis.get('improvement', 0):+.0f} ({eval_analysis['best_approved_score']} → {new_scores.get('overall', 0)})")
+
+            # Add approval tier breakdown
+            tiers = []
+            if eval_analysis.get('meets_targets'): tiers.append("Tier 1 (targets)")
+            if eval_analysis.get('improves_incrementally'): tiers.append("Tier 2 (incremental)")
+            if eval_analysis.get('net_progress'): tiers.append("Tier 2b (net progress)")
+            if best_approved_score is None: tiers.append("First iteration")
+            feedback_parts.append(f"Checked: {', '.join(tiers) if tiers else 'None passed'}")
+
+            feedback_msg = "\n".join(feedback_parts)
+
             iteration = Iteration(
                 session_id=session.id,
                 iteration_num=iteration_num_db,
@@ -654,6 +705,19 @@ async def run_auto_improve(
         "success"
     )
     await log(f"Best score achieved: {best_score if best_score else 'N/A'}", "success")
+
+    # DEBUG: Log score progression summary
+    await log("=== SCORE PROGRESSION SUMMARY ===", "info", "summary")
+    for idx, result in enumerate(results, 1):
+        status = "✓ APPROVED" if result.get("approved") else "✗ REJECTED"
+        overall = result.get("overall_score", "N/A")
+        await log(f"Iteration {idx}: Overall {overall} - {status}", "info", "summary")
+        if result.get("scores"):
+            dim_str = ", ".join([f"{k}={v}" for k, v in result["scores"].items() if k != "overall"])
+            await log(f"  Dimensions: {dim_str}", "info", "summary")
+        if result.get("eval_reason"):
+            await log(f"  Reason: {result['eval_reason']}", "info", "summary")
+
     await manager.broadcast_progress(session_id, "complete", 100, "Auto-Improve complete")
     await manager.broadcast_complete(session_id)
 
