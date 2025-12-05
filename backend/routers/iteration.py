@@ -1,3 +1,6 @@
+import logging
+import traceback
+
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -16,6 +19,9 @@ from backend.services.storage import storage_service
 from backend.services.agent import style_agent
 from backend.services.comfyui import comfyui_service
 from backend.services.critic import style_critic
+from backend.websocket import manager
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/iterate", tags=["iteration"])
 
@@ -26,6 +32,14 @@ async def run_iteration_step(
     db: AsyncSession = Depends(get_db),
 ):
     """Run a single full iteration: generate image + critique."""
+    session_id = data.session_id
+
+    async def log(msg: str, level: str = "info", step: str = None):
+        logger.info(f"[{step or 'iterate'}] {msg}")
+        await manager.broadcast_log(session_id, msg, level, step)
+
+    await log("Starting iteration step...", "info", "iterate")
+
     # Get session with all related data
     result = await db.execute(
         select(Session)
@@ -35,17 +49,21 @@ async def run_iteration_step(
     session = result.scalar_one_or_none()
 
     if not session:
+        await log("Session not found", "error", "iterate")
         raise HTTPException(status_code=404, detail="Session not found")
 
     if not session.style_profiles:
+        await log("No style profile found - extract style first", "error", "iterate")
         raise HTTPException(status_code=400, detail="No style profile found")
 
     if not session.original_image_path:
+        await log("No original image found", "error", "iterate")
         raise HTTPException(status_code=400, detail="No original image found")
 
     # Get latest style profile
     latest_profile_db = max(session.style_profiles, key=lambda sp: sp.version)
     style_profile = StyleProfile(**latest_profile_db.profile_json)
+    await log(f"Using style profile v{latest_profile_db.version}: {style_profile.style_name}", "info", "iterate")
 
     # Gather feedback history
     feedback_history = [
@@ -53,20 +71,38 @@ async def run_iteration_step(
         for it in session.iterations
         if it.feedback
     ]
+    if feedback_history:
+        await log(f"Loaded {len(feedback_history)} feedback entries from history", "info", "iterate")
 
     try:
         # Step 1: Generate image prompt
+        await log("Phase 1: Generating image prompt...", "info", "prompt")
+        await manager.broadcast_progress(session_id, "prompt", 10, "Building prompt")
         session.status = SessionStatus.GENERATING.value
         await db.commit()
+
+        await log(f"Subject: {data.subject}", "info", "prompt")
+        await log(f"Creativity level: {data.creativity_level}/100", "info", "prompt")
 
         image_prompt = await style_agent.generate_image_prompt(
             style_profile=style_profile,
             subject=data.subject,
             feedback_history=feedback_history,
+            session_id=session_id,
         )
 
+        await log(f"Generated prompt ({len(image_prompt)} chars)", "success", "prompt")
+        await log(f"Prompt: {image_prompt[:150]}...", "info", "prompt")
+        await manager.broadcast_progress(session_id, "prompt", 25, "Prompt ready")
+
         # Step 2: Generate image
-        image_b64 = await comfyui_service.generate(prompt=image_prompt)
+        await log("Phase 2: Generating image with ComfyUI...", "info", "generate")
+        await manager.broadcast_progress(session_id, "generate", 30, "Sending to ComfyUI")
+
+        image_b64 = await comfyui_service.generate(prompt=image_prompt, session_id=session_id)
+
+        await log("Image generated successfully", "success", "generate")
+        await manager.broadcast_progress(session_id, "generate", 50, "Image generated")
 
         # Save image
         iteration_num = len(session.iterations) + 1
@@ -74,6 +110,7 @@ async def run_iteration_step(
         image_path = await storage_service.save_image(
             session.id, image_b64, filename
         )
+        await log(f"Saved iteration #{iteration_num} image", "info", "generate")
 
         # Create iteration record
         iteration = Iteration(
@@ -86,18 +123,36 @@ async def run_iteration_step(
         await db.flush()
 
         # Step 3: Critique
+        await log("Phase 3: Critiquing generated image...", "info", "critique")
+        await manager.broadcast_progress(session_id, "critique", 55, "Starting critique")
         session.status = SessionStatus.CRITIQUING.value
         await db.commit()
 
+        await log("Loading original image for comparison...", "info", "critique")
         original_b64 = await storage_service.load_image_raw(
             session.original_image_path
         )
+
+        await log("Sending images to VLM for style comparison...", "info", "critique")
+        await manager.broadcast_progress(session_id, "critique", 60, "Analyzing style match")
+
         critique_result = await style_critic.critique(
             original_image_b64=original_b64,
             generated_image_b64=image_b64,
             style_profile=style_profile,
             creativity_level=data.creativity_level,
+            session_id=session_id,
         )
+
+        # Log critique results
+        overall_score = critique_result.match_scores.get("overall", 0)
+        await log(f"Critique complete - Overall score: {overall_score}/100", "success", "critique")
+        await manager.broadcast_progress(session_id, "critique", 90, f"Score: {overall_score}/100")
+
+        if critique_result.preserved_traits:
+            await log(f"Preserved: {', '.join(critique_result.preserved_traits[:3])}", "info", "critique")
+        if critique_result.lost_traits:
+            await log(f"Lost: {', '.join(critique_result.lost_traits[:3])}", "warning", "critique")
 
         # Update iteration with scores
         iteration.scores_json = critique_result.match_scores
@@ -105,6 +160,10 @@ async def run_iteration_step(
         session.status = SessionStatus.READY.value
         await db.commit()
         await db.refresh(iteration)
+
+        await log("Iteration complete!", "success", "iterate")
+        await manager.broadcast_progress(session_id, "complete", 100, "Done")
+        await manager.broadcast_complete(session_id)
 
         return {
             "iteration_id": iteration.id,
@@ -121,9 +180,17 @@ async def run_iteration_step(
         }
 
     except Exception as e:
+        error_msg = str(e)
+        error_tb = traceback.format_exc()
+        logger.error(f"Iteration failed: {error_msg}\n{error_tb}")
+
+        await log(f"ERROR: {error_msg}", "error", "iterate")
+        await log(f"Stack trace: {error_tb[-500:]}", "error", "iterate")
+        await manager.broadcast_error(session_id, error_msg)
+
         session.status = SessionStatus.ERROR.value
         await db.commit()
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=error_msg)
 
 
 @router.post("/feedback")

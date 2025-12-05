@@ -1,8 +1,12 @@
 import json
+import logging
 from pathlib import Path
 
 from backend.services.vlm import vlm_service
 from backend.models.schemas import StyleProfile
+from backend.websocket import manager
+
+logger = logging.getLogger(__name__)
 
 
 class StyleAgent:
@@ -90,6 +94,7 @@ When given a subject, respond with ONLY the image generation prompt. No explanat
         style_profile: StyleProfile,
         subject: str,
         feedback_history: list[dict] | None = None,
+        session_id: str | None = None,
     ) -> str:
         """
         Generate an image prompt for the given subject in the style.
@@ -98,11 +103,19 @@ When given a subject, respond with ONLY the image generation prompt. No explanat
             style_profile: The style to embody
             subject: What to generate (e.g., "a fox sleeping under a tree")
             feedback_history: Past feedback to inform generation
+            session_id: Optional session ID for WebSocket logging
 
         Returns:
             Image generation prompt string
         """
+        async def log(msg: str, level: str = "info"):
+            logger.info(f"[agent] {msg}")
+            if session_id:
+                await manager.broadcast_log(session_id, msg, level, "prompt")
+
+        await log(f"Building style agent prompt for: {style_profile.style_name}")
         system_prompt = self.build_system_prompt(style_profile, feedback_history)
+        await log(f"System prompt ready ({len(system_prompt)} chars)")
 
         user_prompt = f"""Generate an image prompt for this subject:
 
@@ -113,10 +126,16 @@ Remember:
 - Be specific about colors, lighting, and texture
 - Write a single, detailed prompt ready for image generation"""
 
-        response = await vlm_service.generate_text(
-            prompt=user_prompt,
-            system=system_prompt,
-        )
+        await log("Sending to VLM for prompt generation...")
+        try:
+            response = await vlm_service.generate_text(
+                prompt=user_prompt,
+                system=system_prompt,
+            )
+            await log(f"VLM response received ({len(response)} chars)", "success")
+        except Exception as e:
+            await log(f"VLM prompt generation failed: {e}", "error")
+            raise
 
         # Clean up response - remove any markdown or extra formatting
         response = response.strip()
@@ -126,7 +145,9 @@ Remember:
             lines = response.split("\n")
             response = "\n".join(lines[1:-1] if lines[-1] == "```" else lines[1:])
 
-        return response.strip()
+        cleaned = response.strip()
+        await log(f"Cleaned prompt: {cleaned[:100]}...")
+        return cleaned
 
 
 style_agent = StyleAgent()

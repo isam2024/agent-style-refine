@@ -191,35 +191,89 @@ function Session() {
 
       {/* Main Content */}
       <div className="grid grid-cols-12 gap-6">
-        {/* Left Sidebar - Iteration History */}
+        {/* Left Sidebar - Iteration History (Breadcrumb) */}
         <div className="col-span-2">
-          <h3 className="text-sm font-medium text-slate-700 mb-3">Iterations</h3>
-          <div className="space-y-2">
-            {session.iterations.map((it) => (
-              <button
-                key={it.id}
-                onClick={() => setCurrentIteration(it.iteration_num)}
-                className={`w-full aspect-square rounded-lg overflow-hidden border-2 transition-colors ${
-                  currentIteration === it.iteration_num
-                    ? 'border-blue-500'
-                    : 'border-transparent hover:border-slate-300'
-                }`}
-              >
-                {it.image_b64 ? (
-                  <img
-                    src={it.image_b64}
-                    alt={`Iteration ${it.iteration_num}`}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full bg-slate-200 flex items-center justify-center text-slate-400 text-xs">
-                    #{it.iteration_num}
+          <h3 className="text-sm font-medium text-slate-700 mb-3">
+            History ({session.iterations.length})
+          </h3>
+          <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
+            {session.iterations.map((it) => {
+              const overallScore = it.scores?.overall ?? null
+              const isSelected = currentIteration === it.iteration_num
+
+              return (
+                <button
+                  key={it.id}
+                  onClick={() => setCurrentIteration(it.iteration_num)}
+                  className={`w-full text-left rounded-lg overflow-hidden border-2 transition-all ${
+                    isSelected
+                      ? 'border-blue-500 bg-blue-50'
+                      : 'border-slate-200 hover:border-slate-300 bg-white'
+                  }`}
+                >
+                  {/* Thumbnail */}
+                  <div className="aspect-square relative">
+                    {it.image_b64 ? (
+                      <img
+                        src={it.image_b64}
+                        alt={`Iteration ${it.iteration_num}`}
+                        className="w-full h-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-full h-full bg-slate-100 flex items-center justify-center text-slate-400">
+                        <span className="text-lg font-bold">#{it.iteration_num}</span>
+                      </div>
+                    )}
+                    {/* Iteration number badge */}
+                    <div className="absolute top-1 left-1 bg-black/60 text-white text-xs px-1.5 py-0.5 rounded">
+                      #{it.iteration_num}
+                    </div>
+                    {/* Score badge */}
+                    {overallScore !== null && (
+                      <div
+                        className={`absolute top-1 right-1 text-xs px-1.5 py-0.5 rounded font-medium ${
+                          overallScore >= 80
+                            ? 'bg-green-500 text-white'
+                            : overallScore >= 60
+                            ? 'bg-yellow-500 text-white'
+                            : 'bg-red-500 text-white'
+                        }`}
+                      >
+                        {overallScore}%
+                      </div>
+                    )}
+                    {/* Approval indicator */}
+                    {it.approved !== null && (
+                      <div
+                        className={`absolute bottom-1 right-1 w-4 h-4 rounded-full flex items-center justify-center text-white text-xs ${
+                          it.approved ? 'bg-green-500' : 'bg-red-500'
+                        }`}
+                      >
+                        {it.approved ? '✓' : '✗'}
+                      </div>
+                    )}
                   </div>
-                )}
-              </button>
-            ))}
+                  {/* Metadata */}
+                  <div className="p-2 border-t border-slate-100">
+                    {it.prompt_used && (
+                      <p className="text-xs text-slate-500 line-clamp-2" title={it.prompt_used}>
+                        {it.prompt_used.slice(0, 60)}...
+                      </p>
+                    )}
+                    {it.feedback && (
+                      <p className="text-xs text-blue-600 mt-1 italic line-clamp-1">
+                        "{it.feedback}"
+                      </p>
+                    )}
+                  </div>
+                </button>
+              )
+            })}
             {session.iterations.length === 0 && (
-              <p className="text-xs text-slate-400">No iterations yet</p>
+              <div className="text-center py-8 text-slate-400">
+                <p className="text-sm">No iterations yet</p>
+                <p className="text-xs mt-1">Generate an image to start</p>
+              </div>
             )}
           </div>
         </div>

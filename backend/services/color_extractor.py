@@ -1,18 +1,19 @@
 import base64
 import io
 import logging
-from collections import Counter
 import colorsys
 
+import numpy as np
 from PIL import Image
+from sklearn.cluster import MiniBatchKMeans
 
 logger = logging.getLogger(__name__)
 
 
-def extract_colors_from_b64(image_b64: str, num_colors: int = 5) -> dict:
+def extract_colors_from_b64(image_b64: str, num_colors: int = 8) -> dict:
     """
-    Extract dominant colors from a base64 encoded image using PIL.
-    Uses direct pixel sampling and clustering for accurate color representation.
+    Extract dominant colors from a base64 encoded image using MiniBatchKMeans clustering.
+    Processes the full image without downsampling for accurate color extraction.
     """
     # Remove data URL prefix if present
     if "," in image_b64:
@@ -36,73 +37,56 @@ def extract_colors_from_b64(image_b64: str, num_colors: int = 5) -> dict:
 
     logger.info(f"Image size: {image.size}, mode: {image.mode}")
 
-    # Resize for processing - keep reasonable size for accuracy
-    max_size = 256
-    if max(image.size) > max_size:
-        image.thumbnail((max_size, max_size), Image.Resampling.LANCZOS)
+    # Convert to numpy array - NO DOWNSAMPLING
+    img_np = np.array(image)
+    total_pixels = img_np.shape[0] * img_np.shape[1]
 
-    width, height = image.size
-    pixels = list(image.getdata())
-    total_pixels = len(pixels)
+    # Reshape to (num_pixels, 3) for clustering
+    pixels = img_np.reshape(-1, 3)
 
-    logger.info(f"Processing {total_pixels} pixels")
+    logger.info(f"Processing {total_pixels} pixels with MiniBatchKMeans")
 
-    # Sample pixels evenly across the image for better representation
-    # Instead of just counting, we'll bin colors in HSV space
-    color_bins = {}
+    # Use more clusters than needed for better color discovery
+    k = max(num_colors * 2, 12)
+    kmeans = MiniBatchKMeans(
+        n_clusters=k,
+        random_state=42,
+        batch_size=4096,
+        n_init=3,
+    )
+    kmeans.fit(pixels)
 
-    for pixel in pixels:
-        r, g, b = pixel[:3]
+    # Get cluster centers and their sizes
+    cluster_centers = kmeans.cluster_centers_.astype(int)
+    labels = kmeans.labels_
 
-        # Convert to HSV for better color grouping
-        h, s, v = colorsys.rgb_to_hsv(r/255, g/255, b/255)
+    # Count pixels in each cluster
+    unique, counts = np.unique(labels, return_counts=True)
+    cluster_sizes = dict(zip(unique, counts))
 
-        # Quantize in HSV space (more perceptually uniform)
-        # Hue: 12 bins (30 degrees each)
-        # Saturation: 4 bins
-        # Value: 4 bins
-        h_bin = int(h * 12) % 12
-        s_bin = min(int(s * 4), 3)
-        v_bin = min(int(v * 4), 3)
+    # Sort clusters by size (most common first)
+    sorted_clusters = sorted(
+        range(len(cluster_centers)),
+        key=lambda i: cluster_sizes.get(i, 0),
+        reverse=True
+    )
 
-        bin_key = (h_bin, s_bin, v_bin)
+    logger.info(f"Found {k} color clusters")
 
-        if bin_key not in color_bins:
-            color_bins[bin_key] = {"count": 0, "r_sum": 0, "g_sum": 0, "b_sum": 0}
-
-        color_bins[bin_key]["count"] += 1
-        color_bins[bin_key]["r_sum"] += r
-        color_bins[bin_key]["g_sum"] += g
-        color_bins[bin_key]["b_sum"] += b
-
-    # Sort bins by count and get average color for each
-    sorted_bins = sorted(color_bins.items(), key=lambda x: x[1]["count"], reverse=True)
-
-    logger.info(f"Found {len(sorted_bins)} color bins")
-
-    # Extract diverse colors
+    # Extract diverse colors, filtering for uniqueness
     extracted_colors = []
 
-    for bin_key, bin_data in sorted_bins:
+    for cluster_idx in sorted_clusters:
         if len(extracted_colors) >= num_colors:
             break
 
-        count = bin_data["count"]
-        # Skip if less than 1% of image
-        if count < total_pixels * 0.01 and len(extracted_colors) > 0:
-            continue
+        color = tuple(cluster_centers[cluster_idx])
+        count = cluster_sizes.get(cluster_idx, 0)
 
-        # Calculate average color for this bin
-        avg_r = int(bin_data["r_sum"] / count)
-        avg_g = int(bin_data["g_sum"] / count)
-        avg_b = int(bin_data["b_sum"] / count)
-
-        color = (avg_r, avg_g, avg_b)
-
-        # Check for uniqueness
+        # Check for uniqueness against already extracted colors
         is_unique = True
         for existing in extracted_colors:
-            if color_distance(color, existing) < 60:
+            if color_distance(color, existing) < 50:
                 is_unique = False
                 break
 
@@ -110,24 +94,20 @@ def extract_colors_from_b64(image_b64: str, num_colors: int = 5) -> dict:
             extracted_colors.append(color)
             hex_color = rgb_to_hex(color)
             desc = describe_color(color)
-            logger.info(f"Extracted: {hex_color} ({desc}) - {count} pixels ({count*100/total_pixels:.1f}%)")
+            pct = count * 100 / total_pixels
+            logger.info(f"Extracted: {hex_color} ({desc}) - {count} pixels ({pct:.1f}%)")
 
-    # If we still need more colors, relax constraints
+    # Ensure we have at least some colors
     if len(extracted_colors) < 3:
         logger.info("Relaxing uniqueness constraints...")
-        for bin_key, bin_data in sorted_bins:
+        for cluster_idx in sorted_clusters:
             if len(extracted_colors) >= num_colors:
                 break
-            count = bin_data["count"]
-            avg_r = int(bin_data["r_sum"] / count)
-            avg_g = int(bin_data["g_sum"] / count)
-            avg_b = int(bin_data["b_sum"] / count)
-            color = (avg_r, avg_g, avg_b)
-
+            color = tuple(cluster_centers[cluster_idx])
             if color not in extracted_colors:
                 is_unique = True
                 for existing in extracted_colors:
-                    if color_distance(color, existing) < 30:
+                    if color_distance(color, existing) < 25:
                         is_unique = False
                         break
                 if is_unique:
@@ -142,7 +122,7 @@ def extract_colors_from_b64(image_b64: str, num_colors: int = 5) -> dict:
     accents = hex_colors[3:5] if len(hex_colors) > 3 else []
 
     # Generate color descriptions
-    descriptions = [describe_color(c) for c in extracted_colors[:3]]
+    descriptions = [describe_color(c) for c in extracted_colors[:5]]
 
     # Calculate overall saturation and value
     avg_saturation = calculate_avg_saturation(extracted_colors[:5])

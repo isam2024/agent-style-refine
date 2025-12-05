@@ -5,6 +5,7 @@ from pathlib import Path
 from backend.services.vlm import vlm_service
 from backend.services.color_extractor import extract_colors_from_b64, color_distance, hex_to_rgb
 from backend.models.schemas import StyleProfile, CritiqueResult
+from backend.websocket import manager
 
 logger = logging.getLogger(__name__)
 
@@ -83,6 +84,7 @@ IMPORTANT:
         generated_image_b64: str,
         style_profile: StyleProfile,
         creativity_level: int = 50,
+        session_id: str | None = None,
     ) -> CritiqueResult:
         """
         Critique a generated image against the original style.
@@ -93,25 +95,51 @@ IMPORTANT:
             generated_image_b64: Base64 encoded generated image
             style_profile: Current style profile
             creativity_level: 0-100, controls how much mutation is allowed
+            session_id: Optional session ID for WebSocket logging
 
         Returns:
             CritiqueResult with scores, analysis, and updated profile
         """
+        async def log(msg: str, level: str = "info"):
+            logger.info(f"[critique] {msg}")
+            if session_id:
+                await manager.broadcast_log(session_id, msg, level, "critique")
+
+        generated_colors = None
+
         # Extract colors from both images using PIL for accurate comparison
-        logger.info("Extracting colors for comparison...")
+        await log("Extracting colors from original image...")
         try:
             original_colors = extract_colors_from_b64(original_image_b64)
+            orig_color_list = ", ".join(original_colors.get("color_descriptions", [])[:3])
+            await log(f"Original colors: {orig_color_list}")
+        except Exception as e:
+            await log(f"Original color extraction failed: {e}", "warning")
+            original_colors = None
+
+        await log("Extracting colors from generated image...")
+        try:
             generated_colors = extract_colors_from_b64(generated_image_b64)
+            gen_color_list = ", ".join(generated_colors.get("color_descriptions", [])[:3])
+            await log(f"Generated colors: {gen_color_list}")
+        except Exception as e:
+            await log(f"Generated color extraction failed: {e}", "warning")
+            generated_colors = None
+
+        if original_colors and generated_colors:
+            await log("Comparing color palettes...")
             color_analysis = self._compare_colors(
                 style_profile.palette.dominant_colors,
                 generated_colors["dominant_colors"],
                 original_colors,
                 generated_colors,
             )
-        except Exception as e:
-            logger.warning(f"Color extraction failed: {e}")
+            await log("Color comparison complete")
+        else:
             color_analysis = "Color analysis unavailable."
+            await log("Skipping color comparison due to extraction errors", "warning")
 
+        await log("Loading critique prompt template...")
         prompt_template = self._load_prompt()
 
         # Fill in template
@@ -123,24 +151,55 @@ IMPORTANT:
             "{{COLOR_ANALYSIS}}", color_analysis
         )
 
-        logger.info("Sending generated image to VLM for critique...")
+        await log("Connecting to VLM for style critique...")
+        await log(f"Prompt length: {len(prompt)} characters")
 
         # Only send the generated image (single-image model compatible)
-        response = await vlm_service.analyze(
-            prompt=prompt,
-            images=[generated_image_b64],
-        )
+        try:
+            await log("Sending request to Ollama VLM...")
+            response = await vlm_service.analyze(
+                prompt=prompt,
+                images=[generated_image_b64],
+            )
+            await log(f"VLM response received ({len(response)} chars)", "success")
+        except Exception as e:
+            await log(f"VLM request failed: {e}", "error")
+            raise
 
         # Parse JSON from response
-        result_dict = self._parse_json_response(response)
+        await log("Parsing VLM response...")
+        try:
+            result_dict = self._parse_json_response(response, style_profile)
+            scores = result_dict.get("match_scores", {})
+            await log(f"Parsed scores - Overall: {scores.get('overall', 'N/A')}, Palette: {scores.get('palette', 'N/A')}", "success")
+        except Exception as e:
+            await log(f"Response parsing failed: {e}", "error")
+            await log(f"Raw response preview: {response[:300]}...", "warning")
+            raise
 
         # Update palette in the result with PIL-extracted colors if available
         if generated_colors:
-            result_dict["updated_style_profile"]["palette"]["dominant_colors"] = generated_colors["dominant_colors"]
-            result_dict["updated_style_profile"]["palette"]["accents"] = generated_colors["accents"]
-            result_dict["updated_style_profile"]["palette"]["color_descriptions"] = generated_colors["color_descriptions"]
+            try:
+                await log("Applying extracted colors to updated profile...")
+                updated_profile = result_dict.get("updated_style_profile", {})
+                if "palette" not in updated_profile:
+                    updated_profile["palette"] = style_profile.palette.model_dump()
+                updated_profile["palette"]["dominant_colors"] = generated_colors["dominant_colors"]
+                updated_profile["palette"]["accents"] = generated_colors["accents"]
+                updated_profile["palette"]["color_descriptions"] = generated_colors["color_descriptions"]
+                result_dict["updated_style_profile"] = updated_profile
+            except Exception as e:
+                await log(f"Failed to update palette in critique result: {e}", "warning")
 
-        return CritiqueResult(**result_dict)
+        await log("Building critique result...")
+        try:
+            critique_result = CritiqueResult(**result_dict)
+            await log("Critique result created successfully", "success")
+            return critique_result
+        except Exception as e:
+            await log(f"Failed to create CritiqueResult: {e}", "error")
+            await log(f"Result dict keys: {list(result_dict.keys())}", "error")
+            raise
 
     def _compare_colors(
         self,
@@ -193,33 +252,80 @@ IMPORTANT:
 
         return "\n".join(lines)
 
-    def _parse_json_response(self, response: str) -> dict:
-        """Extract JSON from VLM response."""
+    def _parse_json_response(self, response: str, style_profile: StyleProfile) -> dict:
+        """Extract JSON from VLM response, with fallback to defaults."""
         import re
+
+        parsed = None
 
         # Try direct parsing first
         try:
-            return json.loads(response)
+            parsed = json.loads(response)
         except json.JSONDecodeError:
             pass
 
         # Try to find JSON in markdown code block
-        json_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", response, re.DOTALL)
-        if json_match:
-            try:
-                return json.loads(json_match.group(1))
-            except:
-                pass
+        if not parsed:
+            json_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", response, re.DOTALL)
+            if json_match:
+                try:
+                    parsed = json.loads(json_match.group(1))
+                except:
+                    pass
 
         # Try to find raw JSON object (greedy match for nested objects)
-        json_match = re.search(r"\{.*\}", response, re.DOTALL)
-        if json_match:
-            try:
-                return json.loads(json_match.group(0))
-            except:
-                pass
+        if not parsed:
+            json_match = re.search(r"\{.*\}", response, re.DOTALL)
+            if json_match:
+                try:
+                    parsed = json.loads(json_match.group(0))
+                except:
+                    pass
 
-        raise ValueError(f"Could not parse JSON from response: {response[:500]}")
+        # Build result with defaults, merging any parsed data
+        result = {
+            "match_scores": {
+                "palette": 70,
+                "line_and_shape": 70,
+                "texture": 70,
+                "lighting": 70,
+                "composition": 70,
+                "motifs": 70,
+                "overall": 70,
+            },
+            "preserved_traits": [],
+            "lost_traits": [],
+            "interesting_mutations": [],
+            "updated_style_profile": style_profile.model_dump(),
+        }
+
+        if parsed:
+            # Merge parsed data into result
+            if "match_scores" in parsed and isinstance(parsed["match_scores"], dict):
+                result["match_scores"].update(parsed["match_scores"])
+            if "preserved_traits" in parsed and isinstance(parsed["preserved_traits"], list):
+                result["preserved_traits"] = parsed["preserved_traits"]
+            if "lost_traits" in parsed and isinstance(parsed["lost_traits"], list):
+                result["lost_traits"] = parsed["lost_traits"]
+            if "interesting_mutations" in parsed and isinstance(parsed["interesting_mutations"], list):
+                result["interesting_mutations"] = parsed["interesting_mutations"]
+            if "updated_style_profile" in parsed and isinstance(parsed["updated_style_profile"], dict):
+                # Merge the parsed profile with defaults from current style
+                base_profile = style_profile.model_dump()
+                self._deep_merge(base_profile, parsed["updated_style_profile"])
+                result["updated_style_profile"] = base_profile
+        else:
+            logger.warning(f"Could not parse JSON from VLM response, using defaults. Response: {response[:300]}")
+
+        return result
+
+    def _deep_merge(self, base: dict, updates: dict) -> None:
+        """Deep merge updates into base dict."""
+        for key, value in updates.items():
+            if key in base and isinstance(base[key], dict) and isinstance(value, dict):
+                self._deep_merge(base[key], value)
+            else:
+                base[key] = value
 
 
 style_critic = StyleCritic()

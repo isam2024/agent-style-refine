@@ -6,6 +6,7 @@ import logging
 from pathlib import Path
 
 from backend.config import settings
+from backend.websocket import manager
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +105,7 @@ class ComfyUIService:
         prompt: str,
         workflow: dict | None = None,
         seed: int | None = None,
+        session_id: str | None = None,
     ) -> str:
         """
         Generate an image using ComfyUI.
@@ -112,10 +114,16 @@ class ComfyUIService:
             prompt: The image generation prompt
             workflow: Custom workflow dict (optional, uses default if not provided)
             seed: Random seed (optional)
+            session_id: Optional session ID for WebSocket logging
 
         Returns:
             Base64 encoded generated image
         """
+        async def log(msg: str, level: str = "info"):
+            logger.info(f"[comfyui] {msg}")
+            if session_id:
+                await manager.broadcast_log(session_id, msg, level, "generate")
+
         if workflow is None:
             workflow = self._get_default_workflow(prompt, seed)
         else:
@@ -123,10 +131,12 @@ class ComfyUIService:
 
         payload = {"prompt": workflow, "client_id": self.client_id}
 
-        logger.info(f"ComfyUI: Queuing generation with prompt: {prompt[:100]}...")
+        await log(f"Connecting to ComfyUI at {self.base_url}...")
+        await log(f"Prompt: {prompt[:80]}...")
 
         async with httpx.AsyncClient(timeout=600.0) as client:
             try:
+                await log("Submitting workflow to queue...")
                 response = await client.post(
                     f"{self.base_url}/prompt",
                     json=payload,
@@ -134,18 +144,21 @@ class ComfyUIService:
                 response.raise_for_status()
                 result = response.json()
                 prompt_id = result["prompt_id"]
-                logger.info(f"ComfyUI: Queued prompt_id={prompt_id}")
+                await log(f"Queued job: {prompt_id}", "success")
 
-                image_data = await self._wait_for_completion(client, prompt_id)
-                logger.info(f"ComfyUI: Generation complete")
+                image_data = await self._wait_for_completion(client, prompt_id, session_id)
+                await log("Image generation complete!", "success")
                 return image_data
 
             except httpx.HTTPStatusError as e:
                 error_detail = e.response.text if e.response else str(e)
-                logger.error(f"ComfyUI HTTP error: {e.response.status_code} - {error_detail}")
+                await log(f"HTTP error {e.response.status_code}: {error_detail}", "error")
                 raise RuntimeError(f"ComfyUI error: {error_detail}")
+            except httpx.ConnectError as e:
+                await log(f"Connection failed - is ComfyUI running at {self.base_url}?", "error")
+                raise RuntimeError(f"Cannot connect to ComfyUI: {e}")
             except Exception as e:
-                logger.error(f"ComfyUI error: {e}")
+                await log(f"Generation failed: {e}", "error")
                 raise
 
     def _inject_prompt(
@@ -168,11 +181,18 @@ class ComfyUIService:
         return workflow
 
     async def _wait_for_completion(
-        self, client: httpx.AsyncClient, prompt_id: str
+        self, client: httpx.AsyncClient, prompt_id: str, session_id: str | None = None
     ) -> str:
         """Poll for generation completion and return the image."""
+        async def log(msg: str, level: str = "info"):
+            logger.info(f"[comfyui] {msg}")
+            if session_id:
+                await manager.broadcast_log(session_id, msg, level, "generate")
+
         max_attempts = 300
         attempt = 0
+
+        await log("Waiting for ComfyUI to process...")
 
         while attempt < max_attempts:
             try:
@@ -185,7 +205,7 @@ class ComfyUIService:
                         status = history[prompt_id].get("status", {})
                         if status.get("status_str") == "error":
                             error_msg = status.get("messages", [["Error", "Unknown error"]])
-                            logger.error(f"ComfyUI execution error: {error_msg}")
+                            await log(f"ComfyUI execution error: {error_msg}", "error")
                             raise RuntimeError(f"ComfyUI execution failed: {error_msg}")
 
                         outputs = history[prompt_id].get("outputs", {})
@@ -197,6 +217,7 @@ class ComfyUIService:
                                 subfolder = image_info.get("subfolder", "")
                                 folder_type = image_info.get("type", "output")
 
+                                await log(f"Downloading generated image: {filename}")
                                 image_response = await client.get(
                                     f"{self.base_url}/view",
                                     params={
@@ -211,13 +232,14 @@ class ComfyUIService:
                                 ).decode("utf-8")
 
             except httpx.HTTPStatusError as e:
-                logger.warning(f"ComfyUI poll error: {e}")
+                await log(f"Poll error: {e}", "warning")
 
             await asyncio.sleep(1)
             attempt += 1
             if attempt % 10 == 0:
-                logger.info(f"ComfyUI: Still waiting... ({attempt}s)")
+                await log(f"Still generating... ({attempt}s elapsed)")
 
+        await log("Generation timed out after 5 minutes", "error")
         raise TimeoutError("Image generation timed out after 5 minutes")
 
     async def health_check(self) -> bool:
