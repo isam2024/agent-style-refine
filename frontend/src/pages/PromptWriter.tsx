@@ -48,6 +48,13 @@ function PromptWriter() {
     enabled: !!selectedStyleId,
   })
 
+  // Fetch style breakdown when style is selected
+  const { data: styleBreakdown } = useQuery({
+    queryKey: ['style-breakdown', selectedStyleId],
+    queryFn: () => writePrompt(selectedStyleId!, 'preview', undefined, false),
+    enabled: !!selectedStyleId,
+  })
+
   const writeMutation = useMutation({
     mutationFn: () =>
       writePrompt(
@@ -99,6 +106,10 @@ function PromptWriter() {
     if (!selectedStyleId || !subject.trim()) return
     generateMutation.mutate()
   }
+
+  // Use result breakdown if available, otherwise use styleBreakdown
+  const activeBreakdown = result?.prompt_breakdown || styleBreakdown?.prompt_breakdown
+  const activeStyleName = result?.style_name || styleBreakdown?.style_name
 
   return (
     <div className="space-y-6">
@@ -159,20 +170,20 @@ function PromptWriter() {
             )}
           </div>
 
-          {/* Selected Style Info - shows prompt breakdown after first write */}
-          {result?.prompt_breakdown && (
+          {/* Selected Style Info - shows prompt breakdown */}
+          {activeBreakdown && (
             <div className="bg-white rounded-xl border border-slate-200 p-4">
               <h3 className="text-sm font-medium text-slate-700 mb-3">
-                Style Agent: {result.style_name}
+                Style Agent: {activeStyleName}
               </h3>
 
               {/* Technique & Mood */}
               <div className="space-y-3 text-xs">
-                {result.prompt_breakdown.technique?.length > 0 && (
+                {activeBreakdown.technique?.length > 0 && (
                   <div>
                     <span className="text-slate-400 font-medium block mb-1">Technique:</span>
                     <div className="flex flex-wrap gap-1">
-                      {result.prompt_breakdown.technique.map((t: string, i: number) => (
+                      {activeBreakdown.technique.map((t: string, i: number) => (
                         <span key={i} className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
                           {t}
                         </span>
@@ -180,11 +191,11 @@ function PromptWriter() {
                     </div>
                   </div>
                 )}
-                {result.prompt_breakdown.mood?.length > 0 && (
+                {activeBreakdown.mood?.length > 0 && (
                   <div>
                     <span className="text-slate-400 font-medium block mb-1">Mood:</span>
                     <div className="flex flex-wrap gap-1">
-                      {result.prompt_breakdown.mood.map((m: string, i: number) => (
+                      {activeBreakdown.mood.map((m: string, i: number) => (
                         <span key={i} className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded">
                           {m}
                         </span>
@@ -194,41 +205,41 @@ function PromptWriter() {
                 )}
 
                 {/* Lighting, Texture, Composition */}
-                {result.prompt_breakdown.lighting && (
+                {activeBreakdown.lighting && (
                   <div>
                     <span className="text-slate-400 font-medium block mb-1">Lighting:</span>
                     <div className="text-slate-600 space-y-0.5">
-                      <div>{result.prompt_breakdown.lighting.type}</div>
-                      <div className="text-slate-400 text-[10px]">Shadows: {result.prompt_breakdown.lighting.shadows}</div>
-                      <div className="text-slate-400 text-[10px]">Highlights: {result.prompt_breakdown.lighting.highlights}</div>
+                      <div>{activeBreakdown.lighting.type}</div>
+                      <div className="text-slate-400 text-[10px]">Shadows: {activeBreakdown.lighting.shadows}</div>
+                      <div className="text-slate-400 text-[10px]">Highlights: {activeBreakdown.lighting.highlights}</div>
                     </div>
                   </div>
                 )}
-                {result.prompt_breakdown.texture && (
+                {activeBreakdown.texture && (
                   <div>
                     <span className="text-slate-400 font-medium block mb-1">Texture:</span>
                     <div className="text-slate-600 space-y-0.5">
-                      <div>{result.prompt_breakdown.texture.surface}</div>
-                      <div className="text-slate-400 text-[10px]">Noise: {result.prompt_breakdown.texture.noise}</div>
+                      <div>{activeBreakdown.texture.surface}</div>
+                      <div className="text-slate-400 text-[10px]">Noise: {activeBreakdown.texture.noise}</div>
                     </div>
                   </div>
                 )}
-                {result.prompt_breakdown.composition && (
+                {activeBreakdown.composition && (
                   <div>
                     <span className="text-slate-400 font-medium block mb-1">Composition:</span>
                     <div className="text-slate-600 space-y-0.5">
-                      <div>{result.prompt_breakdown.composition.camera}</div>
-                      <div className="text-slate-400 text-[10px]">{result.prompt_breakdown.composition.framing}</div>
+                      <div>{activeBreakdown.composition.camera}</div>
+                      <div className="text-slate-400 text-[10px]">{activeBreakdown.composition.framing}</div>
                     </div>
                   </div>
                 )}
 
                 {/* Palette */}
-                {result.prompt_breakdown.palette?.length > 0 && (
+                {activeBreakdown.palette?.length > 0 && (
                   <div>
                     <span className="text-slate-400 font-medium block mb-1">Color Palette:</span>
                     <div className="flex flex-wrap gap-1">
-                      {result.prompt_breakdown.palette.map((c: string, i: number) => (
+                      {activeBreakdown.palette.map((c: string, i: number) => (
                         <span key={i} className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
                           {c}
                         </span>
@@ -238,11 +249,11 @@ function PromptWriter() {
                 )}
 
                 {/* Core Invariants */}
-                {result.prompt_breakdown.core_invariants?.length > 0 && (
+                {activeBreakdown.core_invariants?.length > 0 && (
                   <div>
                     <span className="text-slate-400 font-medium block mb-1">Core Invariants:</span>
                     <ul className="list-disc list-inside text-slate-600 space-y-0.5">
-                      {result.prompt_breakdown.core_invariants.slice(0, 3).map((r: string, i: number) => (
+                      {activeBreakdown.core_invariants.slice(0, 3).map((r: string, i: number) => (
                         <li key={i}>{r}</li>
                       ))}
                     </ul>
