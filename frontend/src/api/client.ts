@@ -283,6 +283,7 @@ export async function writeAndGenerate(
 ): Promise<PromptGenerateResponse> {
   return fetchJson<PromptGenerateResponse>(`${API_BASE}/styles/write-and-generate`, {
     method: 'POST',
+    timeout: LONG_TIMEOUT, // Image generation can take a long time
     body: JSON.stringify({
       style_id: styleId,
       subject,
