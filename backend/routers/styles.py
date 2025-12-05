@@ -220,6 +220,25 @@ async def get_style(
     )
 
 
+@router.post("/checkpoint", response_model=TrainedStyleResponse)
+async def checkpoint_style(
+    data: TrainedStyleCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Create a checkpoint of the current training state WITHOUT ending the session.
+
+    This allows you to:
+    - Save interim progress during training
+    - Compare different training stages
+    - Revert to earlier states if needed
+    - Continue training after checkpoint
+
+    The session remains active and you can continue iterating.
+    """
+    return await _create_style_snapshot(data, db, is_checkpoint=True)
+
+
 @router.post("/finalize", response_model=TrainedStyleResponse)
 async def finalize_style(
     data: TrainedStyleCreate,
@@ -227,6 +246,21 @@ async def finalize_style(
 ):
     """
     Finalize a training session into a reusable trained style.
+
+    This creates a final production-ready style from your training session.
+    The session remains intact - you can still continue training if needed,
+    but this marks a style as "complete" for use in production.
+    """
+    return await _create_style_snapshot(data, db, is_checkpoint=False)
+
+
+async def _create_style_snapshot(
+    data: TrainedStyleCreate,
+    db: AsyncSession,
+    is_checkpoint: bool = False,
+):
+    """
+    Internal function to create a style snapshot (checkpoint or finalization).
     Extracts the latest style profile and generates style rules.
     """
     # Get the session with all related data
@@ -316,9 +350,23 @@ async def finalize_style(
                 except Exception:
                     pass
 
+    # Build name with checkpoint indicator if needed
+    display_name = data.name
+    tags_with_type = list(data.tags) if data.tags else []
+
+    if is_checkpoint:
+        # Add checkpoint indicator
+        if not display_name.startswith("[CHECKPOINT]"):
+            display_name = f"[CHECKPOINT] {data.name}"
+        if "checkpoint" not in tags_with_type:
+            tags_with_type.append("checkpoint")
+    else:
+        if "finalized" not in tags_with_type:
+            tags_with_type.append("finalized")
+
     # Create the trained style (agent)
     trained_style = TrainedStyle(
-        name=data.name,
+        name=display_name,
         description=data.description,
         style_profile_json=style_profile.model_dump(),
         style_rules_json=style_rules.model_dump(),
@@ -327,7 +375,7 @@ async def finalize_style(
         source_session_id=session.id,
         iterations_trained=len(session.iterations),
         final_score=final_score,
-        tags_json=data.tags,
+        tags_json=tags_with_type,
     )
 
     db.add(trained_style)
