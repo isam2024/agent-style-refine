@@ -316,3 +316,12 @@ export async function getGenerationHistory(
     }
   );
 }
+
+export async function regenerateThumbnail(styleId: string): Promise<{ status: string; message: string }> {
+  return fetchJson<{ status: string; message: string }>(
+    `${API_BASE}/styles/${styleId}/regenerate-thumbnail`,
+    {
+      method: 'POST',
+    }
+  );
+}

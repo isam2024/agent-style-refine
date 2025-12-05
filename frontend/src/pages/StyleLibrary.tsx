@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { listStyles, deleteStyle } from '../api/client'
+import { listStyles, deleteStyle, regenerateThumbnail } from '../api/client'
 import { TrainedStyleSummary } from '../types'
 
 function StyleLibrary() {
@@ -20,6 +20,13 @@ function StyleLibrary() {
     },
   })
 
+  const regenerateThumbnailMutation = useMutation({
+    mutationFn: regenerateThumbnail,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['styles'] })
+    },
+  })
+
   // Collect all unique tags
   const allTags = Array.from(
     new Set(styles?.flatMap((s) => s.tags) || [])
@@ -29,6 +36,10 @@ function StyleLibrary() {
     if (confirm(`Delete style "${style.name}"?`)) {
       deleteMutation.mutate(style.id)
     }
+  }
+
+  const handleRegenerateThumbnail = (style: TrainedStyleSummary) => {
+    regenerateThumbnailMutation.mutate(style.id)
   }
 
   return (
@@ -159,19 +170,28 @@ function StyleLibrary() {
                 )}
 
                 {/* Actions */}
-                <div className="flex items-center gap-2 mt-4">
-                  <Link
-                    to={`/write/${style.id}`}
-                    className="flex-1 text-center px-3 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700"
-                  >
-                    Use Style
-                  </Link>
+                <div className="space-y-2 mt-4">
+                  <div className="flex items-center gap-2">
+                    <Link
+                      to={`/write/${style.id}`}
+                      className="flex-1 text-center px-3 py-2 bg-green-600 text-white text-sm rounded-lg hover:bg-green-700"
+                    >
+                      Use Style
+                    </Link>
+                    <button
+                      onClick={() => handleDelete(style)}
+                      className="px-3 py-2 text-red-600 text-sm rounded-lg hover:bg-red-50"
+                      disabled={deleteMutation.isPending}
+                    >
+                      Delete
+                    </button>
+                  </div>
                   <button
-                    onClick={() => handleDelete(style)}
-                    className="px-3 py-2 text-red-600 text-sm rounded-lg hover:bg-red-50"
-                    disabled={deleteMutation.isPending}
+                    onClick={() => handleRegenerateThumbnail(style)}
+                    className="w-full px-3 py-1.5 text-blue-600 text-xs rounded-lg hover:bg-blue-50 border border-blue-200"
+                    disabled={regenerateThumbnailMutation.isPending}
                   >
-                    Delete
+                    {regenerateThumbnailMutation.isPending ? 'Regenerating...' : '🔄 Regenerate Thumbnail'}
                   </button>
                 </div>
               </div>

@@ -549,6 +549,76 @@ async def batch_write_prompts(
     return results
 
 
+@router.post("/{style_id}/regenerate-thumbnail")
+async def regenerate_thumbnail(
+    style_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Regenerate thumbnail for a trained style using best iteration.
+    Useful for updating styles created before thumbnail fix.
+    """
+    # Get the style
+    result = await db.execute(
+        select(TrainedStyle).where(TrainedStyle.id == style_id)
+    )
+    style = result.scalar_one_or_none()
+
+    if not style:
+        raise HTTPException(status_code=404, detail="Style not found")
+
+    if not style.source_session_id:
+        raise HTTPException(status_code=400, detail="Style has no source session")
+
+    # Get the source session with iterations
+    result = await db.execute(
+        select(Session)
+        .options(selectinload(Session.iterations))
+        .where(Session.id == style.source_session_id)
+    )
+    session = result.scalar_one_or_none()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Source session not found")
+
+    # Find best iteration (same logic as finalize)
+    thumbnail = None
+    best_iteration = None
+
+    if session.iterations:
+        approved_iterations = [it for it in session.iterations if it.approved]
+        if approved_iterations:
+            best_iteration = max(
+                approved_iterations,
+                key=lambda it: it.scores_json.get("overall", 0) if it.scores_json else 0
+            )
+        else:
+            best_iteration = max(session.iterations, key=lambda it: it.iteration_num)
+
+    # Create thumbnail from best iteration's image
+    if best_iteration and best_iteration.image_path:
+        try:
+            image_b64 = await storage_service.load_image_raw(best_iteration.image_path)
+            thumbnail = create_thumbnail(image_b64)
+        except Exception as e:
+            logger.warning(f"Failed to load iteration image: {e}")
+            # Fallback to original if iteration image fails
+            if session.original_image_path:
+                try:
+                    image_b64 = await storage_service.load_image_raw(session.original_image_path)
+                    thumbnail = create_thumbnail(image_b64)
+                except Exception as e:
+                    logger.warning(f"Failed to load original image: {e}")
+
+    if thumbnail:
+        style.thumbnail_b64 = thumbnail
+        await db.commit()
+        await db.refresh(style)
+        return {"status": "success", "message": "Thumbnail regenerated"}
+    else:
+        raise HTTPException(status_code=500, detail="Failed to generate thumbnail")
+
+
 @router.get("/{style_id}/history", response_model=list[GenerationHistoryResponse])
 async def get_generation_history(
     style_id: str,
