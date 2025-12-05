@@ -21,12 +21,13 @@ class StyleCritic:
         return self._get_default_prompt()
 
     def _get_default_prompt(self) -> str:
-        return """You are a STYLE CRITIC analyzing a GENERATED IMAGE against a target style profile.
+        return """You are a STYLE CRITIC comparing two images for style consistency.
 
 You are given:
-1. The GENERATED IMAGE to analyze
-2. The TARGET STYLE PROFILE (JSON) that describes the desired style
-3. COLOR ANALYSIS comparing the generated image colors to the target palette
+1. IMAGE 1 (first/left): The ORIGINAL REFERENCE image that defines the target style
+2. IMAGE 2 (second/right): The GENERATED image that attempts to replicate that style
+3. The TARGET STYLE PROFILE (JSON) extracted from the original
+4. COLOR ANALYSIS comparing the palettes
 
 Your tasks:
 1. Score how well the generated image matches the target style on each dimension (0-100)
@@ -154,12 +155,12 @@ IMPORTANT:
         await log("Connecting to VLM for style critique...")
         await log(f"Prompt length: {len(prompt)} characters")
 
-        # Only send the generated image (single-image model compatible)
+        # Send both images for proper comparison
         try:
-            await log("Sending request to Ollama VLM...")
+            await log("Sending both images to VLM for comparison...")
             response = await vlm_service.analyze(
                 prompt=prompt,
-                images=[generated_image_b64],
+                images=[original_image_b64, generated_image_b64],
             )
             await log(f"VLM response received ({len(response)} chars)", "success")
         except Exception as e:
