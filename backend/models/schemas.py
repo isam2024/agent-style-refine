@@ -297,7 +297,9 @@ class PromptWriteRequest(BaseModel):
 
 class PromptWriteResponse(BaseModel):
     """Response with styled prompt."""
-    positive_prompt: str = Field(description="The styled positive prompt")
+    subject: str = Field(description="The subject (returned separately)")
+    style_prompt: str = Field(description="ONLY style information (no subject)")
+    positive_prompt: str = Field(description="Combined subject + style for convenience")
     negative_prompt: str | None = Field(description="Negative prompt if requested")
     style_name: str = Field(description="Name of the style used")
     # Optional: breakdown of how the prompt was constructed

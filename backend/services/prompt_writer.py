@@ -36,23 +36,25 @@ class PromptWriter:
         composition = style_profile.composition
 
         # Build prompt as natural flowing sentences
+        # NOTE: Subject is NOT included - only style information
         sentences = []
 
-        # === SENTENCE 1: Subject + Style Technique ===
-        opening = subject.strip().capitalize()
+        # === SENTENCE 1: Style Technique ===
+        opening_parts = []
 
         # Add primary technique
         if style_rules.technique_keywords and len(style_rules.technique_keywords) > 0:
-            opening += f", rendered in {style_rules.technique_keywords[0]}"
+            opening_parts.append(f"Rendered in {style_rules.technique_keywords[0]}")
         elif texture.surface:
             # Fallback to texture description as technique
-            opening += f", created with {texture.surface}"
+            opening_parts.append(f"Created with {texture.surface}")
 
         # Add style name if meaningful
         if style_profile.style_name and style_profile.style_name.lower() not in ["extracted style", "unnamed style"]:
-            opening += f" {style_profile.style_name} style"
+            opening_parts.append(f"{style_profile.style_name} style")
 
-        sentences.append(opening)
+        if opening_parts:
+            sentences.append(". ".join(opening_parts))
 
         # === SENTENCE 2: Color Palette ===
         if palette.color_descriptions and len(palette.color_descriptions) > 0:
@@ -265,7 +267,9 @@ class PromptWriter:
         }
 
         return PromptWriteResponse(
-            positive_prompt=positive_prompt,
+            subject=subject,  # Subject returned separately
+            style_prompt=positive_prompt,  # Only style information
+            positive_prompt=f"{subject.strip()}. {positive_prompt}",  # Combined for convenience
             negative_prompt=negative_prompt,
             style_name=style_profile.style_name,
             prompt_breakdown=prompt_breakdown,
