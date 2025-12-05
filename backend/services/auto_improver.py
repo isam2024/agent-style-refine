@@ -211,6 +211,7 @@ class AutoImprover:
     def evaluate_iteration(
         self,
         new_scores: dict[str, int],
+        critique_result,  # CritiqueResult with preserved_traits, lost_traits
         best_approved_score: int | None = None,
         training_insights: dict | None = None,
     ) -> tuple[bool, str, dict]:
@@ -234,7 +235,74 @@ class AutoImprover:
         """
         overall_score = new_scores.get("overall", 0)
 
-        # Check catastrophic failures first (always reject)
+        # Check for subject/content preservation failures FIRST (highest priority)
+        # These indicate the generated image doesn't match the requested subject
+        lost_traits = critique_result.lost_traits if critique_result else []
+
+        # Keywords that indicate critical subject changes (not style)
+        subject_critical_keywords = [
+            # Demographics/identity (highest priority - these should NEVER change)
+            "african", "asian", "caucasian", "latino", "hispanic", "indigenous",
+            "black", "white", "brown", "dark skin", "light skin", "skin tone",
+            # Gender/age (should not change)
+            "male", "female", "man", "woman", "boy", "girl", "child", "person",
+            "young", "old", "elderly", "adult", "teenager",
+            # Main objects/subjects (critical content)
+            "car", "vehicle", "automobile", "truck", "suv",
+            "building", "house", "structure", "architecture",
+            "animal", "dog", "cat", "horse", "bird", "pet",
+            "motorcycle", "bicycle", "bike", "boat", "plane", "aircraft",
+            # Human features that shouldn't change
+            "face", "facial features", "eyes", "hair color", "beard", "mustache",
+            # Clothing/accessories that define the subject
+            "uniform", "suit", "dress", "hat", "glasses",
+            # Subject identifiers
+            "subject", "main figure", "primary subject", "protagonist", "character",
+        ]
+
+        # Also check for "drift" patterns - phrases indicating deviation from original
+        drift_indicators = [
+            "different", "changed to", "became", "replaced with", "instead of",
+            "now shows", "switched to", "transformed into", "altered to",
+        ]
+
+        subject_preservation_failures = []
+        drift_detected = []
+
+        for trait in lost_traits:
+            trait_lower = trait.lower()
+
+            # Check for explicit drift language
+            for indicator in drift_indicators:
+                if indicator in trait_lower:
+                    drift_detected.append(trait)
+                    break
+
+            # Check for critical subject keywords
+            for keyword in subject_critical_keywords:
+                if keyword in trait_lower:
+                    # Extra check: is this about the subject or just a style descriptor?
+                    # Reject if it includes identity/demographic terms or main objects
+                    critical_terms = ["african", "asian", "caucasian", "black", "white", "brown",
+                                    "male", "female", "man", "woman", "car", "vehicle",
+                                    "face", "subject", "figure"]
+                    is_critical = any(term in trait_lower for term in critical_terms)
+                    if is_critical:
+                        subject_preservation_failures.append(trait)
+                    break
+
+        all_failures = subject_preservation_failures + drift_detected
+        if all_failures:
+            analysis = {
+                "overall_score": overall_score,
+                "subject_preservation_failures": subject_preservation_failures,
+                "drift_detected": drift_detected,
+                "lost_traits": lost_traits,
+            }
+            failure_summary = all_failures[:2]  # Show first 2
+            return False, f"FAIL (Subject Drift): Critical subject changed - {', '.join(failure_summary)}", analysis
+
+        # Check catastrophic failures (always reject)
         catastrophic_failures = []
         for dimension, score in new_scores.items():
             if dimension == "overall":
@@ -292,8 +360,12 @@ class AutoImprover:
             return True, f"PASS (Tier 2 - Incremental): Overall {overall_score} (+{improvement} from {best_approved_score})", analysis
 
         if best_approved_score is None:
-            # First iteration - be lenient, establish baseline
-            return True, f"PASS (Baseline): First iteration with overall {overall_score}", analysis
+            # First iteration - be more lenient with score threshold
+            # But we already checked subject preservation above, so this is safe
+            if overall_score >= 50:  # Very lenient baseline threshold
+                return True, f"PASS (Baseline): First iteration with overall {overall_score}", analysis
+            else:
+                return False, f"FAIL: First iteration score too low ({overall_score} < 50 baseline threshold)", analysis
 
         # Fail - neither meets targets nor improves incrementally
         if improvement is not None:

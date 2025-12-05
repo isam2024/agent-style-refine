@@ -528,6 +528,7 @@ async def run_auto_improve(
             new_scores = iteration_result["critique"].match_scores
             should_approve, eval_reason, eval_analysis = auto_improver.evaluate_iteration(
                 new_scores=new_scores,
+                critique_result=iteration_result["critique"],
                 best_approved_score=best_approved_score,
                 training_insights=training_insights,
             )
