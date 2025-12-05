@@ -1,0 +1,321 @@
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
+
+from backend.database import get_db
+from backend.models.schemas import (
+    IterationRequest,
+    FeedbackRequest,
+    AutoModeRequest,
+    StyleProfile,
+    SessionStatus,
+)
+from backend.models.db_models import Session, StyleProfileDB, Iteration
+from backend.services.storage import storage_service
+from backend.services.agent import style_agent
+from backend.services.comfyui import comfyui_service
+from backend.services.critic import style_critic
+
+router = APIRouter(prefix="/api/iterate", tags=["iteration"])
+
+
+@router.post("/step")
+async def run_iteration_step(
+    data: IterationRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Run a single full iteration: generate image + critique."""
+    # Get session with all related data
+    result = await db.execute(
+        select(Session)
+        .options(selectinload(Session.style_profiles), selectinload(Session.iterations))
+        .where(Session.id == data.session_id)
+    )
+    session = result.scalar_one_or_none()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if not session.style_profiles:
+        raise HTTPException(status_code=400, detail="No style profile found")
+
+    if not session.original_image_path:
+        raise HTTPException(status_code=400, detail="No original image found")
+
+    # Get latest style profile
+    latest_profile_db = max(session.style_profiles, key=lambda sp: sp.version)
+    style_profile = StyleProfile(**latest_profile_db.profile_json)
+
+    # Gather feedback history
+    feedback_history = [
+        {"iteration": it.iteration_num, "notes": it.feedback}
+        for it in session.iterations
+        if it.feedback
+    ]
+
+    try:
+        # Step 1: Generate image prompt
+        session.status = SessionStatus.GENERATING.value
+        await db.commit()
+
+        image_prompt = await style_agent.generate_image_prompt(
+            style_profile=style_profile,
+            subject=data.subject,
+            feedback_history=feedback_history,
+        )
+
+        # Step 2: Generate image
+        image_b64 = await comfyui_service.generate(prompt=image_prompt)
+
+        # Save image
+        iteration_num = len(session.iterations) + 1
+        filename = storage_service.get_iteration_filename(iteration_num)
+        image_path = await storage_service.save_image(
+            session.id, image_b64, filename
+        )
+
+        # Create iteration record
+        iteration = Iteration(
+            session_id=session.id,
+            iteration_num=iteration_num,
+            image_path=str(image_path),
+            prompt_used=image_prompt,
+        )
+        db.add(iteration)
+        await db.flush()
+
+        # Step 3: Critique
+        session.status = SessionStatus.CRITIQUING.value
+        await db.commit()
+
+        original_b64 = await storage_service.load_image_raw(
+            session.original_image_path
+        )
+        critique_result = await style_critic.critique(
+            original_image_b64=original_b64,
+            generated_image_b64=image_b64,
+            style_profile=style_profile,
+            creativity_level=data.creativity_level,
+        )
+
+        # Update iteration with scores
+        iteration.scores_json = critique_result.match_scores
+
+        session.status = SessionStatus.READY.value
+        await db.commit()
+        await db.refresh(iteration)
+
+        return {
+            "iteration_id": iteration.id,
+            "iteration_num": iteration_num,
+            "image_b64": f"data:image/png;base64,{image_b64}",
+            "prompt_used": image_prompt,
+            "critique": {
+                "match_scores": critique_result.match_scores,
+                "preserved_traits": critique_result.preserved_traits,
+                "lost_traits": critique_result.lost_traits,
+                "interesting_mutations": critique_result.interesting_mutations,
+            },
+            "updated_profile": critique_result.updated_style_profile.model_dump(),
+        }
+
+    except Exception as e:
+        session.status = SessionStatus.ERROR.value
+        await db.commit()
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/feedback")
+async def submit_feedback(
+    data: FeedbackRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Submit user feedback for an iteration."""
+    result = await db.execute(
+        select(Iteration).where(Iteration.id == data.iteration_id)
+    )
+    iteration = result.scalar_one_or_none()
+
+    if not iteration:
+        raise HTTPException(status_code=404, detail="Iteration not found")
+
+    iteration.approved = data.approved
+    iteration.feedback = data.notes
+    await db.commit()
+
+    return {
+        "status": "feedback_recorded",
+        "iteration_id": iteration.id,
+        "approved": iteration.approved,
+    }
+
+
+@router.post("/apply-update")
+async def apply_profile_update(
+    session_id: str,
+    updated_profile: StyleProfile,
+    db: AsyncSession = Depends(get_db),
+):
+    """Apply an updated style profile from critique."""
+    result = await db.execute(
+        select(Session)
+        .options(selectinload(Session.style_profiles))
+        .where(Session.id == session_id)
+    )
+    session = result.scalar_one_or_none()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    current_version = max(
+        (sp.version for sp in session.style_profiles), default=0
+    )
+    new_version = current_version + 1
+
+    new_profile_db = StyleProfileDB(
+        session_id=session_id,
+        version=new_version,
+        profile_json=updated_profile.model_dump(),
+    )
+    db.add(new_profile_db)
+    await db.commit()
+
+    return {"version": new_version, "profile": updated_profile.model_dump()}
+
+
+@router.post("/auto")
+async def run_auto_mode(
+    data: AutoModeRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Run multiple iterations automatically until target score or max iterations."""
+    result = await db.execute(
+        select(Session)
+        .options(selectinload(Session.style_profiles), selectinload(Session.iterations))
+        .where(Session.id == data.session_id)
+    )
+    session = result.scalar_one_or_none()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if not session.style_profiles:
+        raise HTTPException(status_code=400, detail="No style profile found")
+
+    if not session.original_image_path:
+        raise HTTPException(status_code=400, detail="No original image found")
+
+    results = []
+
+    for i in range(data.max_iterations):
+        # Refresh session data
+        await db.refresh(session)
+        result = await db.execute(
+            select(Session)
+            .options(
+                selectinload(Session.style_profiles),
+                selectinload(Session.iterations),
+            )
+            .where(Session.id == data.session_id)
+        )
+        session = result.scalar_one()
+
+        # Get latest style profile
+        latest_profile_db = max(session.style_profiles, key=lambda sp: sp.version)
+        style_profile = StyleProfile(**latest_profile_db.profile_json)
+
+        feedback_history = [
+            {"iteration": it.iteration_num, "notes": it.feedback}
+            for it in session.iterations
+            if it.feedback
+        ]
+
+        try:
+            # Generate
+            session.status = SessionStatus.GENERATING.value
+            await db.commit()
+
+            image_prompt = await style_agent.generate_image_prompt(
+                style_profile=style_profile,
+                subject=data.subject,
+                feedback_history=feedback_history,
+            )
+
+            image_b64 = await comfyui_service.generate(prompt=image_prompt)
+
+            iteration_num = len(session.iterations) + 1
+            filename = storage_service.get_iteration_filename(iteration_num)
+            image_path = await storage_service.save_image(
+                session.id, image_b64, filename
+            )
+
+            iteration = Iteration(
+                session_id=session.id,
+                iteration_num=iteration_num,
+                image_path=str(image_path),
+                prompt_used=image_prompt,
+            )
+            db.add(iteration)
+            await db.flush()
+
+            # Critique
+            session.status = SessionStatus.CRITIQUING.value
+            await db.commit()
+
+            original_b64 = await storage_service.load_image_raw(
+                session.original_image_path
+            )
+            critique_result = await style_critic.critique(
+                original_image_b64=original_b64,
+                generated_image_b64=image_b64,
+                style_profile=style_profile,
+                creativity_level=data.creativity_level,
+            )
+
+            iteration.scores_json = critique_result.match_scores
+            iteration.approved = True  # Auto-approved in auto mode
+
+            # Apply updated profile
+            new_version = latest_profile_db.version + 1
+            new_profile_db = StyleProfileDB(
+                session_id=session.id,
+                version=new_version,
+                profile_json=critique_result.updated_style_profile.model_dump(),
+            )
+            db.add(new_profile_db)
+
+            await db.commit()
+            await db.refresh(iteration)
+
+            overall_score = critique_result.match_scores.get("overall", 0)
+
+            results.append({
+                "iteration_num": iteration_num,
+                "overall_score": overall_score,
+                "prompt_used": image_prompt,
+            })
+
+            # Check if we've reached target score
+            if overall_score >= data.target_score:
+                session.status = SessionStatus.COMPLETED.value
+                await db.commit()
+                break
+
+        except Exception as e:
+            session.status = SessionStatus.ERROR.value
+            await db.commit()
+            results.append({
+                "iteration_num": i + 1,
+                "error": str(e),
+            })
+            break
+
+    session.status = SessionStatus.READY.value
+    await db.commit()
+
+    return {
+        "iterations_run": len(results),
+        "results": results,
+        "final_score": results[-1].get("overall_score") if results else None,
+    }
