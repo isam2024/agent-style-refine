@@ -16,7 +16,7 @@ class ComfyUIService:
         self.base_url = settings.comfyui_url
         self.client_id = str(uuid.uuid4())
 
-    def _get_default_workflow(self, prompt: str, seed: int | None = None) -> dict:
+    def _get_default_workflow(self, prompt: str, seed: int | None = None, negative_prompt: str | None = None) -> dict:
         """
         Returns a Flux Dev txt2img workflow.
         """
@@ -95,7 +95,7 @@ class ComfyUIService:
                 "class_type": "CLIPTextEncode",
                 "inputs": {
                     "clip": ["11", 0],
-                    "text": ""
+                    "text": negative_prompt or ""
                 }
             }
         }
@@ -106,6 +106,7 @@ class ComfyUIService:
         workflow: dict | None = None,
         seed: int | None = None,
         session_id: str | None = None,
+        negative_prompt: str | None = None,
     ) -> str:
         """
         Generate an image using ComfyUI.
@@ -115,6 +116,7 @@ class ComfyUIService:
             workflow: Custom workflow dict (optional, uses default if not provided)
             seed: Random seed (optional)
             session_id: Optional session ID for WebSocket logging
+            negative_prompt: Negative prompt for what to avoid (optional)
 
         Returns:
             Base64 encoded generated image
@@ -125,9 +127,9 @@ class ComfyUIService:
                 await manager.broadcast_log(session_id, msg, level, "generate")
 
         if workflow is None:
-            workflow = self._get_default_workflow(prompt, seed)
+            workflow = self._get_default_workflow(prompt, seed, negative_prompt)
         else:
-            workflow = self._inject_prompt(workflow, prompt, seed)
+            workflow = self._inject_prompt(workflow, prompt, seed, negative_prompt)
 
         payload = {"prompt": workflow, "client_id": self.client_id}
 
@@ -162,9 +164,9 @@ class ComfyUIService:
                 raise
 
     def _inject_prompt(
-        self, workflow: dict, prompt: str, seed: int | None
+        self, workflow: dict, prompt: str, seed: int | None, negative_prompt: str | None = None
     ) -> dict:
-        """Inject prompt and seed into workflow nodes."""
+        """Inject prompt, seed, and negative prompt into workflow nodes."""
         import copy
         workflow = copy.deepcopy(workflow)
 
