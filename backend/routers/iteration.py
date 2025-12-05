@@ -673,9 +673,9 @@ async def run_auto_improve(
             if iteration_result["focused_areas"]:
                 iter_debug.append(f"Focused Areas: {', '.join(iteration_result['focused_areas'])}")
 
-            # Image generation prompt
+            # Image generation prompt (FULL - not truncated)
             iter_debug.append(f"\n--- Image Generation Prompt ({len(iteration_result['prompt_used'])} chars) ---")
-            iter_debug.append(iteration_result['prompt_used'][:500] + ("..." if len(iteration_result['prompt_used']) > 500 else ""))
+            iter_debug.append(iteration_result['prompt_used'])
 
             # VLM Critique Analysis
             iter_debug.append(f"\n--- VLM Critique Analysis ---")
