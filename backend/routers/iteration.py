@@ -486,14 +486,91 @@ async def run_auto_improve(
     # Load original image once
     original_b64 = await storage_service.load_image_raw(session.original_image_path)
 
+    # Get original extracted style profile (version 1)
+    original_profile_db = min(session.style_profiles, key=lambda sp: sp.version)
+    original_profile = StyleProfile(**original_profile_db.profile_json)
+
+    # Include original extraction in debug log
+    extraction_info = []
+    extraction_info.append("\n" + "=" * 80)
+    extraction_info.append("ORIGINAL STYLE EXTRACTION")
+    extraction_info.append("=" * 80)
+    extraction_info.append(f"\nOriginal Style Profile (v{original_profile_db.version}):")
+    extraction_info.append(f"Style Name: {original_profile.style_name}")
+    extraction_info.append(f"\nCore Invariants ({len(original_profile.core_invariants)}):")
+    for inv in original_profile.core_invariants:
+        extraction_info.append(f"  - {inv}")
+    extraction_info.append(f"\nPalette:")
+    extraction_info.append(f"  Saturation: {original_profile.palette.saturation}")
+    extraction_info.append(f"  Colors:")
+    for color in original_profile.palette.color_descriptions:
+        extraction_info.append(f"    - {color}")
+    extraction_info.append(f"\nLighting:")
+    extraction_info.append(f"  Type: {original_profile.lighting.lighting_type}")
+    extraction_info.append(f"  Shadows: {original_profile.lighting.shadows}")
+    extraction_info.append(f"  Highlights: {original_profile.lighting.highlights}")
+    extraction_info.append(f"\nTexture:")
+    extraction_info.append(f"  Surface: {original_profile.texture.surface}")
+    extraction_info.append(f"  Noise Level: {original_profile.texture.noise_level}")
+    extraction_info.append(f"  Special Effects: {', '.join(original_profile.texture.special_effects) if original_profile.texture.special_effects else 'none'}")
+    extraction_info.append(f"\nComposition:")
+    extraction_info.append(f"  Camera: {original_profile.composition.camera}")
+    extraction_info.append(f"  Framing: {original_profile.composition.framing}")
+    extraction_info.append(f"  Depth: {original_profile.composition.depth}")
+    extraction_info.append(f"\nLine & Shape:")
+    extraction_info.append(f"  Line Quality: {original_profile.line_and_shape.line_quality}")
+    extraction_info.append(f"  Shape Language: {original_profile.line_and_shape.shape_language}")
+    extraction_info.append(f"\nMotifs:")
+    extraction_info.append(f"  Recurring Elements: {', '.join(original_profile.motifs.recurring_elements) if original_profile.motifs.recurring_elements else 'none'}")
+    extraction_info.append(f"  Themes: {', '.join(original_profile.motifs.themes) if original_profile.motifs.themes else 'none'}")
+
+    await write_debug('\n'.join(extraction_info))
+
+    # Include system prompts
+    from pathlib import Path
+    prompts_dir = Path(__file__).parent.parent / "prompts"
+
+    prompt_info = []
+    prompt_info.append("\n" + "=" * 80)
+    prompt_info.append("SYSTEM PROMPTS")
+    prompt_info.append("=" * 80)
+
+    # Extractor prompt
+    try:
+        extractor_prompt = (prompts_dir / "extractor.md").read_text()
+        prompt_info.append(f"\n--- Extractor Prompt ({len(extractor_prompt)} chars) ---")
+        prompt_info.append(extractor_prompt)
+    except Exception as e:
+        prompt_info.append(f"\n--- Extractor Prompt: ERROR reading file - {e} ---")
+
+    # Generator prompt
+    try:
+        generator_prompt = (prompts_dir / "generator.md").read_text()
+        prompt_info.append(f"\n--- Style Agent Generator Prompt ({len(generator_prompt)} chars) ---")
+        prompt_info.append(generator_prompt)
+    except Exception as e:
+        prompt_info.append(f"\n--- Generator Prompt: ERROR reading file - {e} ---")
+
+    # Critic prompt
+    try:
+        critic_prompt = (prompts_dir / "critic.md").read_text()
+        prompt_info.append(f"\n--- Critic Prompt ({len(critic_prompt)} chars) ---")
+        prompt_info.append(critic_prompt)
+    except Exception as e:
+        prompt_info.append(f"\n--- Critic Prompt: ERROR reading file - {e} ---")
+
+    await write_debug('\n'.join(prompt_info))
+
     # Compute training insights from existing iterations
     training_insights = auto_improver.compute_training_insights(session.iterations)
 
     insights = []
+    insights.append("\n" + "=" * 80)
+    insights.append("TRAINING CONTEXT")
+    insights.append("=" * 80)
     if training_insights.get("historical_best"):
         await log(f"Historical best score: {training_insights['historical_best']:.1f}", "info", "insights")
-        insights.append(f"\n--- Training Insights ---")
-        insights.append(f"Historical Best Score: {training_insights['historical_best']:.1f}")
+        insights.append(f"\nHistorical Best Score: {training_insights['historical_best']:.1f}")
     if training_insights.get("dimension_averages"):
         insights.append(f"Dimension Averages: {', '.join([f'{k}={v:.1f}' for k, v in training_insights['dimension_averages'].items() if k != 'overall'])}")
     if training_insights.get("frequently_lost_traits"):
