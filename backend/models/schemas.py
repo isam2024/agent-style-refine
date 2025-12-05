@@ -20,54 +20,55 @@ class SessionStatus(str, Enum):
 
 # Style Profile Sub-Schemas
 class PaletteSchema(BaseModel):
-    dominant_colors: list[str] = Field(description="Hex color codes for dominant colors")
-    accents: list[str] = Field(description="Hex color codes for accent colors")
+    dominant_colors: list[str] = Field(default=[], description="Hex color codes for dominant colors")
+    accents: list[str] = Field(default=[], description="Hex color codes for accent colors")
     color_descriptions: list[str] = Field(default=[], description="Named descriptions of colors, e.g., 'dusty rose', 'steel blue'")
-    saturation: str = Field(description="e.g., 'low', 'medium', 'high', 'medium-high'")
-    value_range: str = Field(description="e.g., 'dark mids / bright highlights'")
+    saturation: str = Field(default="medium", description="e.g., 'low', 'medium', 'high', 'medium-high'")
+    value_range: str = Field(default="mid-tones", description="e.g., 'dark mids / bright highlights'")
 
 
 class LineShapeSchema(BaseModel):
-    line_quality: str = Field(description="e.g., 'soft edges, minimal hard outlines'")
-    shape_language: str = Field(description="e.g., 'rounded, flowing, organic'")
-    geometry_notes: str = Field(description="Additional notes on geometric patterns")
+    line_quality: str = Field(default="", description="e.g., 'soft edges, minimal hard outlines'")
+    shape_language: str = Field(default="", description="e.g., 'rounded, flowing, organic'")
+    geometry_notes: str = Field(default="", description="Additional notes on geometric patterns")
 
 
 class TextureSchema(BaseModel):
-    surface: str = Field(description="e.g., 'brushy, painterly, subtle canvas grain'")
-    noise_level: str = Field(description="e.g., 'low', 'medium', 'high'")
-    special_effects: list[str] = Field(description="e.g., ['light bloom', 'glow halos']")
+    surface: str = Field(default="", description="e.g., 'brushy, painterly, subtle canvas grain'")
+    noise_level: str = Field(default="medium", description="e.g., 'low', 'medium', 'high'")
+    special_effects: list[str] = Field(default=[], description="e.g., ['light bloom', 'glow halos']")
 
 
 class LightingSchema(BaseModel):
-    lighting_type: str = Field(description="e.g., 'backlit / rim-lit, twilight'")
-    shadows: str = Field(description="e.g., 'soft, diffuse, slightly cool-toned'")
-    highlights: str = Field(description="e.g., 'warm, halo-like around primary subject'")
+    lighting_type: str = Field(default="", description="e.g., 'backlit / rim-lit, twilight'")
+    shadows: str = Field(default="", description="e.g., 'soft, diffuse, slightly cool-toned'")
+    highlights: str = Field(default="", description="e.g., 'warm, halo-like around primary subject'")
 
 
 class CompositionSchema(BaseModel):
-    camera: str = Field(description="e.g., 'mid shot, slight low angle'")
-    framing: str = Field(description="e.g., 'subject centered or slightly off-center'")
-    negative_space_behavior: str = Field(description="How negative space is treated")
+    camera: str = Field(default="", description="e.g., 'mid shot, slight low angle'")
+    framing: str = Field(default="", description="e.g., 'subject centered or slightly off-center'")
+    negative_space_behavior: str = Field(default="", description="How negative space is treated")
 
 
 class MotifsSchema(BaseModel):
-    recurring_elements: list[str] = Field(description="Elements that should appear")
-    forbidden_elements: list[str] = Field(description="Elements to avoid")
+    recurring_elements: list[str] = Field(default=[], description="Elements that should appear")
+    forbidden_elements: list[str] = Field(default=[], description="Elements to avoid")
 
 
 # Main Style Profile
 class StyleProfile(BaseModel):
-    style_name: str = Field(description="A descriptive name for this style")
+    style_name: str = Field(default="Extracted Style", description="A descriptive name for this style")
     core_invariants: list[str] = Field(
+        default=[],
         description="Key style traits that must NEVER change"
     )
-    palette: PaletteSchema
-    line_and_shape: LineShapeSchema
-    texture: TextureSchema
-    lighting: LightingSchema
-    composition: CompositionSchema
-    motifs: MotifsSchema
+    palette: PaletteSchema = Field(default_factory=PaletteSchema)
+    line_and_shape: LineShapeSchema = Field(default_factory=LineShapeSchema)
+    texture: TextureSchema = Field(default_factory=TextureSchema)
+    lighting: LightingSchema = Field(default_factory=LightingSchema)
+    composition: CompositionSchema = Field(default_factory=CompositionSchema)
+    motifs: MotifsSchema = Field(default_factory=MotifsSchema)
     original_subject: str | None = Field(
         default=None,
         description="What is depicted in the original image (subject matter)"
