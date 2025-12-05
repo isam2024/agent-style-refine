@@ -281,14 +281,36 @@ async def finalize_style(
         style_profile, iteration_history, style_rules
     )
 
-    # Create thumbnail from original image
+    # Create thumbnail from best iteration (highest scoring approved, or latest)
     thumbnail = None
-    if session.original_image_path:
+    best_iteration = None
+
+    # Find best iteration: highest scoring approved iteration
+    if session.iterations:
+        approved_iterations = [it for it in session.iterations if it.approved]
+        if approved_iterations:
+            # Get highest scoring approved iteration
+            best_iteration = max(
+                approved_iterations,
+                key=lambda it: it.scores_json.get("overall", 0) if it.scores_json else 0
+            )
+        else:
+            # No approved iterations - use latest
+            best_iteration = max(session.iterations, key=lambda it: it.iteration_num)
+
+    # Create thumbnail from best iteration's image
+    if best_iteration and best_iteration.image_path:
         try:
-            image_b64 = await storage_service.load_image_raw(session.original_image_path)
+            image_b64 = await storage_service.load_image_raw(best_iteration.image_path)
             thumbnail = create_thumbnail(image_b64)
         except Exception:
-            pass
+            # Fallback to original if iteration image fails
+            if session.original_image_path:
+                try:
+                    image_b64 = await storage_service.load_image_raw(session.original_image_path)
+                    thumbnail = create_thumbnail(image_b64)
+                except Exception:
+                    pass
 
     # Create the trained style (agent)
     trained_style = TrainedStyle(
