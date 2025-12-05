@@ -91,17 +91,19 @@ IMPORTANT:
                 await manager.broadcast_log(session_id, msg, level, "extract")
 
         # Extract colors using PIL (accurate)
-        await log("Extracting colors using PIL...")
+        await log("Extracting colors using PIL/KMeans...")
         try:
             pil_colors = extract_colors_from_b64(image_b64)
-            color_list = ", ".join(pil_colors["color_descriptions"][:3])
-            await log(f"Found colors: {color_list}", "success")
+            await log(f"Found {len(pil_colors['dominant_colors'])} dominant + {len(pil_colors['accents'])} accent colors", "success")
+            await log(f"Dominant: {', '.join(pil_colors['color_descriptions'][:5])}")
+            await log(f"Saturation: {pil_colors['saturation']}, Value: {pil_colors['value_range']}")
         except Exception as e:
             await log(f"PIL color extraction failed: {e}", "warning")
             pil_colors = None
 
         # Get style analysis from VLM
-        await log("Sending image to VLM for analysis...")
+        await log("Sending image to VLM for full style analysis...")
+        await log("Analyzing: style, lighting, texture, composition, motifs, subject...")
         prompt = self._load_prompt()
 
         response = await vlm_service.analyze(
@@ -109,16 +111,29 @@ IMPORTANT:
             images=[image_b64],
         )
 
-        await log("Parsing VLM response...")
+        await log(f"VLM response received ({len(response)} chars)")
+        await log("Parsing style profile from VLM response...")
 
         # Parse JSON from response
         profile_dict = self._parse_json_response(response)
 
         await log(f"Style identified: {profile_dict.get('style_name', 'Unknown')}", "success")
 
+        # Log what was extracted
+        if profile_dict.get("lighting"):
+            await log(f"Lighting: {profile_dict['lighting'].get('lighting_type', 'N/A')}")
+        if profile_dict.get("texture"):
+            await log(f"Texture: {profile_dict['texture'].get('surface', 'N/A')}")
+        if profile_dict.get("composition"):
+            await log(f"Composition: {profile_dict['composition'].get('camera', 'N/A')}")
+        if profile_dict.get("original_subject"):
+            await log(f"Subject: {profile_dict['original_subject'][:80]}...")
+        if profile_dict.get("suggested_test_prompt"):
+            await log(f"Test prompt: {profile_dict['suggested_test_prompt'][:80]}...")
+
         # Override palette with PIL-extracted colors (more accurate)
         if pil_colors:
-            await log("Applying accurate PIL color data...")
+            await log("Applying accurate PIL color data to palette...")
             profile_dict["palette"]["dominant_colors"] = pil_colors["dominant_colors"]
             profile_dict["palette"]["accents"] = pil_colors["accents"]
             profile_dict["palette"]["color_descriptions"] = pil_colors["color_descriptions"]
@@ -126,9 +141,10 @@ IMPORTANT:
             profile_dict["palette"]["value_range"] = pil_colors["value_range"]
 
         # Log core invariants
+        await log("Core style invariants:")
         if profile_dict.get("core_invariants"):
-            for inv in profile_dict["core_invariants"][:3]:
-                await log(f"Core trait: {inv}")
+            for inv in profile_dict["core_invariants"]:
+                await log(f"  • {inv}")
 
         return StyleProfile(**profile_dict)
 

@@ -10,7 +10,7 @@ from sklearn.cluster import MiniBatchKMeans
 logger = logging.getLogger(__name__)
 
 
-def extract_colors_from_b64(image_b64: str, num_colors: int = 8) -> dict:
+def extract_colors_from_b64(image_b64: str, num_colors: int = 12) -> dict:
     """
     Extract dominant colors from a base64 encoded image using MiniBatchKMeans clustering.
     Processes the full image without downsampling for accurate color extraction.
@@ -115,18 +115,18 @@ def extract_colors_from_b64(image_b64: str, num_colors: int = 8) -> dict:
 
     # Convert to hex
     hex_colors = [rgb_to_hex(c) for c in extracted_colors]
-    logger.info(f"Final colors: {hex_colors}")
+    logger.info(f"Final colors ({len(hex_colors)}): {hex_colors}")
 
-    # Split into dominant (first 3) and accents (rest)
-    dominant = hex_colors[:3] if len(hex_colors) >= 3 else hex_colors
-    accents = hex_colors[3:5] if len(hex_colors) > 3 else []
+    # Split into dominant (first 5) and accents (next 4)
+    dominant = hex_colors[:5] if len(hex_colors) >= 5 else hex_colors
+    accents = hex_colors[5:9] if len(hex_colors) > 5 else []
 
-    # Generate color descriptions
-    descriptions = [describe_color(c) for c in extracted_colors[:5]]
+    # Generate color descriptions for all extracted colors
+    descriptions = [describe_color(c) for c in extracted_colors]
 
     # Calculate overall saturation and value
-    avg_saturation = calculate_avg_saturation(extracted_colors[:5])
-    value_range = calculate_value_range(extracted_colors[:5])
+    avg_saturation = calculate_avg_saturation(extracted_colors)
+    value_range = calculate_value_range(extracted_colors)
 
     return {
         "dominant_colors": dominant,
