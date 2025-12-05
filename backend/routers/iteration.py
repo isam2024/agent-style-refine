@@ -529,6 +529,7 @@ async def run_auto_improve(
             should_approve, eval_reason, eval_analysis = auto_improver.evaluate_iteration(
                 new_scores=new_scores,
                 critique_result=iteration_result["critique"],
+                style_profile=style_profile,  # For checking original_subject
                 best_approved_score=best_approved_score,
                 training_insights=training_insights,
             )

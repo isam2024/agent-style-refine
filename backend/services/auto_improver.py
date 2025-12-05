@@ -212,6 +212,7 @@ class AutoImprover:
         self,
         new_scores: dict[str, int],
         critique_result,  # CritiqueResult with preserved_traits, lost_traits
+        style_profile: StyleProfile | None = None,  # For checking original_subject
         best_approved_score: int | None = None,
         training_insights: dict | None = None,
     ) -> tuple[bool, str, dict]:
@@ -235,72 +236,71 @@ class AutoImprover:
         """
         overall_score = new_scores.get("overall", 0)
 
-        # Check for subject/content preservation failures FIRST (highest priority)
-        # These indicate the generated image doesn't match the requested subject
+        # Check for subject/content drift FIRST (highest priority)
+        # The VLM compares generated vs original, so check what it says was lost
         lost_traits = critique_result.lost_traits if critique_result else []
+        original_subject = style_profile.original_subject if style_profile else None
 
-        # Keywords that indicate critical subject changes (not style)
-        subject_critical_keywords = [
-            # Demographics/identity (highest priority - these should NEVER change)
-            "african", "asian", "caucasian", "latino", "hispanic", "indigenous",
-            "black", "white", "brown", "dark skin", "light skin", "skin tone",
-            # Gender/age (should not change)
-            "male", "female", "man", "woman", "boy", "girl", "child", "person",
-            "young", "old", "elderly", "adult", "teenager",
-            # Main objects/subjects (critical content)
-            "car", "vehicle", "automobile", "truck", "suv",
-            "building", "house", "structure", "architecture",
-            "animal", "dog", "cat", "horse", "bird", "pet",
-            "motorcycle", "bicycle", "bike", "boat", "plane", "aircraft",
-            # Human features that shouldn't change
-            "face", "facial features", "eyes", "hair color", "beard", "mustache",
-            # Clothing/accessories that define the subject
-            "uniform", "suit", "dress", "hat", "glasses",
-            # Subject identifiers
-            "subject", "main figure", "primary subject", "protagonist", "character",
-        ]
+        subject_drift_failures = []
 
-        # Also check for "drift" patterns - phrases indicating deviation from original
+        # Strategy 1: Check if lost_traits mentions the original subject being lost/changed
+        if original_subject and lost_traits:
+            # Extract key nouns from original_subject (e.g., "cat", "mountain", "person")
+            # Simple approach: split and check if any significant word appears in lost_traits
+            original_keywords = [
+                word.lower().strip('.,!?;:')
+                for word in original_subject.split()
+                if len(word) > 3  # Skip short words like "a", "the", "in"
+            ]
+
+            for trait in lost_traits:
+                trait_lower = trait.lower()
+                # Check if this lost trait mentions the original subject
+                for keyword in original_keywords:
+                    if keyword in trait_lower:
+                        subject_drift_failures.append(trait)
+                        break
+
+        # Strategy 2: Look for generic drift patterns in lost_traits
+        # These indicate the VLM noticed the subject changed, regardless of what it was
         drift_indicators = [
-            "different", "changed to", "became", "replaced with", "instead of",
-            "now shows", "switched to", "transformed into", "altered to",
+            # Explicit subject change language
+            "subject changed", "main subject", "primary subject", "original subject",
+            "subject matter", "central subject", "depicted subject",
+            # Generic change language applied to subjects
+            "different subject", "wrong subject", "subject became", "subject is now",
+            "replaced the subject", "subject replaced", "changed from",
+            # Loss of key content
+            "key element lost", "main element lost", "central element missing",
+            "content changed", "subject matter altered",
         ]
-
-        subject_preservation_failures = []
-        drift_detected = []
 
         for trait in lost_traits:
             trait_lower = trait.lower()
-
-            # Check for explicit drift language
             for indicator in drift_indicators:
                 if indicator in trait_lower:
-                    drift_detected.append(trait)
+                    subject_drift_failures.append(trait)
                     break
 
-            # Check for critical subject keywords
-            for keyword in subject_critical_keywords:
-                if keyword in trait_lower:
-                    # Extra check: is this about the subject or just a style descriptor?
-                    # Reject if it includes identity/demographic terms or main objects
-                    critical_terms = ["african", "asian", "caucasian", "black", "white", "brown",
-                                    "male", "female", "man", "woman", "car", "vehicle",
-                                    "face", "subject", "figure"]
-                    is_critical = any(term in trait_lower for term in critical_terms)
-                    if is_critical:
-                        subject_preservation_failures.append(trait)
-                    break
+        # Strategy 3: Check preserved_traits - if suspiciously empty, might indicate total drift
+        preserved_traits = critique_result.preserved_traits if critique_result else []
+        if len(lost_traits) > 5 and len(preserved_traits) < 2:
+            # Almost nothing preserved - likely total subject change
+            subject_drift_failures.append("Minimal preservation - possible subject mismatch")
 
-        all_failures = subject_preservation_failures + drift_detected
-        if all_failures:
+        if subject_drift_failures:
+            # Remove duplicates
+            subject_drift_failures = list(dict.fromkeys(subject_drift_failures))
+
             analysis = {
                 "overall_score": overall_score,
-                "subject_preservation_failures": subject_preservation_failures,
-                "drift_detected": drift_detected,
+                "subject_drift_failures": subject_drift_failures,
+                "original_subject": original_subject,
                 "lost_traits": lost_traits,
+                "preserved_traits": preserved_traits,
             }
-            failure_summary = all_failures[:2]  # Show first 2
-            return False, f"FAIL (Subject Drift): Critical subject changed - {', '.join(failure_summary)}", analysis
+            failure_summary = subject_drift_failures[:2]  # Show first 2
+            return False, f"FAIL (Subject Drift): {', '.join(failure_summary)}", analysis
 
         # Check catastrophic failures (always reject)
         catastrophic_failures = []
