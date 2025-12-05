@@ -12,21 +12,44 @@ import {
 
 const API_BASE = '/api';
 
-async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      'Content-Type': 'application/json',
-      ...options?.headers,
-    },
-  });
+// Default timeout for regular requests (30 seconds)
+const DEFAULT_TIMEOUT = 30000;
+// Extended timeout for long operations like iteration (10 minutes)
+const LONG_TIMEOUT = 600000;
 
-  if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-    throw new Error(error.detail || 'Request failed');
+async function fetchJson<T>(
+  url: string,
+  options?: RequestInit & { timeout?: number }
+): Promise<T> {
+  const { timeout = DEFAULT_TIMEOUT, ...fetchOptions } = options || {};
+
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+  try {
+    const response = await fetch(url, {
+      ...fetchOptions,
+      signal: controller.signal,
+      headers: {
+        'Content-Type': 'application/json',
+        ...fetchOptions?.headers,
+      },
+    });
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+      throw new Error(error.detail || 'Request failed');
+    }
+
+    return response.json();
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') {
+      throw new Error(`Request timed out after ${timeout / 1000} seconds`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
   }
-
-  return response.json();
 }
 
 // Sessions
@@ -58,6 +81,7 @@ export async function extractStyle(sessionId: string): Promise<StyleProfile> {
   return fetchJson<StyleProfile>(`${API_BASE}/extract/`, {
     method: 'POST',
     body: JSON.stringify({ session_id: sessionId }),
+    timeout: LONG_TIMEOUT,
   });
 }
 
@@ -122,6 +146,7 @@ export async function runIterationStep(
       subject,
       creativity_level: creativityLevel,
     }),
+    timeout: LONG_TIMEOUT,
   });
 }
 
@@ -225,6 +250,7 @@ export async function reextractStyle(sessionId: string): Promise<StyleProfile> {
   return fetchJson<StyleProfile>(`${API_BASE}/extract/reextract`, {
     method: 'POST',
     body: JSON.stringify({ session_id: sessionId }),
+    timeout: LONG_TIMEOUT,
   });
 }
 
