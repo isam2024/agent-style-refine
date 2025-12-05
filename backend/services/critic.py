@@ -201,6 +201,48 @@ IMPORTANT:
             except Exception as e:
                 await log(f"Failed to update palette in critique result: {e}", "warning")
 
+        # Process vectorized corrections and update feature confidence
+        corrections = result_dict.get("corrections", [])
+        if corrections:
+            await log(f"Processing {len(corrections)} vectorized corrections...")
+
+            # Update feature confidence based on corrections
+            updated_profile = result_dict.get("updated_style_profile", {})
+            if updated_profile and "feature_registry" in updated_profile:
+                feature_registry = updated_profile["feature_registry"]
+                features = feature_registry.get("features", {})
+
+                # Track which features appeared in corrections (present in generated image)
+                corrected_feature_ids = {corr["feature_id"] for corr in corrections if isinstance(corr, dict)}
+
+                await log(f"Updating confidence for {len(features)} features...")
+                for feature_id, feature in features.items():
+                    appeared_in_generated = feature_id in corrected_feature_ids
+                    old_confidence = feature.get("confidence", 0.5)
+                    new_confidence = self._update_feature_confidence(feature, appeared_in_generated)
+
+                    if abs(new_confidence - old_confidence) > 0.05:  # Log significant changes
+                        direction = "↑" if new_confidence > old_confidence else "↓"
+                        await log(f"  {feature_id}: {old_confidence:.2f} {direction} {new_confidence:.2f}")
+
+                # Log correction summary
+                direction_counts = {}
+                high_confidence_corrections = []
+                for corr in corrections:
+                    if isinstance(corr, dict):
+                        direction = corr.get("direction", "unknown")
+                        direction_counts[direction] = direction_counts.get(direction, 0) + 1
+                        if corr.get("confidence", 0) >= 0.8:
+                            high_confidence_corrections.append(f"{corr['feature_id']}:{direction}")
+
+                await log(f"Correction directions: {', '.join([f'{k}={v}' for k, v in direction_counts.items()])}")
+                if high_confidence_corrections:
+                    await log(f"High-confidence corrections (>0.8): {', '.join(high_confidence_corrections[:5])}")
+            else:
+                await log("No feature_registry in updated profile - skipping confidence updates", "warning")
+        else:
+            await log("No corrections provided by VLM (may be using old critic prompt)", "warning")
+
         await log("Building critique result...")
         try:
             critique_result = CritiqueResult(**result_dict)
@@ -261,6 +303,52 @@ IMPORTANT:
         lines.append(f"Generated value range: {generated_extracted['value_range']}")
 
         return "\n".join(lines)
+
+    def _update_feature_confidence(self, feature: dict, appeared_in_iteration: bool) -> float:
+        """
+        Update confidence score for a feature based on persistence.
+
+        Confidence increases when:
+        - Feature appears in both original AND generated (appeared_in_iteration=True)
+        - Feature persists across multiple iterations
+
+        Confidence decreases when:
+        - Feature disappears in generated image (appeared_in_iteration=False)
+        - Feature only appeared in 1-2 iterations (likely coincidence)
+
+        Args:
+            feature: Feature dict with confidence, persistence_count
+            appeared_in_iteration: True if feature was mentioned in corrections (present in generated)
+
+        Returns:
+            Updated confidence score (0.0-1.0)
+        """
+        current_confidence = feature.get("confidence", 0.5)
+        persistence_count = feature.get("persistence_count", 1)
+
+        if appeared_in_iteration:
+            # Feature appeared - boost confidence
+            feature["persistence_count"] = persistence_count + 1
+
+            # Confidence grows with persistence (logarithmic curve)
+            # 1 iteration = 0.3, 3 iterations = 0.6, 5+ iterations = 0.85+
+            new_persistence = feature["persistence_count"]
+            persistence_factor = min(1.0, 0.3 + (0.15 * new_persistence))
+
+            # Smooth update (moving average: 70% old, 30% new)
+            new_confidence = 0.7 * current_confidence + 0.3 * persistence_factor
+        else:
+            # Feature disappeared - penalize confidence
+            decay = 0.15  # Confidence drops by 15% per missed iteration
+            new_confidence = current_confidence * (1.0 - decay)
+
+        # Clamp to valid range
+        new_confidence = max(0.0, min(1.0, new_confidence))
+
+        # Update in-place
+        feature["confidence"] = new_confidence
+
+        return new_confidence
 
     def _parse_json_response(self, response: str, style_profile: StyleProfile) -> dict:
         """Extract JSON from VLM response, with fallback to defaults."""

@@ -60,6 +60,7 @@ When given a subject, respond with ONLY the image generation prompt. No explanat
         self,
         style_profile: StyleProfile,
         feedback_history: list[dict] | None = None,
+        latest_corrections: list[dict] | None = None,
     ) -> str:
         """
         Build the system prompt for the style agent.
@@ -67,6 +68,7 @@ When given a subject, respond with ONLY the image generation prompt. No explanat
         Args:
             style_profile: The current style profile
             feedback_history: List of past feedback items with approval status and critique data
+            latest_corrections: Vectorized corrections from most recent critique (optional)
 
         Returns:
             Complete system prompt string
@@ -139,6 +141,9 @@ When given a subject, respond with ONLY the image generation prompt. No explanat
         emphasize_text = "\n".join(emphasize_traits) if emphasize_traits else "None identified yet."
         preserve_text = "\n".join(preserve_traits) if preserve_traits else "None identified yet."
 
+        # Format vectorized corrections
+        corrections_text = self._format_corrections(latest_corrections) if latest_corrections else "No corrections from previous iteration (first generation or corrections not available)."
+
         return template.replace(
             "{{STYLE_NAME}}", style_profile.style_name
         ).replace(
@@ -151,6 +156,8 @@ When given a subject, respond with ONLY the image generation prompt. No explanat
             "{{EMPHASIZE_TRAITS}}", emphasize_text
         ).replace(
             "{{PRESERVE_TRAITS}}", preserve_text
+        ).replace(
+            "{{CORRECTIONS}}", corrections_text
         )
 
     async def generate_image_prompt(
@@ -158,6 +165,7 @@ When given a subject, respond with ONLY the image generation prompt. No explanat
         style_profile: StyleProfile,
         subject: str,
         feedback_history: list[dict] | None = None,
+        latest_corrections: list[dict] | None = None,
         session_id: str | None = None,
     ) -> str:
         """
@@ -167,6 +175,7 @@ When given a subject, respond with ONLY the image generation prompt. No explanat
             style_profile: The style to embody
             subject: What to generate (e.g., "a fox sleeping under a tree")
             feedback_history: Past feedback to inform generation
+            latest_corrections: Vectorized corrections from most recent critique (optional)
             session_id: Optional session ID for WebSocket logging
 
         Returns:
@@ -178,7 +187,9 @@ When given a subject, respond with ONLY the image generation prompt. No explanat
                 await manager.broadcast_log(session_id, msg, level, "prompt")
 
         await log(f"Building style agent prompt for: {style_profile.style_name}")
-        system_prompt = self.build_system_prompt(style_profile, feedback_history)
+        if latest_corrections:
+            await log(f"Including {len(latest_corrections)} vectorized corrections")
+        system_prompt = self.build_system_prompt(style_profile, feedback_history, latest_corrections)
         await log(f"System prompt ready ({len(system_prompt)} chars)")
 
         user_prompt = f"""Generate an image prompt for this subject:
@@ -212,6 +223,85 @@ Remember:
         cleaned = response.strip()
         await log(f"Cleaned prompt: {cleaned[:100]}...")
         return cleaned
+
+    def _format_corrections(self, corrections: list[dict]) -> str:
+        """
+        Format vectorized corrections into human-readable text for the generator.
+
+        Args:
+            corrections: List of correction dicts with feature_id, direction, magnitude, etc.
+
+        Returns:
+            Formatted text explaining the corrections
+        """
+        if not corrections:
+            return "No corrections from previous iteration."
+
+        lines = []
+        lines.append(f"**{len(corrections)} corrections from previous critique:**\n")
+
+        # Group by direction for clarity
+        by_direction = {}
+        for corr in corrections:
+            direction = corr.get("direction", "unknown")
+            if direction not in by_direction:
+                by_direction[direction] = []
+            by_direction[direction].append(corr)
+
+        # Sort by confidence (highest first)
+        for direction, corr_list in by_direction.items():
+            corr_list.sort(key=lambda c: c.get("confidence", 0), reverse=True)
+
+        # Format each direction group
+        direction_order = ["eliminate", "reduce", "reinforce", "maintain", "exaggerate", "simplify", "rotate", "redistribute"]
+        for direction in direction_order:
+            if direction not in by_direction:
+                continue
+
+            corr_list = by_direction[direction]
+            lines.append(f"\n**{direction.upper()}** ({len(corr_list)} features):")
+
+            for corr in corr_list[:5]:  # Limit to top 5 per direction
+                feature_id = corr.get("feature_id", "unknown")
+                magnitude = corr.get("magnitude", 0.0)
+                confidence = corr.get("confidence", 0.0)
+                current_state = corr.get("current_state", "")
+                target_state = corr.get("target_state", "")
+                diagnostic = corr.get("diagnostic", "")
+                spatial_hint = corr.get("spatial_hint", "")
+
+                # Format the correction
+                mag_str = f"magnitude: {magnitude:.1f}" if magnitude > 0.1 else ""
+                conf_str = f"confidence: {confidence:.2f}" if confidence < 1.0 else ""
+                meta = ", ".join(filter(None, [mag_str, conf_str]))
+
+                line = f"- {feature_id}"
+                if meta:
+                    line += f" ({meta})"
+
+                # Add current → target if available
+                if current_state and target_state:
+                    line += f"\n  Current: {current_state[:80]}"
+                    line += f"\n  Target: {target_state[:80]}"
+
+                # Add spatial hint
+                if spatial_hint:
+                    line += f"\n  Location: {spatial_hint}"
+
+                # Add diagnostic (root cause)
+                if diagnostic:
+                    line += f"\n  Why: {diagnostic[:100]}"
+
+                lines.append(line)
+
+        # Add summary
+        high_confidence = [c for c in corrections if c.get("confidence", 0) >= 0.8]
+        if high_confidence:
+            lines.append(f"\n**HIGH PRIORITY** ({len(high_confidence)} high-confidence corrections):")
+            for corr in high_confidence[:3]:
+                lines.append(f"- {corr['feature_id']}: {corr['direction']} (confidence: {corr['confidence']:.2f})")
+
+        return "\n".join(lines)
 
 
 style_agent = StyleAgent()

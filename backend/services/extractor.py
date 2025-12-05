@@ -200,6 +200,23 @@ IMPORTANT:
             await log(f"Image description extraction failed: {e}", "warning")
             profile_dict["image_description"] = None
 
+        # Validate and log feature_registry parsing
+        if "feature_registry" in profile_dict and profile_dict["feature_registry"]:
+            feature_count = len(profile_dict["feature_registry"].get("features", {}))
+            if feature_count > 0:
+                await log(f"Feature classification: {feature_count} features extracted", "success")
+                # Log feature types breakdown
+                features = profile_dict["feature_registry"].get("features", {})
+                type_counts = {}
+                for feature in features.values():
+                    ftype = feature.get("feature_type", "unknown")
+                    type_counts[ftype] = type_counts.get(ftype, 0) + 1
+                await log(f"  Types: {', '.join([f'{k}={v}' for k, v in type_counts.items()])}")
+            else:
+                await log("Feature classification: Empty feature_registry (VLM provided structure but no features)", "warning")
+        else:
+            await log("Feature classification: No feature_registry from VLM (will use empty default)", "warning")
+
         return StyleProfile(**profile_dict)
 
     def _parse_json_response(self, response: str) -> dict:
