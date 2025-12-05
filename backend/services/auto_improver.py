@@ -299,21 +299,35 @@ class AutoImprover:
             }
             return False, f"FAIL (Subject Drift): {', '.join(subject_drift_failures[:1])}", analysis
 
-        # Check catastrophic failures (but skip on first iteration to establish baseline)
-        catastrophic_failures = []
+        # Categorize catastrophic failures by dimension type (skip on first iteration)
+        structural_catastrophic = []
+        technique_catastrophic = []
+        stylistic_catastrophic = []
+
         if best_approved_score is not None:  # Not the first iteration
             for dimension, score in new_scores.items():
                 if dimension == "overall":
                     continue
                 if score < self.catastrophic_threshold:
-                    catastrophic_failures.append(f"{dimension}={score}")
+                    failure_str = f"{dimension}={score}"
+                    if dimension in self.structural_dimensions:
+                        structural_catastrophic.append(failure_str)
+                    elif dimension in self.technique_dimensions:
+                        technique_catastrophic.append(failure_str)
+                    elif dimension in self.stylistic_dimensions:
+                        stylistic_catastrophic.append(failure_str)
 
-            if catastrophic_failures:
+            # STRUCTURAL catastrophic = INSTANT REJECT (subject/composition identity lost)
+            if structural_catastrophic:
                 analysis = {
                     "overall_score": overall_score,
-                    "catastrophic_failures": catastrophic_failures,
+                    "catastrophic_failures": structural_catastrophic,
+                    "catastrophic_type": "structural",
                 }
-                return False, f"FAIL: Catastrophic failure in {', '.join(catastrophic_failures)}", analysis
+                return False, f"FAIL (Structural Catastrophic): {', '.join(structural_catastrophic)} - subject identity lost", analysis
+
+        # Combine all catastrophic failures for analysis
+        all_catastrophic = structural_catastrophic + technique_catastrophic + stylistic_catastrophic
 
         # Tier 1: Check if meets absolute targets (ideal case)
         target_overall = self.target_overall_score
@@ -328,42 +342,32 @@ class AutoImprover:
 
         meets_targets = (overall_score >= target_overall) and (not dimension_below_target)
 
-        # Tier 2: Check if improves incrementally
-        # NEW: Accept if making NET PROGRESS across dimensions (even if overall doesn't jump by 3)
-        improvement = None
-        improves_incrementally = False
-        dimension_improvements = {}
-        net_progress = False
+        # WEIGHTED NET PROGRESS CALCULATION
+        # Calculate weighted delta from previous iteration (if available)
+        weighted_net_progress = 0.0
+        dimension_deltas = {}
+        weighted_deltas = {}
+        improvement = None  # Scalar overall improvement (legacy)
 
-        if best_approved_score is not None and self.allow_incremental:
+        if previous_scores is not None:
+            # Calculate per-dimension deltas
+            for dimension in self.dimension_weights.keys():
+                if dimension in new_scores and dimension in previous_scores:
+                    delta = new_scores[dimension] - previous_scores[dimension]
+                    dimension_deltas[dimension] = delta
+                    # Weight the delta by dimension importance
+                    weighted_delta = delta * self.dimension_weights[dimension]
+                    weighted_deltas[dimension] = weighted_delta
+                    weighted_net_progress += weighted_delta
+
+        # Legacy scalar improvement (for backward compatibility)
+        if best_approved_score is not None:
             improvement = overall_score - best_approved_score
-            improves_incrementally = improvement >= self.min_improvement
 
-            # NEW: Also check per-dimension progress to avoid oscillation
-            # If we have training insights with historical dimension scores, use those
-            if training_insights and training_insights.get("dimension_averages"):
-                hist_dims = training_insights["dimension_averages"]
-                improved_count = 0
-                regressed_count = 0
-                improvement_sum = 0
-                regression_sum = 0
-
-                for dimension, current_score in new_scores.items():
-                    if dimension == "overall":
-                        continue
-                    hist_score = hist_dims.get(dimension, 50)  # Default to 50 if unknown
-                    delta = current_score - hist_score
-                    dimension_improvements[dimension] = delta
-
-                    if delta > 2:  # Improved by more than noise
-                        improved_count += 1
-                        improvement_sum += delta
-                    elif delta < -2:  # Regressed by more than noise
-                        regressed_count += 1
-                        regression_sum += abs(delta)
-
-                # Accept if more dimensions improved than regressed, or if total gains > total losses
-                net_progress = (improved_count > regressed_count) or (improvement_sum > regression_sum)
+        # Classify progress strength
+        strong_weighted_progress = weighted_net_progress >= self.strong_net_progress_threshold
+        weak_positive_progress = weighted_net_progress >= self.weak_net_progress_threshold
+        negative_progress = weighted_net_progress < 0
 
         # Build analysis
         analysis = {
@@ -372,38 +376,52 @@ class AutoImprover:
             "target_dimension": target_dimension,
             "meets_targets": meets_targets,
             "best_approved_score": best_approved_score,
-            "improvement": improvement,
-            "improves_incrementally": improves_incrementally,
-            "dimension_improvements": dimension_improvements,
-            "net_progress": net_progress,
+            "improvement": improvement,  # Legacy scalar
+            "dimension_deltas": dimension_deltas,
+            "weighted_deltas": weighted_deltas,
+            "weighted_net_progress": weighted_net_progress,
+            "strong_weighted_progress": strong_weighted_progress,
+            "weak_positive_progress": weak_positive_progress,
             "dimension_below_target": dimension_below_target,
+            "catastrophic_failures": all_catastrophic,
+            "structural_catastrophic": structural_catastrophic,
+            "technique_catastrophic": technique_catastrophic,
+            "stylistic_catastrophic": stylistic_catastrophic,
         }
 
-        # Decision logic
+        # DECISION LOGIC - Multi-tier weighted evaluation
+
+        # Tier 1: Meets absolute quality targets
         if meets_targets:
-            # Tier 1: Meets quality targets
-            return True, f"PASS (Tier 1): Overall {overall_score}/{target_overall}, all dimensions meet target", analysis
+            return True, f"PASS (Tier 1 - Quality Targets): Overall {overall_score}/{target_overall}, all dimensions ≥ {target_dimension}", analysis
 
-        if improves_incrementally:
-            # Tier 2: Incremental improvement (overall score jumped by 3+)
-            return True, f"PASS (Tier 2 - Incremental): Overall {overall_score} (+{improvement} from {best_approved_score})", analysis
+        # Tier 2: Strong weighted net progress (clear multi-dimensional improvement)
+        if strong_weighted_progress:
+            improved_dims = [f"{d}({delta:+.0f})" for d, delta in dimension_deltas.items() if delta > 2]
+            return True, f"PASS (Tier 2 - Strong Progress): Weighted Δ={weighted_net_progress:+.1f} | Improved: {', '.join(improved_dims[:3])}", analysis
 
-        if net_progress:
-            # Tier 2b: Net progress across dimensions (avoids oscillation)
-            improved = [d for d, delta in dimension_improvements.items() if delta > 2]
-            return True, f"PASS (Tier 2 - Net Progress): Improved dimensions: {', '.join(improved[:3])}", analysis
+        # Tier 3: Weak positive progress despite catastrophic failures
+        # Allow if: stylistic/technique catastrophic BUT net progress is positive
+        if weak_positive_progress and (technique_catastrophic or stylistic_catastrophic):
+            cat_type = "technique" if technique_catastrophic else "stylistic"
+            cat_dims = technique_catastrophic if technique_catastrophic else stylistic_catastrophic
+            return True, f"PASS (Tier 3 - Recovery Mode): Weighted Δ={weighted_net_progress:+.1f} despite {cat_type} regression in {', '.join(cat_dims)}", analysis
 
+        # First iteration baseline (always approve)
         if best_approved_score is None:
-            # First iteration - ALWAYS approve to establish baseline
-            # We already checked subject drift above, catastrophic failures skipped for first
-            # This prevents rejection loops where nothing ever gets approved
             return True, f"PASS (Baseline): First iteration with overall {overall_score}", analysis
 
-        # Fail - neither meets targets nor improves incrementally
-        if improvement is not None:
-            return False, f"FAIL: Overall {overall_score} doesn't meet target ({target_overall}) and improvement (+{improvement}) < threshold ({self.min_improvement})", analysis
-        else:
-            return False, f"FAIL: Overall {overall_score} < target {target_overall}, dimensions: {', '.join(dimension_below_target[:3]) if dimension_below_target else 'OK'}", analysis
+        # FAIL: Negative weighted progress or no progress despite catastrophic
+        if negative_progress:
+            regressed_dims = [f"{d}({delta:.0f})" for d, delta in dimension_deltas.items() if delta < -2]
+            return False, f"FAIL: Weighted Δ={weighted_net_progress:.1f} (negative) | Regressed: {', '.join(regressed_dims[:3])}", analysis
+
+        # FAIL: Catastrophic failures with insufficient progress
+        if all_catastrophic:
+            return False, f"FAIL: Catastrophic in {', '.join(all_catastrophic)} with Weighted Δ={weighted_net_progress:.1f} (below threshold)", analysis
+
+        # FAIL: No progress
+        return False, f"FAIL: Weighted Δ={weighted_net_progress:.1f} below threshold ({self.weak_net_progress_threshold})", analysis
 
     def _build_focused_feedback(
         self,

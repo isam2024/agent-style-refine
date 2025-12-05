@@ -651,6 +651,7 @@ async def run_auto_improve(
                 style_profile=style_profile,  # For checking original_subject
                 best_approved_score=best_approved_score,
                 training_insights=training_insights,
+                previous_scores=baseline_scores,  # For weighted delta calculation
             )
 
             # DEBUG: Log comprehensive VLM metadata and decision analysis (to console AND file)
@@ -713,12 +714,22 @@ async def run_auto_improve(
             await log(f"[DEBUG] Overall Score: {new_scores.get('overall', 0)}", "info", "debug")
             await log(f"[DEBUG] Dimension Scores: {', '.join([f'{k}={v}' for k, v in new_scores.items() if k != 'overall'])}", "info", "debug")
 
-            # DEBUG: Log dimension changes vs historical average
-            if eval_analysis.get("dimension_improvements"):
-                improved = [f"{d}({'+' if delta > 0 else ''}{delta:.0f})" for d, delta in eval_analysis["dimension_improvements"].items() if abs(delta) > 2]
-                if improved:
-                    iter_debug.append(f"Dimension Changes vs History: {', '.join(improved)}")
-                    await log(f"[DEBUG] Dimension Changes vs History: {', '.join(improved)}", "info", "debug")
+            # DEBUG: Log weighted dimension deltas
+            if eval_analysis.get("dimension_deltas"):
+                dimension_changes = []
+                for d, delta in eval_analysis["dimension_deltas"].items():
+                    if abs(delta) > 2:  # Only show significant changes
+                        weight = eval_analysis.get("weighted_deltas", {}).get(d, 0)
+                        dimension_changes.append(f"{d}({delta:+.0f}, w={weight:+.1f})")
+                if dimension_changes:
+                    iter_debug.append(f"Dimension Deltas: {', '.join(dimension_changes)}")
+                    await log(f"[DEBUG] Dimension Deltas: {', '.join(dimension_changes)}", "info", "debug")
+
+            # DEBUG: Log weighted net progress
+            if "weighted_net_progress" in eval_analysis:
+                wnp = eval_analysis["weighted_net_progress"]
+                iter_debug.append(f"Weighted Net Progress: {wnp:+.1f} (threshold: strong≥3.0, weak≥1.0)")
+                await log(f"[DEBUG] Weighted Net Progress: {wnp:+.1f}", "info", "debug")
 
             # DEBUG: Log vs best approved
             if eval_analysis.get("best_approved_score"):
@@ -729,24 +740,33 @@ async def run_auto_improve(
             # DEBUG: Log approval decision details
             iter_debug.append(f"\n--- Decision Analysis ---")
             iter_debug.append(f"  - Meets targets (Tier 1): {eval_analysis.get('meets_targets', False)}")
-            iter_debug.append(f"  - Incremental improvement (Tier 2): {eval_analysis.get('improves_incrementally', False)} (need +3)")
-            iter_debug.append(f"  - Net progress (Tier 2b): {eval_analysis.get('net_progress', False)}")
+            iter_debug.append(f"  - Strong weighted progress (Tier 2): {eval_analysis.get('strong_weighted_progress', False)} (≥3.0)")
+            iter_debug.append(f"  - Weak positive progress (Tier 3): {eval_analysis.get('weak_positive_progress', False)} (≥1.0)")
             iter_debug.append(f"  - First iteration: {best_approved_score is None}")
 
             await log(f"[DEBUG] Decision Analysis:", "info", "debug")
             await log(f"  - Meets targets (Tier 1): {eval_analysis.get('meets_targets', False)}", "info", "debug")
-            await log(f"  - Incremental improvement (Tier 2): {eval_analysis.get('improves_incrementally', False)} (need +3)", "info", "debug")
-            await log(f"  - Net progress (Tier 2b): {eval_analysis.get('net_progress', False)}", "info", "debug")
+            await log(f"  - Strong weighted progress (Tier 2): {eval_analysis.get('strong_weighted_progress', False)}", "info", "debug")
+            await log(f"  - Weak positive progress (Tier 3): {eval_analysis.get('weak_positive_progress', False)}", "info", "debug")
             await log(f"  - First iteration: {best_approved_score is None}", "info", "debug")
 
+            # Log catastrophic failures with categorization
+            if eval_analysis.get('structural_catastrophic'):
+                struct_msg = f"  - Structural catastrophic: {eval_analysis['structural_catastrophic']} (INSTANT REJECT)"
+                iter_debug.append(struct_msg)
+                await log(struct_msg, "error", "debug")
+            if eval_analysis.get('technique_catastrophic'):
+                tech_msg = f"  - Technique catastrophic: {eval_analysis['technique_catastrophic']} (check net progress)"
+                iter_debug.append(tech_msg)
+                await log(tech_msg, "warning", "debug")
+            if eval_analysis.get('stylistic_catastrophic'):
+                style_msg = f"  - Stylistic catastrophic: {eval_analysis['stylistic_catastrophic']} (gated by net progress)"
+                iter_debug.append(style_msg)
+                await log(style_msg, "warning", "debug")
             if eval_analysis.get('subject_drift_failures'):
                 drift_msg = f"  - Subject drift detected: {eval_analysis['subject_drift_failures'][:1]}"
                 iter_debug.append(drift_msg)
-                await log(drift_msg, "warning", "debug")
-            if eval_analysis.get('catastrophic_failures'):
-                cat_msg = f"  - Catastrophic failures: {eval_analysis['catastrophic_failures']}"
-                iter_debug.append(cat_msg)
-                await log(cat_msg, "error", "debug")
+                await log(drift_msg, "error", "debug")
 
             # Log evaluation
             decision_status = "✓ APPROVED" if should_approve else "✗ REJECTED"
@@ -810,20 +830,24 @@ async def run_auto_improve(
             dimension_scores = [f"{k}={v}" for k, v in new_scores.items() if k != 'overall']
             feedback_parts.append(f"Dimensions: {', '.join(dimension_scores)}")
 
-            # Add decision analysis
-            if eval_analysis.get("dimension_improvements"):
-                improved = [f"{d}({'+' if delta > 0 else ''}{delta:.0f})" for d, delta in eval_analysis["dimension_improvements"].items() if abs(delta) > 2]
-                if improved:
-                    feedback_parts.append(f"Changes vs history: {', '.join(improved)}")
+            # Add weighted dimension changes
+            if eval_analysis.get("dimension_deltas"):
+                changed = [f"{d}({delta:+.0f})" for d, delta in eval_analysis["dimension_deltas"].items() if abs(delta) > 2]
+                if changed:
+                    feedback_parts.append(f"Dimension Δ: {', '.join(changed)}")
+
+            if eval_analysis.get("weighted_net_progress") is not None:
+                wnp = eval_analysis["weighted_net_progress"]
+                feedback_parts.append(f"Weighted Net Progress: {wnp:+.1f}")
 
             if eval_analysis.get("best_approved_score"):
                 feedback_parts.append(f"vs Best approved: {eval_analysis.get('improvement', 0):+.0f} ({eval_analysis['best_approved_score']} → {new_scores.get('overall', 0)})")
 
             # Add approval tier breakdown
             tiers = []
-            if eval_analysis.get('meets_targets'): tiers.append("Tier 1 (targets)")
-            if eval_analysis.get('improves_incrementally'): tiers.append("Tier 2 (incremental)")
-            if eval_analysis.get('net_progress'): tiers.append("Tier 2b (net progress)")
+            if eval_analysis.get('meets_targets'): tiers.append("Tier 1 (quality)")
+            if eval_analysis.get('strong_weighted_progress'): tiers.append("Tier 2 (strong Δ)")
+            if eval_analysis.get('weak_positive_progress'): tiers.append("Tier 3 (weak +Δ)")
             if best_approved_score is None: tiers.append("First iteration")
             feedback_parts.append(f"Checked: {', '.join(tiers) if tiers else 'None passed'}")
 
