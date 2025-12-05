@@ -415,6 +415,15 @@ IMPORTANT:
         else:
             logger.warning(f"Could not parse JSON from VLM response, using defaults. Response: {response[:300]}")
 
+        # Normalize feature_registry.features type (VLM may return [] instead of {})
+        if "updated_style_profile" in result:
+            profile = result["updated_style_profile"]
+            if "feature_registry" in profile:
+                registry = profile["feature_registry"]
+                if "features" in registry and isinstance(registry["features"], list):
+                    logger.warning(f"VLM returned features as list, converting to dict. Input: {registry['features']}")
+                    registry["features"] = {}
+
         return result
 
     def _deep_merge(self, base: dict, updates: dict) -> None:
