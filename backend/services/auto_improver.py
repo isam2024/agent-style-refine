@@ -22,11 +22,10 @@ class AutoImprover:
         self.weak_dimension_threshold = 65  # Dimensions below this need focus
         self.improvement_boost = 1.5  # How much to emphasize weak areas
 
-        # Pass/Fail criteria
-        self.overall_weight = 0.6  # Overall score gets 60% weight
-        self.dimensions_weight = 0.4  # Dimension scores get 40% weight
-        self.catastrophic_regression_threshold = 20  # Dimension drop > this = catastrophic
-        self.min_improvement = 0.5  # Minimum weighted score improvement to pass
+        # Absolute threshold criteria (no baseline comparison)
+        self.min_overall_score = 70  # Minimum overall score to pass
+        self.min_dimension_score = 55  # Minimum for any individual dimension
+        self.catastrophic_threshold = 40  # Any dimension below this = catastrophic fail
 
     async def run_focused_iteration(
         self,
@@ -37,6 +36,7 @@ class AutoImprover:
         feedback_history: list[dict],
         previous_scores: dict[str, int] | None = None,
         creativity_level: int = 50,
+        training_insights: dict | None = None,
         log_fn: Callable[[str, str, str], Awaitable[None]] = None,
     ) -> dict:
         """
@@ -73,7 +73,8 @@ class AutoImprover:
         focused_feedback = self._build_focused_feedback(
             weak_dimensions,
             style_profile,
-            feedback_history
+            feedback_history,
+            training_insights
         )
 
         if focused_feedback:
@@ -136,102 +137,133 @@ class AutoImprover:
             "focused_areas": focused_areas,
         }
 
-    def calculate_weighted_score(self, scores: dict[str, int]) -> float:
-        """
-        Calculate weighted composite score.
+    def compute_training_insights(self, iterations: list) -> dict:
+        """Analyze training history to extract insights."""
+        if not iterations:
+            return {
+                "dimension_averages": {},
+                "frequently_lost_traits": [],
+                "historical_best": None,
+            }
 
-        Overall score gets 60% weight, dimension average gets 40% weight.
-        This makes the overall score more important in decision-making.
-        """
-        overall = scores.get("overall", 0)
+        # Calculate dimension averages from all iterations
+        dimension_scores = {}
+        for it in iterations:
+            if it.scores_json:
+                for dim, score in it.scores_json.items():
+                    if dim not in dimension_scores:
+                        dimension_scores[dim] = []
+                    dimension_scores[dim].append(score)
 
-        # Calculate average of dimension scores (excluding 'overall')
-        dimension_scores = [v for k, v in scores.items() if k != "overall"]
-        dimension_avg = sum(dimension_scores) / len(dimension_scores) if dimension_scores else 0
+        dimension_averages = {
+            dim: sum(scores) / len(scores) for dim, scores in dimension_scores.items()
+        }
 
-        # Weighted composite
-        weighted = (overall * self.overall_weight) + (dimension_avg * self.dimensions_weight)
-        return weighted
+        # Find frequently lost traits
+        lost_traits_count = {}
+        for it in iterations:
+            if it.critique_json and it.critique_json.get("lost_traits"):
+                for trait in it.critique_json["lost_traits"]:
+                    lost_traits_count[trait] = lost_traits_count.get(trait, 0) + 1
+
+        # Sort by frequency, take top 5
+        frequently_lost_traits = sorted(
+            lost_traits_count.items(), key=lambda x: x[1], reverse=True
+        )[:5]
+        frequently_lost_traits = [trait for trait, _ in frequently_lost_traits]
+
+        # Find historical best overall score
+        historical_best = None
+        if "overall" in dimension_averages:
+            historical_best = dimension_averages["overall"]
+
+        return {
+            "dimension_averages": dimension_averages,
+            "frequently_lost_traits": frequently_lost_traits,
+            "historical_best": historical_best,
+        }
 
     def evaluate_iteration(
         self,
         new_scores: dict[str, int],
-        baseline_scores: dict[str, int] | None,
+        training_insights: dict | None = None,
     ) -> tuple[bool, str, dict]:
         """
         Determine if iteration should be approved (pass) or rejected (fail).
 
+        Uses ABSOLUTE thresholds (not baseline comparison) since VLM scoring is non-deterministic.
+
         Returns: (should_approve, reason, analysis)
 
         Pass criteria:
-        - Weighted score improves by at least min_improvement
-        - No catastrophic regression (dimension drop > 20 points)
-        - Overall score doesn't regress
+        - Overall score >= min_overall_score (default 70)
+        - All dimensions >= min_dimension_score (default 55)
+        - No catastrophic failures (dimension < 40)
+        - Thresholds adapt based on training insights
 
         Fail criteria:
-        - Weighted score regresses or doesn't improve enough
-        - Catastrophic regression in any dimension
-        - Overall score regresses
+        - Overall score below threshold
+        - Any dimension below minimum
+        - Catastrophic failure in any dimension
         """
-        # If no baseline, first iteration always passes
-        if not baseline_scores:
-            return True, "First iteration - establishing baseline", {
-                "weighted_score": self.calculate_weighted_score(new_scores),
-                "overall_score": new_scores.get("overall", 0),
-            }
+        overall_score = new_scores.get("overall", 0)
 
-        # Calculate weighted scores
-        new_weighted = self.calculate_weighted_score(new_scores)
-        baseline_weighted = self.calculate_weighted_score(baseline_scores)
-        weighted_delta = new_weighted - baseline_weighted
+        # Adapt thresholds based on training insights
+        min_overall = self.min_overall_score
+        min_dimension = self.min_dimension_score
 
-        # Check overall score
-        new_overall = new_scores.get("overall", 0)
-        baseline_overall = baseline_scores.get("overall", 0)
-        overall_delta = new_overall - baseline_overall
+        if training_insights and training_insights.get("dimension_averages"):
+            # If historical average is low, be slightly more lenient
+            hist_overall = training_insights.get("historical_best")
+            if hist_overall and hist_overall < 65:
+                min_overall = max(60, hist_overall - 5)  # Aim slightly below historical best
 
-        # Check for catastrophic regressions
-        catastrophic_regressions = []
-        dimension_deltas = {}
+            # Adjust dimension thresholds based on historical performance
+            dimension_avgs = training_insights["dimension_averages"]
 
-        for dimension, new_score in new_scores.items():
+        # Check catastrophic failures first
+        catastrophic_failures = []
+        dimension_failures = []
+
+        for dimension, score in new_scores.items():
             if dimension == "overall":
                 continue
-            baseline_score = baseline_scores.get(dimension, 0)
-            delta = new_score - baseline_score
-            dimension_deltas[dimension] = delta
 
-            if delta < -self.catastrophic_regression_threshold:
-                catastrophic_regressions.append(f"{dimension} ({baseline_score} → {new_score}, Δ{delta})")
+            if score < self.catastrophic_threshold:
+                catastrophic_failures.append(f"{dimension}={score}")
+            elif score < min_dimension:
+                dimension_failures.append(f"{dimension}={score}")
 
         # Build analysis
         analysis = {
-            "weighted_score": new_weighted,
-            "weighted_delta": weighted_delta,
-            "overall_score": new_overall,
-            "overall_delta": overall_delta,
-            "dimension_deltas": dimension_deltas,
-            "catastrophic_regressions": catastrophic_regressions,
+            "overall_score": overall_score,
+            "min_overall_threshold": min_overall,
+            "min_dimension_threshold": min_dimension,
+            "catastrophic_failures": catastrophic_failures,
+            "dimension_failures": dimension_failures,
+            "dimension_scores": {k: v for k, v in new_scores.items() if k != "overall"},
         }
 
         # Fail conditions
-        if catastrophic_regressions:
-            return False, f"FAIL: Catastrophic regression in {', '.join(catastrophic_regressions)}", analysis
+        if catastrophic_failures:
+            return False, f"FAIL: Catastrophic failure in {', '.join(catastrophic_failures)}", analysis
 
-        if overall_delta < -2:  # Allow small fluctuation
-            return False, f"FAIL: Overall score regressed ({baseline_overall} → {new_overall}, Δ{overall_delta:.1f})", analysis
+        if overall_score < min_overall:
+            return False, f"FAIL: Overall score {overall_score} < {min_overall} threshold", analysis
 
-        if weighted_delta < self.min_improvement:
-            return False, f"FAIL: Insufficient improvement (weighted Δ{weighted_delta:.1f} < {self.min_improvement})", analysis
+        if dimension_failures:
+            return False, f"FAIL: Dimensions below threshold: {', '.join(dimension_failures)}", analysis
 
         # Pass!
-        return True, f"PASS: Weighted score improved by {weighted_delta:.1f} (overall Δ{overall_delta:.1f})", analysis
+        passed_dims = len([s for s in new_scores.values() if s >= min_dimension]) - 1  # -1 for overall
+        return True, f"PASS: Overall {overall_score}/{min_overall}, all {passed_dims} dimensions meet threshold", analysis
 
     def _build_focused_feedback(
         self,
         weak_dimensions: list[str],
         style_profile: StyleProfile,
         existing_feedback: list[dict],
+        training_insights: dict | None = None,
     ) -> list[dict]:
         """Build synthetic feedback to emphasize weak dimensions."""
         focused_feedback = []
@@ -279,6 +311,18 @@ class AutoImprover:
                     "notes": f"Line quality: {style_profile.line_and_shape.line_quality}. "
                             f"Shape language: {style_profile.line_and_shape.shape_language}.",
                     "area": "line quality",
+                })
+
+        # Add feedback for frequently lost traits from training insights
+        if training_insights and training_insights.get("frequently_lost_traits"):
+            lost_traits = training_insights["frequently_lost_traits"][:3]  # Top 3
+            if lost_traits:
+                focused_feedback.append({
+                    "iteration": -1,
+                    "approved": False,
+                    "notes": f"CRITICAL: These traits are frequently lost in training: {', '.join(lost_traits)}. "
+                            f"Pay special attention to preserving these elements.",
+                    "area": "frequently lost traits",
                 })
 
         return focused_feedback

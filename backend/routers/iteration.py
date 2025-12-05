@@ -459,8 +459,15 @@ async def run_auto_improve(
     # Load original image once
     original_b64 = await storage_service.load_image_raw(session.original_image_path)
 
+    # Compute training insights from existing iterations
+    training_insights = auto_improver.compute_training_insights(session.iterations)
+    if training_insights.get("historical_best"):
+        await log(f"Historical best score: {training_insights['historical_best']:.1f}", "info", "insights")
+    if training_insights.get("frequently_lost_traits"):
+        await log(f"Frequently lost traits: {', '.join(training_insights['frequently_lost_traits'][:3])}", "warning", "insights")
+
     results = []
-    baseline_scores = None  # Scores from last approved iteration
+    baseline_scores = None  # Track scores from current iteration for weak dimension detection
     approved_count = 0
     rejected_count = 0
 
@@ -510,8 +517,9 @@ async def run_auto_improve(
                 style_profile=style_profile,
                 original_image_b64=original_b64,
                 feedback_history=feedback_history,
-                previous_scores=baseline_scores,  # Use baseline from last approved iteration
+                previous_scores=baseline_scores,  # Use for weak dimension detection
                 creativity_level=data.creativity_level,
+                training_insights=training_insights,  # Use for threshold adaptation and lost traits
                 log_fn=log,
             )
 
@@ -519,7 +527,7 @@ async def run_auto_improve(
             new_scores = iteration_result["critique"].match_scores
             should_approve, eval_reason, eval_analysis = auto_improver.evaluate_iteration(
                 new_scores=new_scores,
-                baseline_scores=baseline_scores,
+                training_insights=training_insights,
             )
 
             # Log evaluation
@@ -565,11 +573,11 @@ async def run_auto_improve(
                 )
                 db.add(new_profile_db)
                 await log(f"Profile updated to v{new_version}", "success", "update")
-
-                # Update baseline to this approved iteration
-                baseline_scores = new_scores
             else:
                 await log("Profile not updated (iteration rejected)", "info", "update")
+
+            # Always update baseline_scores for weak dimension detection (regardless of approval)
+            baseline_scores = new_scores
 
             await db.commit()
             await db.refresh(iteration)
@@ -585,8 +593,6 @@ async def run_auto_improve(
                 "scores": new_scores,
                 "approved": should_approve,
                 "eval_reason": eval_reason,
-                "weighted_score": eval_analysis.get("weighted_score"),
-                "weighted_delta": eval_analysis.get("weighted_delta"),
             })
 
             # Check stopping conditions (only consider approved iterations)

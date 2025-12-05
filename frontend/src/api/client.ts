@@ -15,8 +15,9 @@ const API_BASE = '/api';
 
 // Default timeout for regular requests (30 seconds)
 const DEFAULT_TIMEOUT = 30000;
-// Extended timeout for long operations like iteration (10 minutes)
-const LONG_TIMEOUT = 600000;
+// Extended timeout for long operations like iteration (30 minutes)
+// Auto-improve can run many iterations sequentially, each taking 30-60 seconds
+const LONG_TIMEOUT = 1800000;
 
 async function fetchJson<T>(
   url: string,
@@ -213,8 +214,6 @@ export async function runAutoImprove(
     scores?: Record<string, number>;
     approved?: boolean;
     eval_reason?: string;
-    weighted_score?: number;
-    weighted_delta?: number;
     error?: string;
   }>;
   final_score: number | null;
