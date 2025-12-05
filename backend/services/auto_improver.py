@@ -236,71 +236,33 @@ class AutoImprover:
         """
         overall_score = new_scores.get("overall", 0)
 
-        # Check for subject/content drift FIRST (highest priority)
-        # The VLM compares generated vs original, so check what it says was lost
+        # Check for subject/content drift - VERY CONSERVATIVE
+        # Only reject if VLM explicitly says the SUBJECT (what) changed, not STYLE (how)
         lost_traits = critique_result.lost_traits if critique_result else []
-        original_subject = style_profile.original_subject if style_profile else None
 
-        subject_drift_failures = []
-
-        # Strategy 1: Check if lost_traits mentions the original subject being lost/changed
-        if original_subject and lost_traits:
-            # Extract key nouns from original_subject (e.g., "cat", "mountain", "person")
-            # Simple approach: split and check if any significant word appears in lost_traits
-            original_keywords = [
-                word.lower().strip('.,!?;:')
-                for word in original_subject.split()
-                if len(word) > 3  # Skip short words like "a", "the", "in"
-            ]
-
-            for trait in lost_traits:
-                trait_lower = trait.lower()
-                # Check if this lost trait mentions the original subject
-                for keyword in original_keywords:
-                    if keyword in trait_lower:
-                        subject_drift_failures.append(trait)
-                        break
-
-        # Strategy 2: Look for generic drift patterns in lost_traits
-        # These indicate the VLM noticed the subject changed, regardless of what it was
-        drift_indicators = [
-            # Explicit subject change language
-            "subject changed", "main subject", "primary subject", "original subject",
-            "subject matter", "central subject", "depicted subject",
-            # Generic change language applied to subjects
-            "different subject", "wrong subject", "subject became", "subject is now",
-            "replaced the subject", "subject replaced", "changed from",
-            # Loss of key content
-            "key element lost", "main element lost", "central element missing",
-            "content changed", "subject matter altered",
+        # ONLY look for explicit VLM statements that the subject/content changed
+        # Do NOT check keywords - those catch style elements incorrectly
+        explicit_drift_patterns = [
+            "subject changed", "subject is different", "subject became",
+            "wrong subject", "different subject", "subject replaced",
+            "main content changed", "depicts different", "shows different",
         ]
 
+        subject_drift_failures = []
         for trait in lost_traits:
             trait_lower = trait.lower()
-            for indicator in drift_indicators:
-                if indicator in trait_lower:
+            for pattern in explicit_drift_patterns:
+                if pattern in trait_lower:
                     subject_drift_failures.append(trait)
                     break
 
-        # Strategy 3: Check preserved_traits - if suspiciously empty, might indicate total drift
-        preserved_traits = critique_result.preserved_traits if critique_result else []
-        if len(lost_traits) > 5 and len(preserved_traits) < 2:
-            # Almost nothing preserved - likely total subject change
-            subject_drift_failures.append("Minimal preservation - possible subject mismatch")
-
         if subject_drift_failures:
-            # Remove duplicates
-            subject_drift_failures = list(dict.fromkeys(subject_drift_failures))
-
             analysis = {
                 "overall_score": overall_score,
                 "subject_drift_failures": subject_drift_failures,
-                "original_subject": original_subject,
                 "lost_traits": lost_traits,
-                "preserved_traits": preserved_traits,
             }
-            failure_summary = subject_drift_failures[:2]  # Show first 2
-            return False, f"FAIL (Subject Drift): {', '.join(failure_summary)}", analysis
+            return False, f"FAIL (Subject Drift): {', '.join(subject_drift_failures[:1])}", analysis
 
         # Check catastrophic failures (always reject)
         catastrophic_failures = []
@@ -330,13 +292,42 @@ class AutoImprover:
 
         meets_targets = (overall_score >= target_overall) and (not dimension_below_target)
 
-        # Tier 2: Check if improves on best approved (incremental case)
+        # Tier 2: Check if improves incrementally
+        # NEW: Accept if making NET PROGRESS across dimensions (even if overall doesn't jump by 3)
         improvement = None
         improves_incrementally = False
+        dimension_improvements = {}
+        net_progress = False
 
         if best_approved_score is not None and self.allow_incremental:
             improvement = overall_score - best_approved_score
             improves_incrementally = improvement >= self.min_improvement
+
+            # NEW: Also check per-dimension progress to avoid oscillation
+            # If we have training insights with historical dimension scores, use those
+            if training_insights and training_insights.get("dimension_averages"):
+                hist_dims = training_insights["dimension_averages"]
+                improved_count = 0
+                regressed_count = 0
+                improvement_sum = 0
+                regression_sum = 0
+
+                for dimension, current_score in new_scores.items():
+                    if dimension == "overall":
+                        continue
+                    hist_score = hist_dims.get(dimension, 50)  # Default to 50 if unknown
+                    delta = current_score - hist_score
+                    dimension_improvements[dimension] = delta
+
+                    if delta > 2:  # Improved by more than noise
+                        improved_count += 1
+                        improvement_sum += delta
+                    elif delta < -2:  # Regressed by more than noise
+                        regressed_count += 1
+                        regression_sum += abs(delta)
+
+                # Accept if more dimensions improved than regressed, or if total gains > total losses
+                net_progress = (improved_count > regressed_count) or (improvement_sum > regression_sum)
 
         # Build analysis
         analysis = {
@@ -347,6 +338,8 @@ class AutoImprover:
             "best_approved_score": best_approved_score,
             "improvement": improvement,
             "improves_incrementally": improves_incrementally,
+            "dimension_improvements": dimension_improvements,
+            "net_progress": net_progress,
             "dimension_below_target": dimension_below_target,
         }
 
@@ -356,8 +349,13 @@ class AutoImprover:
             return True, f"PASS (Tier 1): Overall {overall_score}/{target_overall}, all dimensions meet target", analysis
 
         if improves_incrementally:
-            # Tier 2: Incremental improvement
+            # Tier 2: Incremental improvement (overall score jumped by 3+)
             return True, f"PASS (Tier 2 - Incremental): Overall {overall_score} (+{improvement} from {best_approved_score})", analysis
+
+        if net_progress:
+            # Tier 2b: Net progress across dimensions (avoids oscillation)
+            improved = [d for d, delta in dimension_improvements.items() if delta > 2]
+            return True, f"PASS (Tier 2 - Net Progress): Improved dimensions: {', '.join(improved[:3])}", analysis
 
         if best_approved_score is None:
             # First iteration - be more lenient with score threshold
