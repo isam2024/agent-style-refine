@@ -134,6 +134,40 @@ function Session() {
     },
   })
 
+  // Handle feedback and auto-continue the loop
+  const handleApprove = async (notes?: string) => {
+    if (!latestResult) return
+
+    // Submit feedback
+    await feedbackMutation.mutateAsync({
+      iterationId: latestResult.iteration_id,
+      approved: true,
+      notes,
+    })
+
+    // Apply the updated profile
+    await applyUpdateMutation.mutateAsync(latestResult.updated_profile)
+
+    // Auto-trigger next iteration
+    setLatestResult(null)
+    iterateMutation.mutate()
+  }
+
+  const handleReject = async (notes?: string) => {
+    if (!latestResult) return
+
+    // Submit feedback (don't apply profile update)
+    await feedbackMutation.mutateAsync({
+      iterationId: latestResult.iteration_id,
+      approved: false,
+      notes,
+    })
+
+    // Auto-trigger next iteration with same subject
+    setLatestResult(null)
+    iterateMutation.mutate()
+  }
+
   if (isLoading) {
     return <div className="text-center py-12 text-slate-500">Loading session...</div>
   }
@@ -387,23 +421,9 @@ function Session() {
           {latestResult && (
             <FeedbackPanel
               critique={latestResult.critique}
-              onApprove={(notes) => {
-                feedbackMutation.mutate({
-                  iterationId: latestResult.iteration_id,
-                  approved: true,
-                  notes,
-                })
-                applyUpdateMutation.mutate(latestResult.updated_profile)
-              }}
-              onReject={(notes) => {
-                feedbackMutation.mutate({
-                  iterationId: latestResult.iteration_id,
-                  approved: false,
-                  notes,
-                })
-                setLatestResult(null)
-              }}
-              isLoading={feedbackMutation.isPending || applyUpdateMutation.isPending}
+              onApprove={handleApprove}
+              onReject={handleReject}
+              isLoading={feedbackMutation.isPending || applyUpdateMutation.isPending || iterateMutation.isPending}
             />
           )}
 
