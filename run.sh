@@ -21,23 +21,52 @@ FRONTEND_PORT=1442
 stop_services() {
     echo -e "${YELLOW}Stopping existing services...${NC}"
 
-    # Kill processes on backend port
-    local backend_pid=$(lsof -ti:$BACKEND_PORT 2>/dev/null)
-    if [ -n "$backend_pid" ]; then
-        echo -e "  Stopping backend (PID: $backend_pid)..."
-        kill $backend_pid 2>/dev/null || kill -9 $backend_pid 2>/dev/null
+    # Kill all processes on backend port
+    local backend_pids=$(lsof -ti:$BACKEND_PORT 2>/dev/null | tr '\n' ' ')
+    if [ -n "$backend_pids" ]; then
+        echo -e "  Stopping backend processes: $backend_pids"
+        kill $backend_pids 2>/dev/null
         sleep 1
+        # Force kill if still running
+        backend_pids=$(lsof -ti:$BACKEND_PORT 2>/dev/null | tr '\n' ' ')
+        if [ -n "$backend_pids" ]; then
+            kill -9 $backend_pids 2>/dev/null
+            sleep 1
+        fi
     fi
 
-    # Kill processes on frontend port
-    local frontend_pid=$(lsof -ti:$FRONTEND_PORT 2>/dev/null)
-    if [ -n "$frontend_pid" ]; then
-        echo -e "  Stopping frontend (PID: $frontend_pid)..."
-        kill $frontend_pid 2>/dev/null || kill -9 $frontend_pid 2>/dev/null
+    # Kill all processes on frontend port
+    local frontend_pids=$(lsof -ti:$FRONTEND_PORT 2>/dev/null | tr '\n' ' ')
+    if [ -n "$frontend_pids" ]; then
+        echo -e "  Stopping frontend processes: $frontend_pids"
+        kill $frontend_pids 2>/dev/null
         sleep 1
+        # Force kill if still running
+        frontend_pids=$(lsof -ti:$FRONTEND_PORT 2>/dev/null | tr '\n' ' ')
+        if [ -n "$frontend_pids" ]; then
+            kill -9 $frontend_pids 2>/dev/null
+            sleep 1
+        fi
     fi
 
-    echo -e "  ${GREEN}✓ Ports cleared${NC}"
+    # Wait for ports to be free (up to 5 seconds)
+    local retries=10
+    while [ $retries -gt 0 ]; do
+        local backend_busy=$(lsof -ti:$BACKEND_PORT 2>/dev/null)
+        local frontend_busy=$(lsof -ti:$FRONTEND_PORT 2>/dev/null)
+        if [ -z "$backend_busy" ] && [ -z "$frontend_busy" ]; then
+            break
+        fi
+        echo -e "  Waiting for ports to be released..."
+        sleep 0.5
+        retries=$((retries - 1))
+    done
+
+    if [ $retries -eq 0 ]; then
+        echo -e "  ${RED}Warning: Ports may still be in use${NC}"
+    else
+        echo -e "  ${GREEN}✓ Ports cleared${NC}"
+    fi
     echo ""
 }
 
