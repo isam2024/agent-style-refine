@@ -161,181 +161,85 @@ function PromptWriter() {
 
           {/* Selected Style Info */}
           {selectedStyle && (
-            <div className="bg-white rounded-xl border border-slate-200 p-4 space-y-4">
-              <div>
-                <h3 className="font-medium text-slate-800">
-                  {selectedStyle.style_profile.style_name}
-                </h3>
-                {selectedStyle.description && (
-                  <p className="text-sm text-slate-500 mt-1">
-                    {selectedStyle.description}
-                  </p>
-                )}
-              </div>
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <h3 className="font-medium text-slate-800">
+                {selectedStyle.style_profile.style_name}
+              </h3>
+              {selectedStyle.description && (
+                <p className="text-sm text-slate-500 mt-1">
+                  {selectedStyle.description}
+                </p>
+              )}
+              <div className="mt-3 space-y-2">
+                {/* Training Stats */}
+                <div className="text-xs text-slate-500">
+                  {selectedStyle.iterations_trained} iterations
+                  {selectedStyle.final_score && ` • Score: ${selectedStyle.final_score}/100`}
+                </div>
 
-              {/* Training Stats */}
-              {selectedStyle.training_summary && (
-                <div className="border-t border-slate-100 pt-3">
-                  <span className="text-xs text-slate-400 uppercase font-medium">
-                    Training Stats
+                {/* Core Traits */}
+                <div>
+                  <span className="text-xs text-slate-400 uppercase">
+                    Core Traits
                   </span>
-                  <div className="grid grid-cols-2 gap-2 mt-2 text-xs">
-                    <div>
-                      <span className="text-slate-500">Iterations:</span>
-                      <span className="ml-1 font-medium text-slate-700">
-                        {selectedStyle.iterations_trained}
-                      </span>
-                    </div>
-                    {selectedStyle.final_score && (
-                      <div>
-                        <span className="text-slate-500">Final Score:</span>
-                        <span className="ml-1 font-medium text-slate-700">
-                          {selectedStyle.final_score}/100
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {selectedStyle.style_profile.core_invariants
+                      .slice(0, 3)
+                      .map((trait, i) => (
+                        <span
+                          key={i}
+                          className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded"
+                        >
+                          {trait}
                         </span>
-                      </div>
+                      ))}
+                  </div>
+                </div>
+
+                {/* Palette */}
+                <div>
+                  <span className="text-xs text-slate-400 uppercase">
+                    Palette
+                  </span>
+                  <div className="flex gap-1 mt-1">
+                    {selectedStyle.style_profile.palette.dominant_colors.map(
+                      (color, i) => (
+                        <div
+                          key={i}
+                          className="w-6 h-6 rounded border border-slate-200"
+                          style={{ backgroundColor: color }}
+                          title={color}
+                        />
+                      )
                     )}
                   </div>
                 </div>
-              )}
 
-              {/* Core Traits */}
-              <div className="border-t border-slate-100 pt-3">
-                <span className="text-xs text-slate-400 uppercase font-medium">
-                  Core Traits
-                </span>
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {selectedStyle.style_profile.core_invariants
-                    .slice(0, 3)
-                    .map((trait, i) => (
-                      <span
-                        key={i}
-                        className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded"
-                      >
-                        {trait}
-                      </span>
-                    ))}
-                </div>
-              </div>
-
-              {/* Palette */}
-              <div className="border-t border-slate-100 pt-3">
-                <span className="text-xs text-slate-400 uppercase font-medium">
-                  Palette
-                </span>
-                <div className="flex gap-1 mt-2">
-                  {selectedStyle.style_profile.palette.dominant_colors.map(
-                    (color, i) => (
-                      <div
-                        key={i}
-                        className="w-6 h-6 rounded border border-slate-200"
-                        style={{ backgroundColor: color }}
-                        title={color}
-                      />
-                    )
-                  )}
-                </div>
-              </div>
-
-              {/* Style Rules */}
-              {selectedStyle.style_rules && (
-                <>
-                  {selectedStyle.style_rules.technique_keywords.length > 0 && (
-                    <div className="border-t border-slate-100 pt-3">
-                      <span className="text-xs text-slate-400 uppercase font-medium">
-                        Techniques
-                      </span>
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {selectedStyle.style_rules.technique_keywords
-                          .slice(0, 3)
-                          .map((tech, i) => (
-                            <span
-                              key={i}
-                              className="px-2 py-0.5 bg-purple-50 text-purple-700 text-xs rounded"
-                            >
-                              {tech}
-                            </span>
-                          ))}
+                {/* Agent Details (expandable) */}
+                <details className="text-xs">
+                  <summary className="cursor-pointer text-blue-600 hover:text-blue-700 mt-2">
+                    View agent details
+                  </summary>
+                  <div className="mt-2 space-y-2 text-slate-600">
+                    {selectedStyle.style_rules.technique_keywords.length > 0 && (
+                      <div>
+                        <span className="font-medium">Techniques:</span> {selectedStyle.style_rules.technique_keywords.slice(0, 3).join(', ')}
                       </div>
-                    </div>
-                  )}
-
-                  {selectedStyle.style_rules.mood_keywords.length > 0 && (
-                    <div className="border-t border-slate-100 pt-3">
-                      <span className="text-xs text-slate-400 uppercase font-medium">
-                        Mood
-                      </span>
-                      <div className="flex flex-wrap gap-1 mt-2">
-                        {selectedStyle.style_rules.mood_keywords
-                          .slice(0, 3)
-                          .map((mood, i) => (
-                            <span
-                              key={i}
-                              className="px-2 py-0.5 bg-amber-50 text-amber-700 text-xs rounded"
-                            >
-                              {mood}
-                            </span>
-                          ))}
+                    )}
+                    {selectedStyle.style_rules.mood_keywords.length > 0 && (
+                      <div>
+                        <span className="font-medium">Mood:</span> {selectedStyle.style_rules.mood_keywords.slice(0, 3).join(', ')}
                       </div>
-                    </div>
-                  )}
-                </>
-              )}
-
-              {/* Expandable Full Details */}
-              <details className="border-t border-slate-100 pt-3">
-                <summary className="text-xs text-blue-600 hover:text-blue-700 cursor-pointer font-medium">
-                  View Full Style Profile
-                </summary>
-                <div className="mt-3 space-y-3 text-xs">
-                  {/* Lighting */}
-                  <div>
-                    <span className="text-slate-400 uppercase font-medium">Lighting</span>
-                    <p className="text-slate-600 mt-1">
-                      {selectedStyle.style_profile.lighting.lighting_type}
-                    </p>
-                  </div>
-
-                  {/* Texture */}
-                  <div>
-                    <span className="text-slate-400 uppercase font-medium">Texture</span>
-                    <p className="text-slate-600 mt-1">
-                      {selectedStyle.style_profile.texture.surface}
-                    </p>
-                  </div>
-
-                  {/* Composition */}
-                  <div>
-                    <span className="text-slate-400 uppercase font-medium">Composition</span>
-                    <p className="text-slate-600 mt-1">
-                      {selectedStyle.style_profile.composition.camera} • {selectedStyle.style_profile.composition.framing}
-                    </p>
-                  </div>
-
-                  {/* Always Include */}
-                  {selectedStyle.style_rules.always_include.length > 0 && (
+                    )}
                     <div>
-                      <span className="text-green-600 uppercase font-medium">Always Include</span>
-                      <ul className="list-disc list-inside text-slate-600 mt-1 space-y-0.5">
-                        {selectedStyle.style_rules.always_include.slice(0, 5).map((item, i) => (
-                          <li key={i}>{item}</li>
-                        ))}
-                      </ul>
+                      <span className="font-medium">Lighting:</span> {selectedStyle.style_profile.lighting.lighting_type}
                     </div>
-                  )}
-
-                  {/* Always Avoid */}
-                  {selectedStyle.style_rules.always_avoid.length > 0 && (
                     <div>
-                      <span className="text-red-600 uppercase font-medium">Always Avoid</span>
-                      <ul className="list-disc list-inside text-slate-600 mt-1 space-y-0.5">
-                        {selectedStyle.style_rules.always_avoid.slice(0, 5).map((item, i) => (
-                          <li key={i}>{item}</li>
-                        ))}
-                      </ul>
+                      <span className="font-medium">Texture:</span> {selectedStyle.style_profile.texture.surface}
                     </div>
-                  )}
-                </div>
-              </details>
+                  </div>
+                </details>
+              </div>
             </div>
           )}
 
