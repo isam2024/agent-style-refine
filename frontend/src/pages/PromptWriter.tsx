@@ -541,7 +541,7 @@ function PromptWriter() {
                   {/* Image */}
                   {entry.image_b64 ? (
                     <img
-                      src={entry.image_b64}
+                      src={`data:image/png;base64,${entry.image_b64}`}
                       alt={entry.subject}
                       className="w-full aspect-square object-cover"
                     />
