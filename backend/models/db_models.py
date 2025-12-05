@@ -80,6 +80,8 @@ class Iteration(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow
     )
+    # Full critique data for training
+    critique_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # Relationships
     session: Mapped["Session"] = relationship(back_populates="iterations")
@@ -88,9 +90,19 @@ class Iteration(Base):
     def scores(self) -> dict[str, int] | None:
         return self.scores_json
 
+    @property
+    def critique(self) -> dict | None:
+        return self.critique_json
+
 
 class TrainedStyle(Base):
-    """A finalized style extracted from training, ready for prompt writing."""
+    """A finalized style extracted from training, ready for prompt writing.
+
+    Each TrainedStyle is its own 'agent' with:
+    - Unique style profile (visual characteristics)
+    - Learned rules from training (what to include/avoid)
+    - Training summary (what was learned during iteration)
+    """
     __tablename__ = "trained_styles"
 
     id: Mapped[str] = mapped_column(
@@ -99,11 +111,14 @@ class TrainedStyle(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
 
-    # The finalized style profile
+    # The finalized style profile (visual characteristics)
     style_profile_json: Mapped[dict] = mapped_column(JSON, nullable=False)
 
     # Style rules learned from training (positive/negative descriptors)
     style_rules_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+    # Training summary - what the agent learned during training
+    training_summary_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)
 
     # Reference image thumbnail (base64, small)
     thumbnail_b64: Mapped[str | None] = mapped_column(Text, nullable=True)
@@ -126,3 +141,7 @@ class TrainedStyle(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )
+
+    @property
+    def training_summary(self) -> dict | None:
+        return self.training_summary_json

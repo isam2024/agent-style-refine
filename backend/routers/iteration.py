@@ -65,14 +65,25 @@ async def run_iteration_step(
     style_profile = StyleProfile(**latest_profile_db.profile_json)
     await log(f"Using style profile v{latest_profile_db.version}: {style_profile.style_name}", "info", "iterate")
 
-    # Gather feedback history
-    feedback_history = [
-        {"iteration": it.iteration_num, "notes": it.feedback}
-        for it in session.iterations
-        if it.feedback
-    ]
+    # Gather FULL feedback history with approval status and critique data
+    feedback_history = []
+    for it in session.iterations:
+        if it.approved is not None or it.feedback:
+            entry = {
+                "iteration": it.iteration_num,
+                "approved": it.approved,
+                "notes": it.feedback,
+            }
+            # Include critique data if available
+            if it.critique_json:
+                entry["preserved_traits"] = it.critique_json.get("preserved_traits", [])
+                entry["lost_traits"] = it.critique_json.get("lost_traits", [])
+            feedback_history.append(entry)
+
     if feedback_history:
-        await log(f"Loaded {len(feedback_history)} feedback entries from history", "info", "iterate")
+        approved_count = sum(1 for f in feedback_history if f.get("approved"))
+        rejected_count = sum(1 for f in feedback_history if f.get("approved") == False)
+        await log(f"Loaded {len(feedback_history)} feedback entries ({approved_count} approved, {rejected_count} rejected)", "info", "iterate")
 
     try:
         # Step 1: Generate image prompt
@@ -154,8 +165,13 @@ async def run_iteration_step(
         if critique_result.lost_traits:
             await log(f"Lost: {', '.join(critique_result.lost_traits[:3])}", "warning", "critique")
 
-        # Update iteration with scores
+        # Update iteration with scores AND full critique data
         iteration.scores_json = critique_result.match_scores
+        iteration.critique_json = {
+            "preserved_traits": critique_result.preserved_traits,
+            "lost_traits": critique_result.lost_traits,
+            "interesting_mutations": critique_result.interesting_mutations,
+        }
 
         session.status = SessionStatus.READY.value
         await db.commit()
@@ -292,11 +308,19 @@ async def run_auto_mode(
         latest_profile_db = max(session.style_profiles, key=lambda sp: sp.version)
         style_profile = StyleProfile(**latest_profile_db.profile_json)
 
-        feedback_history = [
-            {"iteration": it.iteration_num, "notes": it.feedback}
-            for it in session.iterations
-            if it.feedback
-        ]
+        # Gather rich feedback history with approval status and critique data
+        feedback_history = []
+        for it in session.iterations:
+            if it.approved is not None or it.feedback:
+                entry = {
+                    "iteration": it.iteration_num,
+                    "approved": it.approved,
+                    "notes": it.feedback,
+                }
+                if it.critique_json:
+                    entry["preserved_traits"] = it.critique_json.get("preserved_traits", [])
+                    entry["lost_traits"] = it.critique_json.get("lost_traits", [])
+                feedback_history.append(entry)
 
         try:
             # Generate
@@ -341,6 +365,11 @@ async def run_auto_mode(
             )
 
             iteration.scores_json = critique_result.match_scores
+            iteration.critique_json = {
+                "preserved_traits": critique_result.preserved_traits,
+                "lost_traits": critique_result.lost_traits,
+                "interesting_mutations": critique_result.interesting_mutations,
+            }
             iteration.approved = True  # Auto-approved in auto mode
 
             # Apply updated profile

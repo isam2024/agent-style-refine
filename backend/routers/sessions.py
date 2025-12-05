@@ -115,6 +115,7 @@ async def get_session(
             "feedback": it.feedback,
             "approved": it.approved,
             "created_at": it.created_at.isoformat(),
+            "critique_data": it.critique_json,  # Include critique data for training insights
         }
         try:
             it_data["image_b64"] = await storage_service.load_image(it.image_path)

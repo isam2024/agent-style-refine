@@ -15,6 +15,7 @@ import SideBySide from '../components/SideBySide'
 import StyleProfileView from '../components/StyleProfileView'
 import FeedbackPanel from '../components/FeedbackPanel'
 import LogWindow from '../components/LogWindow'
+import TrainingInsights from '../components/TrainingInsights'
 
 function Session() {
   const { sessionId } = useParams<{ sessionId: string }>()
@@ -412,6 +413,11 @@ function Session() {
 
         {/* Right Sidebar - Style Profile & Feedback */}
         <div className="col-span-4 space-y-4">
+          {/* Training Insights */}
+          {session.iterations.length > 0 && (
+            <TrainingInsights iterations={session.iterations} />
+          )}
+
           {/* Style Profile */}
           {session.style_profile && (
             <StyleProfileView profile={session.style_profile.profile} />

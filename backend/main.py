@@ -137,6 +137,23 @@ async def vlm_health():
     return await vlm_service.check_model()
 
 
+@app.get("/health/vlm/status")
+async def vlm_status():
+    """Get VLM status including active requests and Ollama processes."""
+    return await vlm_service.get_status()
+
+
+@app.post("/health/vlm/cancel")
+async def vlm_cancel_requests():
+    """Cancel all active VLM requests."""
+    active_before = len(vlm_service.get_active_requests())
+    vlm_service.cancel_all_requests()
+    return {
+        "status": "cancelled",
+        "requests_cancelled": active_before,
+    }
+
+
 @app.websocket("/ws/{session_id}")
 async def websocket_route(websocket: WebSocket, session_id: str):
     await websocket_endpoint(websocket, session_id)

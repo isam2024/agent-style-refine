@@ -1,6 +1,7 @@
 import httpx
 import json
 import logging
+import asyncio
 from typing import AsyncIterator
 
 from backend.config import settings
@@ -12,12 +13,25 @@ class VLMService:
     def __init__(self):
         self.base_url = settings.ollama_url
         self.model = settings.vlm_model
+        self._active_requests: dict[str, bool] = {}  # Track active requests
+
+    def cancel_request(self, request_id: str):
+        """Mark a request as cancelled."""
+        if request_id in self._active_requests:
+            self._active_requests[request_id] = False
+            logger.info(f"VLM: Request {request_id} marked for cancellation")
+
+    def is_cancelled(self, request_id: str) -> bool:
+        """Check if a request has been cancelled."""
+        return self._active_requests.get(request_id) == False
 
     async def analyze(
         self,
         prompt: str,
         images: list[str] | None = None,
         system: str | None = None,
+        request_id: str | None = None,
+        timeout: float = 300.0,
     ) -> str:
         """
         Send a prompt to the VLM with optional images.
@@ -26,10 +40,16 @@ class VLMService:
             prompt: The user prompt
             images: List of base64 encoded images (raw, no data URL prefix)
             system: Optional system prompt
+            request_id: Optional ID to track/cancel this request
+            timeout: Request timeout in seconds (default 5 minutes)
 
         Returns:
             The model's response text
         """
+        # Track this request if ID provided
+        if request_id:
+            self._active_requests[request_id] = True
+
         messages = []
 
         if system:
@@ -58,12 +78,18 @@ class VLMService:
         logger.debug(f"VLM: Using model {self.model}")
         logger.debug(f"VLM: Prompt preview: {prompt[:200]}...")
 
-        async with httpx.AsyncClient(timeout=300.0) as client:
+        # Use streaming internally so we can detect cancellation
+        async with httpx.AsyncClient(timeout=timeout) as client:
             try:
                 response = await client.post(
                     f"{self.base_url}/api/chat",
                     json=payload,
                 )
+
+                # Check if cancelled
+                if request_id and self.is_cancelled(request_id):
+                    logger.info(f"VLM: Request {request_id} was cancelled")
+                    raise asyncio.CancelledError("Request cancelled by user")
 
                 if response.status_code != 200:
                     error_text = response.text
@@ -87,11 +113,17 @@ class VLMService:
                 logger.error(f"VLM: Cannot connect to Ollama at {self.base_url}: {e}")
                 raise RuntimeError(f"Cannot connect to Ollama at {self.base_url}. Is it running?")
             except httpx.TimeoutException as e:
-                logger.error(f"VLM: Request timed out: {e}")
-                raise RuntimeError("Ollama request timed out after 5 minutes")
+                logger.error(f"VLM: Request timed out after {timeout}s: {e}")
+                raise RuntimeError(f"Ollama request timed out after {int(timeout/60)} minutes. The model may be overloaded.")
+            except asyncio.CancelledError:
+                raise
             except Exception as e:
                 logger.error(f"VLM: Unexpected error: {type(e).__name__}: {e}")
                 raise
+            finally:
+                # Clean up request tracking
+                if request_id and request_id in self._active_requests:
+                    del self._active_requests[request_id]
 
     async def analyze_stream(
         self,
@@ -152,11 +184,51 @@ class VLMService:
         self,
         prompt: str,
         system: str | None = None,
+        request_id: str | None = None,
     ) -> str:
         """
         Generate text without images (for the style agent prompt generation).
         """
-        return await self.analyze(prompt=prompt, system=system)
+        return await self.analyze(prompt=prompt, system=system, request_id=request_id)
+
+    def get_active_requests(self) -> list[str]:
+        """Get list of active request IDs."""
+        return [k for k, v in self._active_requests.items() if v]
+
+    def cancel_all_requests(self):
+        """Cancel all active requests."""
+        for request_id in list(self._active_requests.keys()):
+            self._active_requests[request_id] = False
+        logger.info(f"VLM: Cancelled {len(self._active_requests)} requests")
+
+    async def get_status(self) -> dict:
+        """Get Ollama status including any running processes."""
+        status = {
+            "connected": False,
+            "model": self.model,
+            "active_requests": len(self.get_active_requests()),
+            "ollama_running": None,
+        }
+
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                # Check if Ollama is responding
+                response = await client.get(f"{self.base_url}/api/tags")
+                status["connected"] = response.status_code == 200
+
+                # Check for running processes (Ollama ps endpoint)
+                try:
+                    ps_response = await client.get(f"{self.base_url}/api/ps")
+                    if ps_response.status_code == 200:
+                        ps_data = ps_response.json()
+                        status["ollama_running"] = ps_data.get("models", [])
+                except:
+                    pass
+
+        except Exception as e:
+            logger.warning(f"VLM status check failed: {e}")
+
+        return status
 
     async def health_check(self) -> bool:
         """Check if Ollama is available."""

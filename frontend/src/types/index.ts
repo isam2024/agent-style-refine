@@ -89,6 +89,11 @@ export interface Iteration {
   feedback: string | null;
   approved: boolean | null;
   created_at: string;
+  critique_data: {
+    preserved_traits: string[];
+    lost_traits: string[];
+    interesting_mutations: string[];
+  } | null;
 }
 
 export interface IterationStepResult {
@@ -157,11 +162,28 @@ export interface PromptWriteResponse {
     subject: string;
     additional_context: string | null;
     technique: string[];
-    palette: string | null;
-    lighting: string;
-    texture: string;
+    palette: string[];
+    lighting: {
+      type: string;
+      shadows: string;
+      highlights: string;
+    };
+    texture: {
+      surface: string;
+      noise: string;
+      effects: string[];
+    };
+    composition: {
+      camera: string;
+      framing: string;
+      negative_space: string;
+    };
     mood: string[];
-    style_rules_applied: number;
+    core_invariants: string[];
+    always_include: string[];
+    always_avoid: string[];
+    emphasize: string[];
+    de_emphasize: string[];
   } | null;
 }
 

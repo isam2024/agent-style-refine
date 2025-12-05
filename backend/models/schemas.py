@@ -121,6 +121,11 @@ class IterationResponse(BaseModel):
     feedback: str | None = None
     approved: bool | None = None
     created_at: datetime
+    # Critique data for training insights
+    critique_data: dict | None = Field(
+        default=None,
+        description="Critique data including preserved_traits, lost_traits, etc."
+    )
 
     class Config:
         from_attributes = True
@@ -220,12 +225,16 @@ class TrainedStyleCreate(BaseModel):
 
 
 class TrainedStyleResponse(BaseModel):
-    """Response for a trained style."""
+    """Response for a trained style (style agent)."""
     id: str
     name: str
     description: str | None
     style_profile: StyleProfile
     style_rules: StyleRules
+    training_summary: dict | None = Field(
+        default=None,
+        description="Summary of what the agent learned during training"
+    )
     thumbnail_b64: str | None
     source_session_id: str | None
     iterations_trained: int

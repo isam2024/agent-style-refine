@@ -53,6 +53,108 @@ def create_thumbnail(image_b64: str, size: tuple = (128, 128)) -> str:
     return base64.b64encode(buffer.getvalue()).decode()
 
 
+def build_training_summary(
+    style_profile: StyleProfile,
+    iteration_history: list[dict],
+    style_rules: StyleRules,
+) -> dict:
+    """
+    Build a comprehensive summary of what the agent learned during training.
+    This captures the 'personality' of this style agent.
+    """
+    from collections import Counter
+
+    summary = {
+        "style_name": style_profile.style_name,
+        "original_subject": style_profile.original_subject,
+        "iterations_total": len(iteration_history),
+        "iterations_approved": 0,
+        "iterations_rejected": 0,
+        "average_score": None,
+        "dimension_scores": {},
+        "strengths": [],
+        "weaknesses": [],
+        "key_traits": [],
+        "learned_rules": {
+            "always_include": style_rules.always_include,
+            "always_avoid": style_rules.always_avoid,
+            "technique": style_rules.technique_keywords,
+            "mood": style_rules.mood_keywords,
+            "emphasize": style_rules.emphasize,
+            "de_emphasize": style_rules.de_emphasize,
+        },
+        "palette_summary": {
+            "dominant_colors": style_profile.palette.dominant_colors[:5],
+            "color_descriptions": style_profile.palette.color_descriptions[:5],
+            "saturation": style_profile.palette.saturation,
+            "value_range": style_profile.palette.value_range,
+        },
+        "lighting_summary": {
+            "type": style_profile.lighting.lighting_type,
+            "shadows": style_profile.lighting.shadows,
+            "highlights": style_profile.lighting.highlights,
+        },
+        "composition_summary": {
+            "camera": style_profile.composition.camera,
+            "framing": style_profile.composition.framing,
+        },
+    }
+
+    # Process iteration history
+    all_scores = []
+    dimension_scores = {}
+    all_preserved = []
+    all_lost = []
+
+    for iteration in iteration_history:
+        if iteration.get("approved"):
+            summary["iterations_approved"] += 1
+        else:
+            summary["iterations_rejected"] += 1
+
+        if iteration.get("scores"):
+            for dim, score in iteration["scores"].items():
+                if dim not in dimension_scores:
+                    dimension_scores[dim] = []
+                dimension_scores[dim].append(score)
+                if dim == "overall":
+                    all_scores.append(score)
+
+        if iteration.get("preserved_traits"):
+            all_preserved.extend(iteration["preserved_traits"])
+        if iteration.get("lost_traits"):
+            all_lost.extend(iteration["lost_traits"])
+
+    # Calculate averages
+    if all_scores:
+        summary["average_score"] = sum(all_scores) // len(all_scores)
+
+    # Calculate dimension averages and identify strengths/weaknesses
+    for dim, scores in dimension_scores.items():
+        if dim == "overall":
+            continue
+        avg = sum(scores) // len(scores)
+        summary["dimension_scores"][dim] = avg
+        if avg >= 75:
+            summary["strengths"].append(dim)
+        elif avg < 60:
+            summary["weaknesses"].append(dim)
+
+    # Find key traits (most frequently preserved)
+    preserved_counts = Counter(all_preserved)
+    summary["key_traits"] = [
+        trait for trait, count in preserved_counts.most_common(5)
+    ]
+
+    # Find problem areas (most frequently lost)
+    lost_counts = Counter(all_lost)
+    summary["problem_areas"] = [
+        trait for trait, count in lost_counts.most_common(5)
+    ]
+
+    return summary
+
+
 @router.get("/", response_model=list[TrainedStyleSummary])
 async def list_styles(
     db: AsyncSession = Depends(get_db),
@@ -103,6 +205,7 @@ async def get_style(
         description=style.description,
         style_profile=StyleProfile(**style.style_profile_json),
         style_rules=StyleRules(**style.style_rules_json),
+        training_summary=style.training_summary_json,
         thumbnail_b64=style.thumbnail_b64,
         source_session_id=style.source_session_id,
         iterations_trained=style.iterations_trained,
@@ -143,16 +246,27 @@ async def finalize_style(
     latest_profile_db = max(session.style_profiles, key=lambda p: p.version)
     style_profile = StyleProfile(**latest_profile_db.profile_json)
 
-    # Gather feedback history from iterations
-    feedback_history = [
-        {"approved": it.approved, "notes": it.feedback}
-        for it in session.iterations
-        if it.approved is not None
-    ]
+    # Gather FULL iteration history with critique data
+    iteration_history = []
+    for it in session.iterations:
+        if it.approved is not None:
+            iteration_data = {
+                "iteration_num": it.iteration_num,
+                "approved": it.approved,
+                "notes": it.feedback,
+                "scores": it.scores_json or {},
+                "prompt_used": it.prompt_used,
+            }
+            # Add critique data if available
+            if it.critique_json:
+                iteration_data["preserved_traits"] = it.critique_json.get("preserved_traits", [])
+                iteration_data["lost_traits"] = it.critique_json.get("lost_traits", [])
+                iteration_data["interesting_mutations"] = it.critique_json.get("interesting_mutations", [])
+            iteration_history.append(iteration_data)
 
-    # Extract style rules
+    # Extract style rules with full iteration data
     style_rules = prompt_writer.extract_rules_from_profile(
-        style_profile, feedback_history
+        style_profile, iteration_history
     )
 
     # Calculate final score from last iteration
@@ -161,6 +275,11 @@ async def finalize_style(
         last_iteration = max(session.iterations, key=lambda i: i.iteration_num)
         if last_iteration.scores_json and "overall" in last_iteration.scores_json:
             final_score = last_iteration.scores_json["overall"]
+
+    # Build training summary - what this agent learned
+    training_summary = build_training_summary(
+        style_profile, iteration_history, style_rules
+    )
 
     # Create thumbnail from original image
     thumbnail = None
@@ -171,12 +290,13 @@ async def finalize_style(
         except Exception:
             pass
 
-    # Create the trained style
+    # Create the trained style (agent)
     trained_style = TrainedStyle(
         name=data.name,
         description=data.description,
         style_profile_json=style_profile.model_dump(),
         style_rules_json=style_rules.model_dump(),
+        training_summary_json=training_summary,
         thumbnail_b64=thumbnail,
         source_session_id=session.id,
         iterations_trained=len(session.iterations),
@@ -194,6 +314,7 @@ async def finalize_style(
         description=trained_style.description,
         style_profile=style_profile,
         style_rules=style_rules,
+        training_summary=training_summary,
         thumbnail_b64=trained_style.thumbnail_b64,
         source_session_id=trained_style.source_session_id,
         iterations_trained=trained_style.iterations_trained,
@@ -257,6 +378,7 @@ async def update_style(
         description=style.description,
         style_profile=StyleProfile(**style.style_profile_json),
         style_rules=StyleRules(**style.style_rules_json),
+        training_summary=style.training_summary_json,
         thumbnail_b64=style.thumbnail_b64,
         source_session_id=style.source_session_id,
         iterations_trained=style.iterations_trained,

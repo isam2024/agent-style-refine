@@ -32,18 +32,26 @@ Your role is to write detailed image generation prompts that perfectly embody a 
 {{STYLE_PROFILE}}
 ```
 
-## FEEDBACK HISTORY:
+## TRAINING FEEDBACK (CRITICAL - LEARN FROM THIS):
 {{FEEDBACK_HISTORY}}
+
+## TRAITS TO EMPHASIZE (frequently lost in past iterations):
+{{EMPHASIZE_TRAITS}}
+
+## TRAITS THAT WORK WELL (preserved in approved iterations):
+{{PRESERVE_TRAITS}}
 
 ## YOUR RULES:
 1. Every prompt you write MUST express the core invariants
-2. Use explicit color language based on the palette (mention specific tones, not just "colorful")
-3. Describe lighting setup explicitly (direction, quality, color temperature)
-4. Include texture and surface quality descriptions
-5. Respect forbidden_elements - NEVER include them
-6. You may naturally incorporate recurring_elements where appropriate
-7. Write prompts suitable for Stable Diffusion / Flux style models
-8. Be detailed but not verbose - aim for 50-150 words
+2. PRIORITIZE traits that were frequently lost - be MORE EXPLICIT about them
+3. Avoid approaches that led to rejections (see feedback notes)
+4. Use explicit color language based on the palette (mention specific tones, not just "colorful")
+5. Describe lighting setup explicitly (direction, quality, color temperature)
+6. Include texture and surface quality descriptions
+7. Respect forbidden_elements - NEVER include them
+8. You may naturally incorporate recurring_elements where appropriate
+9. Write prompts suitable for Stable Diffusion / Flux style models
+10. Be detailed but not verbose - aim for 50-150 words
 
 ## OUTPUT FORMAT:
 When given a subject, respond with ONLY the image generation prompt. No explanation, no markdown, just the prompt text."""
@@ -58,11 +66,13 @@ When given a subject, respond with ONLY the image generation prompt. No explanat
 
         Args:
             style_profile: The current style profile
-            feedback_history: List of past feedback items
+            feedback_history: List of past feedback items with approval status and critique data
 
         Returns:
             Complete system prompt string
         """
+        from collections import Counter
+
         template = self._load_prompt()
 
         # Format core invariants
@@ -70,14 +80,64 @@ When given a subject, respond with ONLY the image generation prompt. No explanat
             f"- {inv}" for inv in style_profile.core_invariants
         )
 
-        # Format feedback history
+        # Process feedback history to extract learnings
+        feedback_lines = []
+        all_lost_traits = []
+        all_preserved_traits = []
+        rejected_notes = []
+
         if feedback_history:
-            feedback_text = "\n".join(
-                f"- Iteration {f.get('iteration', '?')}: {f.get('notes', 'No notes')}"
-                for f in feedback_history[-5:]  # Last 5 feedback items
-            )
+            for f in feedback_history[-10:]:  # Last 10 entries
+                iteration = f.get('iteration', '?')
+                approved = f.get('approved')
+                notes = f.get('notes', '')
+
+                # Build feedback line
+                status = "✓ APPROVED" if approved else "✗ REJECTED" if approved == False else "pending"
+                line = f"- Iteration {iteration} [{status}]"
+                if notes:
+                    line += f": {notes}"
+                feedback_lines.append(line)
+
+                # Collect traits
+                if f.get('lost_traits'):
+                    all_lost_traits.extend(f['lost_traits'])
+                if f.get('preserved_traits'):
+                    if approved:  # Only count preserved from approved iterations
+                        all_preserved_traits.extend(f['preserved_traits'])
+
+                # Collect rejection notes for learning
+                if approved == False and notes:
+                    rejected_notes.append(notes)
+
+            feedback_text = "\n".join(feedback_lines)
+
+            # Find frequently lost traits (need emphasis)
+            lost_counts = Counter(all_lost_traits)
+            emphasize_traits = [
+                f"- {trait} (lost {count}x)"
+                for trait, count in lost_counts.most_common(8)
+            ]
+
+            # Find consistently preserved traits (what works)
+            preserved_counts = Counter(all_preserved_traits)
+            preserve_traits = [
+                f"- {trait}"
+                for trait, count in preserved_counts.most_common(5)
+            ]
+
+            # Add rejection learnings to feedback
+            if rejected_notes:
+                feedback_text += "\n\n### Rejected iteration notes (AVOID these issues):\n"
+                feedback_text += "\n".join(f"- {note}" for note in rejected_notes[-3:])
+
         else:
-            feedback_text = "No feedback yet."
+            feedback_text = "No feedback yet - this is the first iteration."
+            emphasize_traits = []
+            preserve_traits = []
+
+        emphasize_text = "\n".join(emphasize_traits) if emphasize_traits else "None identified yet."
+        preserve_text = "\n".join(preserve_traits) if preserve_traits else "None identified yet."
 
         return template.replace(
             "{{STYLE_NAME}}", style_profile.style_name
@@ -87,6 +147,10 @@ When given a subject, respond with ONLY the image generation prompt. No explanat
             "{{STYLE_PROFILE}}", json.dumps(style_profile.model_dump(), indent=2)
         ).replace(
             "{{FEEDBACK_HISTORY}}", feedback_text
+        ).replace(
+            "{{EMPHASIZE_TRAITS}}", emphasize_text
+        ).replace(
+            "{{PRESERVE_TRAITS}}", preserve_text
         )
 
     async def generate_image_prompt(

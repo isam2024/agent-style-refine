@@ -331,36 +331,143 @@ function PromptWriter() {
 
               {/* Prompt Breakdown */}
               {result.prompt_breakdown && (
-                <div className="mt-4 pt-4 border-t border-slate-100">
+                <div className="mt-4 pt-4 border-t border-slate-100 space-y-4">
                   <span className="text-xs text-slate-400 uppercase">
                     Prompt Breakdown
                   </span>
-                  <div className="grid grid-cols-2 gap-2 mt-2 text-xs">
-                    <div>
-                      <span className="text-slate-400">Subject:</span>{' '}
-                      <span className="text-slate-600">
-                        {result.prompt_breakdown.subject}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400">Lighting:</span>{' '}
-                      <span className="text-slate-600">
-                        {result.prompt_breakdown.lighting}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400">Texture:</span>{' '}
-                      <span className="text-slate-600">
-                        {result.prompt_breakdown.texture}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400">Rules Applied:</span>{' '}
-                      <span className="text-slate-600">
-                        {result.prompt_breakdown.style_rules_applied}
-                      </span>
-                    </div>
+
+                  {/* Subject */}
+                  <div className="text-sm">
+                    <span className="text-slate-400 font-medium">Subject:</span>{' '}
+                    <span className="text-slate-700">{result.prompt_breakdown.subject}</span>
                   </div>
+
+                  {/* Technique & Mood */}
+                  <div className="grid grid-cols-2 gap-4 text-xs">
+                    {result.prompt_breakdown.technique?.length > 0 && (
+                      <div>
+                        <span className="text-slate-400 font-medium block mb-1">Technique:</span>
+                        <div className="flex flex-wrap gap-1">
+                          {result.prompt_breakdown.technique.map((t: string, i: number) => (
+                            <span key={i} className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {result.prompt_breakdown.mood?.length > 0 && (
+                      <div>
+                        <span className="text-slate-400 font-medium block mb-1">Mood:</span>
+                        <div className="flex flex-wrap gap-1">
+                          {result.prompt_breakdown.mood.map((m: string, i: number) => (
+                            <span key={i} className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded">
+                              {m}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Lighting, Texture, Composition */}
+                  <div className="grid grid-cols-3 gap-4 text-xs">
+                    {result.prompt_breakdown.lighting && (
+                      <div>
+                        <span className="text-slate-400 font-medium block mb-1">Lighting:</span>
+                        <div className="text-slate-600 space-y-0.5">
+                          <div>{result.prompt_breakdown.lighting.type}</div>
+                          <div className="text-slate-400">Shadows: {result.prompt_breakdown.lighting.shadows}</div>
+                          <div className="text-slate-400">Highlights: {result.prompt_breakdown.lighting.highlights}</div>
+                        </div>
+                      </div>
+                    )}
+                    {result.prompt_breakdown.texture && (
+                      <div>
+                        <span className="text-slate-400 font-medium block mb-1">Texture:</span>
+                        <div className="text-slate-600 space-y-0.5">
+                          <div>{result.prompt_breakdown.texture.surface}</div>
+                          <div className="text-slate-400">Noise: {result.prompt_breakdown.texture.noise}</div>
+                          {result.prompt_breakdown.texture.effects?.length > 0 && (
+                            <div className="text-slate-400">Effects: {result.prompt_breakdown.texture.effects.join(', ')}</div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {result.prompt_breakdown.composition && (
+                      <div>
+                        <span className="text-slate-400 font-medium block mb-1">Composition:</span>
+                        <div className="text-slate-600 space-y-0.5">
+                          <div>{result.prompt_breakdown.composition.camera}</div>
+                          <div className="text-slate-400">{result.prompt_breakdown.composition.framing}</div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Palette */}
+                  {result.prompt_breakdown.palette?.length > 0 && (
+                    <div className="text-xs">
+                      <span className="text-slate-400 font-medium block mb-1">Color Palette:</span>
+                      <div className="flex flex-wrap gap-1">
+                        {result.prompt_breakdown.palette.map((c: string, i: number) => (
+                          <span key={i} className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                            {c}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Style Rules */}
+                  <div className="grid grid-cols-2 gap-4 text-xs">
+                    {result.prompt_breakdown.always_include?.length > 0 && (
+                      <div>
+                        <span className="text-green-600 font-medium block mb-1">Always Include:</span>
+                        <ul className="list-disc list-inside text-slate-600 space-y-0.5">
+                          {result.prompt_breakdown.always_include.map((r: string, i: number) => (
+                            <li key={i}>{r}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {result.prompt_breakdown.always_avoid?.length > 0 && (
+                      <div>
+                        <span className="text-red-600 font-medium block mb-1">Always Avoid:</span>
+                        <ul className="list-disc list-inside text-slate-600 space-y-0.5">
+                          {result.prompt_breakdown.always_avoid.map((r: string, i: number) => (
+                            <li key={i}>{r}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Emphasize / De-emphasize from training */}
+                  {(result.prompt_breakdown.emphasize?.length > 0 || result.prompt_breakdown.de_emphasize?.length > 0) && (
+                    <div className="grid grid-cols-2 gap-4 text-xs border-t border-slate-100 pt-3">
+                      {result.prompt_breakdown.emphasize?.length > 0 && (
+                        <div>
+                          <span className="text-amber-600 font-medium block mb-1">Emphasize (from training):</span>
+                          <ul className="list-disc list-inside text-slate-600 space-y-0.5">
+                            {result.prompt_breakdown.emphasize.map((r: string, i: number) => (
+                              <li key={i}>{r}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                      {result.prompt_breakdown.de_emphasize?.length > 0 && (
+                        <div>
+                          <span className="text-slate-500 font-medium block mb-1">De-emphasize:</span>
+                          <ul className="list-disc list-inside text-slate-400 space-y-0.5">
+                            {result.prompt_breakdown.de_emphasize.map((r: string, i: number) => (
+                              <li key={i}>{r}</li>
+                            ))}
+                          </ul>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
