@@ -3,6 +3,8 @@ Styles Router
 
 Manages trained styles and prompt writing functionality.
 """
+import logging
+from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -12,7 +14,7 @@ from io import BytesIO
 from PIL import Image
 
 from backend.database import get_db
-from backend.models.db_models import TrainedStyle, Session, StyleProfileDB, Iteration
+from backend.models.db_models import TrainedStyle, Session, StyleProfileDB, Iteration, GenerationHistory
 from backend.models.schemas import (
     StyleProfile,
     StyleRules,
@@ -23,12 +25,14 @@ from backend.models.schemas import (
     PromptWriteResponse,
     PromptGenerateRequest,
     PromptGenerateResponse,
+    GenerationHistoryResponse,
 )
 from backend.services.storage import storage_service
 from backend.services.prompt_writer import prompt_writer
 from backend.services.comfyui import comfyui_service
 
 router = APIRouter(prefix="/api/styles", tags=["styles"])
+logger = logging.getLogger(__name__)
 
 
 def create_thumbnail(image_b64: str, size: tuple = (128, 128)) -> str:
@@ -480,6 +484,28 @@ async def write_and_generate(
         negative_prompt=prompt_result.negative_prompt,
     )
 
+    # Save the generated image to storage
+    image_path = None
+    try:
+        image_filename = f"gen_{style.id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.png"
+        saved_path = await storage_service.save_image(style.id, image_b64, image_filename)
+        image_path = str(saved_path)
+    except Exception as e:
+        logger.warning(f"Failed to save generated image: {e}")
+
+    # Save to generation history
+    history_entry = GenerationHistory(
+        style_id=style.id,
+        style_name=style.name,
+        subject=data.subject,
+        additional_context=data.additional_context,
+        positive_prompt=prompt_result.positive_prompt,
+        negative_prompt=prompt_result.negative_prompt,
+        image_path=image_path,
+    )
+    db.add(history_entry)
+    await db.commit()
+
     return PromptGenerateResponse(
         positive_prompt=prompt_result.positive_prompt,
         negative_prompt=prompt_result.negative_prompt,
@@ -521,3 +547,56 @@ async def batch_write_prompts(
         results.append(prompt_result)
 
     return results
+
+
+@router.get("/{style_id}/history", response_model=list[GenerationHistoryResponse])
+async def get_generation_history(
+    style_id: str,
+    limit: int = 50,
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Get generation history for a trained style.
+    Returns the most recent generations with their prompts and images.
+    """
+    # Verify style exists
+    result = await db.execute(
+        select(TrainedStyle).where(TrainedStyle.id == style_id)
+    )
+    style = result.scalar_one_or_none()
+
+    if not style:
+        raise HTTPException(status_code=404, detail="Style not found")
+
+    # Get history entries
+    result = await db.execute(
+        select(GenerationHistory)
+        .where(GenerationHistory.style_id == style_id)
+        .order_by(GenerationHistory.created_at.desc())
+        .limit(limit)
+    )
+    history_entries = result.scalars().all()
+
+    # Load images and build responses
+    responses = []
+    for entry in history_entries:
+        image_b64 = None
+        if entry.image_path:
+            try:
+                image_b64 = await storage_service.load_image_raw(entry.image_path)
+            except Exception as e:
+                logger.warning(f"Failed to load image for history entry {entry.id}: {e}")
+
+        responses.append(GenerationHistoryResponse(
+            id=entry.id,
+            style_id=entry.style_id,
+            style_name=entry.style_name,
+            subject=entry.subject,
+            additional_context=entry.additional_context,
+            positive_prompt=entry.positive_prompt,
+            negative_prompt=entry.negative_prompt,
+            image_b64=image_b64,
+            created_at=entry.created_at,
+        ))
+
+    return responses

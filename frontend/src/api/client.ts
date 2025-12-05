@@ -8,6 +8,7 @@ import {
   TrainedStyle,
   PromptWriteResponse,
   PromptGenerateResponse,
+  GenerationHistoryResponse,
 } from '../types';
 
 const API_BASE = '/api';
@@ -299,6 +300,18 @@ export async function batchWritePrompts(
     {
       method: 'POST',
       body: JSON.stringify(subjects),
+    }
+  );
+}
+
+export async function getGenerationHistory(
+  styleId: string,
+  limit: number = 50
+): Promise<GenerationHistoryResponse[]> {
+  return fetchJson<GenerationHistoryResponse[]>(
+    `${API_BASE}/styles/${styleId}/history?limit=${limit}`,
+    {
+      method: 'GET',
     }
   );
 }

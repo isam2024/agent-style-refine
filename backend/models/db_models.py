@@ -145,3 +145,34 @@ class TrainedStyle(Base):
     @property
     def training_summary(self) -> dict | None:
         return self.training_summary_json
+
+
+class GenerationHistory(Base):
+    """History of images generated using prompt writer.
+
+    Tracks all generations for auditing and exploration.
+    """
+    __tablename__ = "generation_history"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=generate_uuid
+    )
+    style_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("trained_styles.id", ondelete="CASCADE"), nullable=False
+    )
+    style_name: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    # Generation inputs
+    subject: Mapped[str] = mapped_column(Text, nullable=False)
+    additional_context: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Generated prompts
+    positive_prompt: Mapped[str] = mapped_column(Text, nullable=False)
+    negative_prompt: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Generated image (stored as base64 or path)
+    image_path: Mapped[str | None] = mapped_column(String(500), nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow
+    )

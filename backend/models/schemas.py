@@ -309,6 +309,25 @@ class PromptGenerateResponse(BaseModel):
     style_name: str
 
 
+class GenerationHistoryResponse(BaseModel):
+    """Response for a generation history entry."""
+    id: str
+    style_id: str
+    style_name: str
+    subject: str
+    additional_context: str | None
+    positive_prompt: str
+    negative_prompt: str | None
+    image_b64: str | None = Field(
+        default=None,
+        description="Base64 encoded image if available"
+    )
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
 class IterationStepResult(BaseModel):
     """Result from running one iteration step."""
     iteration_id: str

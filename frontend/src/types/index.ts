@@ -194,3 +194,15 @@ export interface PromptGenerateResponse {
   image_b64: string;
   style_name: string;
 }
+
+export interface GenerationHistoryResponse {
+  id: string;
+  style_id: string;
+  style_name: string;
+  subject: string;
+  additional_context: string | null;
+  positive_prompt: string;
+  negative_prompt: string | null;
+  image_b64: string | null;
+  created_at: string;
+}

@@ -1,16 +1,18 @@
 import { useState, useEffect } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { useQuery, useMutation } from '@tanstack/react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   listStyles,
   getStyle,
   writePrompt,
   writeAndGenerate,
+  getGenerationHistory,
 } from '../api/client'
-import { PromptWriteResponse, PromptGenerateResponse } from '../types'
+import { PromptWriteResponse, PromptGenerateResponse, GenerationHistoryResponse } from '../types'
 
 function PromptWriter() {
   const { styleId: urlStyleId } = useParams<{ styleId?: string }>()
+  const queryClient = useQueryClient()
 
   const [selectedStyleId, setSelectedStyleId] = useState<string | null>(
     urlStyleId || null
@@ -37,6 +39,12 @@ function PromptWriter() {
   const { data: selectedStyle } = useQuery({
     queryKey: ['style', selectedStyleId],
     queryFn: () => getStyle(selectedStyleId!),
+    enabled: !!selectedStyleId,
+  })
+
+  const { data: history, isLoading: historyLoading } = useQuery({
+    queryKey: ['generation-history', selectedStyleId],
+    queryFn: () => getGenerationHistory(selectedStyleId!, 20),
     enabled: !!selectedStyleId,
   })
 
@@ -69,6 +77,10 @@ function PromptWriter() {
         prompt_breakdown: null,
       })
       setGeneratedImage(data.image_b64)
+      // Invalidate history query to refresh the list
+      queryClient.invalidateQueries({
+        queryKey: ['generation-history', selectedStyleId],
+      })
     },
   })
 
@@ -496,6 +508,95 @@ function PromptWriter() {
           )}
         </div>
       </div>
+
+      {/* Generation History */}
+      {selectedStyleId && (
+        <div className="bg-white rounded-xl border border-slate-200 p-6">
+          <h3 className="text-lg font-semibold text-slate-800 mb-4">
+            Generation History
+          </h3>
+
+          {historyLoading && (
+            <div className="text-center py-8 text-slate-400">
+              Loading history...
+            </div>
+          )}
+
+          {!historyLoading && history && history.length === 0 && (
+            <div className="text-center py-8 text-slate-400">
+              <p>No generations yet.</p>
+              <p className="text-sm mt-1">
+                Use "Write & Generate" to create images with this style.
+              </p>
+            </div>
+          )}
+
+          {!historyLoading && history && history.length > 0 && (
+            <div className="grid grid-cols-4 gap-4">
+              {history.map((entry) => (
+                <div
+                  key={entry.id}
+                  className="border border-slate-200 rounded-lg overflow-hidden hover:border-slate-300 transition-colors"
+                >
+                  {/* Image */}
+                  {entry.image_b64 ? (
+                    <img
+                      src={entry.image_b64}
+                      alt={entry.subject}
+                      className="w-full aspect-square object-cover"
+                    />
+                  ) : (
+                    <div className="w-full aspect-square bg-slate-100 flex items-center justify-center text-4xl">
+                      🎨
+                    </div>
+                  )}
+
+                  {/* Info */}
+                  <div className="p-3 space-y-2">
+                    <div>
+                      <p className="text-sm font-medium text-slate-700 line-clamp-2">
+                        {entry.subject}
+                      </p>
+                      {entry.additional_context && (
+                        <p className="text-xs text-slate-500 line-clamp-1 mt-1">
+                          {entry.additional_context}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="text-xs text-slate-400">
+                      {new Date(entry.created_at).toLocaleDateString()} {new Date(entry.created_at).toLocaleTimeString()}
+                    </div>
+
+                    {/* Prompts (collapsible) */}
+                    <details className="text-xs">
+                      <summary className="cursor-pointer text-blue-600 hover:text-blue-700">
+                        View prompts
+                      </summary>
+                      <div className="mt-2 space-y-2">
+                        <div>
+                          <span className="text-green-600 font-medium">Positive:</span>
+                          <p className="text-slate-600 mt-1 font-mono text-[10px] leading-tight">
+                            {entry.positive_prompt}
+                          </p>
+                        </div>
+                        {entry.negative_prompt && (
+                          <div>
+                            <span className="text-red-600 font-medium">Negative:</span>
+                            <p className="text-slate-600 mt-1 font-mono text-[10px] leading-tight">
+                              {entry.negative_prompt}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </details>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
