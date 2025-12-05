@@ -476,8 +476,17 @@ async def run_auto_improve(
     training_insights = auto_improver.compute_training_insights(session.iterations)
     if training_insights.get("historical_best"):
         await log(f"Historical best score: {training_insights['historical_best']:.1f}", "info", "insights")
+        debug_lines.append(f"\n--- Training Insights ---")
+        debug_lines.append(f"Historical Best Score: {training_insights['historical_best']:.1f}")
+    if training_insights.get("dimension_averages"):
+        debug_lines.append(f"Dimension Averages: {', '.join([f'{k}={v:.1f}' for k, v in training_insights['dimension_averages'].items() if k != 'overall'])}")
     if training_insights.get("frequently_lost_traits"):
         await log(f"Frequently lost traits: {', '.join(training_insights['frequently_lost_traits'][:3])}", "warning", "insights")
+        debug_lines.append(f"Frequently Lost Traits: {', '.join(training_insights['frequently_lost_traits'][:5])}")
+
+    debug_lines.append(f"\nPrevious Iterations: {len(session.iterations)}")
+    debug_lines.append(f"Latest Style Profile Version: {max((sp.version for sp in session.style_profiles), default=0)}")
+    debug_lines.append("")
 
     results = []
     baseline_scores = None  # Track scores from current iteration for weak dimension detection
@@ -547,12 +556,52 @@ async def run_auto_improve(
                 training_insights=training_insights,
             )
 
-            # DEBUG: Log detailed score breakdown and decision analysis (to console AND file)
+            # DEBUG: Log comprehensive VLM metadata and decision analysis (to console AND file)
             debug_lines.append(f"\n{'='*60}")
             debug_lines.append(f"ITERATION {iteration_num}")
             debug_lines.append(f"{'='*60}")
+
+            # Feedback history context
+            debug_lines.append(f"\nFeedback History: {len(feedback_history)} approved iterations")
+            if feedback_history:
+                recent = feedback_history[-3:]  # Last 3 approved iterations
+                debug_lines.append(f"Recent feedback context:")
+                for fb in recent:
+                    approval = "✓" if fb.get("approved") else "✗"
+                    notes = fb.get("notes", "")[:50]
+                    debug_lines.append(f"  Iteration {fb['iteration']}: {approval} - {notes}")
+
+            # Weak dimensions and focus areas
+            if iteration_result["weak_dimensions"]:
+                debug_lines.append(f"\nWeak Dimensions Targeted: {', '.join(iteration_result['weak_dimensions'])}")
+            if iteration_result["focused_areas"]:
+                debug_lines.append(f"Focused Areas: {', '.join(iteration_result['focused_areas'])}")
+
+            # Image generation prompt
+            debug_lines.append(f"\n--- Image Generation Prompt ({len(iteration_result['prompt_used'])} chars) ---")
+            debug_lines.append(iteration_result['prompt_used'][:500] + ("..." if len(iteration_result['prompt_used']) > 500 else ""))
+
+            # VLM Critique Analysis
+            debug_lines.append(f"\n--- VLM Critique Analysis ---")
             debug_lines.append(f"Overall Score: {new_scores.get('overall', 0)}")
             debug_lines.append(f"Dimension Scores: {', '.join([f'{k}={v}' for k, v in new_scores.items() if k != 'overall'])}")
+
+            if iteration_result["critique"].preserved_traits:
+                debug_lines.append(f"\n✓ Preserved Traits ({len(iteration_result['critique'].preserved_traits)}):")
+                for trait in iteration_result["critique"].preserved_traits[:10]:
+                    debug_lines.append(f"  - {trait}")
+                if len(iteration_result["critique"].preserved_traits) > 10:
+                    debug_lines.append(f"  ... and {len(iteration_result['critique'].preserved_traits) - 10} more")
+
+            if iteration_result["critique"].lost_traits:
+                debug_lines.append(f"\n✗ Lost Traits ({len(iteration_result['critique'].lost_traits)}):")
+                for trait in iteration_result["critique"].lost_traits:
+                    debug_lines.append(f"  - {trait}")
+
+            if iteration_result["critique"].interesting_mutations:
+                debug_lines.append(f"\n~ Interesting Mutations ({len(iteration_result['critique'].interesting_mutations)}):")
+                for mutation in iteration_result["critique"].interesting_mutations[:5]:
+                    debug_lines.append(f"  - {mutation}")
 
             await log(f"[DEBUG] Overall Score: {new_scores.get('overall', 0)}", "info", "debug")
             await log(f"[DEBUG] Dimension Scores: {', '.join([f'{k}={v}' for k, v in new_scores.items() if k != 'overall'])}", "info", "debug")
@@ -571,7 +620,7 @@ async def run_auto_improve(
                 await log(f"[DEBUG] {vs_best}", "info", "debug")
 
             # DEBUG: Log approval decision details
-            debug_lines.append(f"\nDecision Analysis:")
+            debug_lines.append(f"\n--- Decision Analysis ---")
             debug_lines.append(f"  - Meets targets (Tier 1): {eval_analysis.get('meets_targets', False)}")
             debug_lines.append(f"  - Incremental improvement (Tier 2): {eval_analysis.get('improves_incrementally', False)} (need +3)")
             debug_lines.append(f"  - Net progress (Tier 2b): {eval_analysis.get('net_progress', False)}")
@@ -595,6 +644,32 @@ async def run_auto_improve(
             # Log evaluation
             decision_status = "✓ APPROVED" if should_approve else "✗ REJECTED"
             debug_lines.append(f"\n{decision_status}: {eval_reason}")
+
+            # DEBUG: Log current style profile being used
+            debug_lines.append(f"\n--- Style Profile (v{latest_profile_db.version}) ---")
+            debug_lines.append(f"Style Name: {style_profile.style_name}")
+            debug_lines.append(f"Core Invariants: {', '.join(style_profile.core_invariants[:5])}")
+            debug_lines.append(f"Palette: {', '.join(style_profile.palette.color_descriptions[:3])} (saturation: {style_profile.palette.saturation})")
+            debug_lines.append(f"Lighting: {style_profile.lighting.lighting_type}, shadows: {style_profile.lighting.shadows}")
+            debug_lines.append(f"Texture: {style_profile.texture.surface}, noise: {style_profile.texture.noise_level}")
+            debug_lines.append(f"Composition: {style_profile.composition.camera}, {style_profile.composition.framing}")
+            debug_lines.append(f"Line Quality: {style_profile.line_and_shape.line_quality}")
+
+            # DEBUG: Log VLM's updated style profile suggestions
+            if iteration_result["critique"].updated_style_profile:
+                updated = iteration_result["critique"].updated_style_profile
+                debug_lines.append(f"\n--- VLM Updated Style Profile (suggested changes) ---")
+                # Check for changes in key areas
+                if updated.palette.color_descriptions != style_profile.palette.color_descriptions:
+                    debug_lines.append(f"Palette change: {', '.join(updated.palette.color_descriptions[:3])}")
+                if updated.lighting.lighting_type != style_profile.lighting.lighting_type:
+                    debug_lines.append(f"Lighting change: {updated.lighting.lighting_type}")
+                if updated.texture.surface != style_profile.texture.surface:
+                    debug_lines.append(f"Texture change: {updated.texture.surface}")
+                if updated.composition.camera != style_profile.composition.camera:
+                    debug_lines.append(f"Composition change: {updated.composition.camera}")
+                if updated.line_and_shape.line_quality != style_profile.line_and_shape.line_quality:
+                    debug_lines.append(f"Line quality change: {updated.line_and_shape.line_quality}")
 
             if should_approve:
                 await log(f"✓ {eval_reason}", "success", "evaluation")
