@@ -27,91 +27,115 @@ class PromptWriter:
         Write a styled prompt from a subject and trained style.
 
         This uses a deterministic template-based approach for consistency.
-        The VLM is NOT used here - we rely on the pre-extracted style rules.
+        Constructs a natural-reading prompt that integrates the subject with style metadata.
         """
-        # Build the positive prompt with rich style information
-        prompt_parts = []
-
-        # 1. Subject comes first
-        prompt_parts.append(subject.strip())
-
-        # 2. Add additional context if provided
-        if additional_context:
-            prompt_parts.append(additional_context.strip())
-
-        # 3. Style name as anchor
-        prompt_parts.append(f"in {style_profile.style_name} style")
-
-        # 4. Add technique keywords (painting style, medium)
-        if style_rules.technique_keywords:
-            prompt_parts.extend(style_rules.technique_keywords[:4])
-
-        # 5. Detailed palette description
         palette = style_profile.palette
-        if palette.color_descriptions:
-            colors = palette.color_descriptions[:5]
-            prompt_parts.append(f"color palette featuring {', '.join(colors)}")
-        prompt_parts.append(f"{palette.saturation} saturation")
-        prompt_parts.append(f"{palette.value_range}")
-
-        # 6. Detailed lighting setup
         lighting = style_profile.lighting
-        prompt_parts.append(f"{lighting.lighting_type} lighting")
-        prompt_parts.append(f"{lighting.shadows} shadows")
-        prompt_parts.append(f"{lighting.highlights} highlights")
-
-        # 7. Line and shape language
-        line_shape = style_profile.line_and_shape
-        prompt_parts.append(line_shape.line_quality)
-        prompt_parts.append(f"{line_shape.shape_language} shapes")
-        if line_shape.geometry_notes:
-            prompt_parts.append(line_shape.geometry_notes)
-
-        # 8. Texture and surface quality
         texture = style_profile.texture
-        prompt_parts.append(f"{texture.surface} surface")
-        prompt_parts.append(f"{texture.noise_level} noise")
-        if texture.special_effects:
-            prompt_parts.extend(texture.special_effects)
-
-        # 9. Camera and composition
+        line_shape = style_profile.line_and_shape
         composition = style_profile.composition
-        prompt_parts.append(f"{composition.camera} camera angle")
-        prompt_parts.append(f"{composition.framing} framing")
-        prompt_parts.append(f"{composition.negative_space_behavior} negative space")
 
-        # 10. Core style invariants (the most important traits)
+        # Build an integrated prompt that reads naturally
+        prompt_segments = []
+
+        # === SEGMENT 1: Subject with immediate style context ===
+        # If we have an image description, use it as a style template
+        if style_profile.image_description:
+            # Use image description but inject our subject
+            # The description is already style-rich
+            desc = style_profile.image_description
+            # Try to replace the original subject if we can identify it
+            if style_profile.original_subject:
+                # Simple replacement strategy
+                desc_lower = desc.lower()
+                orig_subject_lower = style_profile.original_subject.lower()
+                if orig_subject_lower in desc_lower:
+                    desc = desc.replace(style_profile.original_subject, subject)
+                else:
+                    # Prepend new subject
+                    prompt_segments.append(subject.strip())
+                    prompt_segments.append(desc)
+            else:
+                # Prepend new subject
+                prompt_segments.append(subject.strip())
+                prompt_segments.append(desc)
+        else:
+            # No description - build from scratch
+            # Start with subject + core technique
+            subject_with_technique = subject.strip()
+            if style_rules.technique_keywords:
+                subject_with_technique += f", {style_rules.technique_keywords[0]}"
+            prompt_segments.append(subject_with_technique)
+
+            # Add style name
+            prompt_segments.append(f"{style_profile.style_name} style")
+
+        # === SEGMENT 2: Core invariants (most important) ===
         if style_profile.core_invariants:
-            for inv in style_profile.core_invariants:
-                prompt_parts.append(inv)
+            prompt_segments.extend(style_profile.core_invariants[:3])
 
-        # 11. Mood keywords
+        # === SEGMENT 3: Color palette (specific colors) ===
+        if palette.color_descriptions:
+            colors = palette.color_descriptions[:4]
+            prompt_segments.append(f"colors: {', '.join(colors)}")
+
+        # === SEGMENT 4: Lighting (key atmosphere driver) ===
+        if lighting.lighting_type:
+            prompt_segments.append(lighting.lighting_type)
+        if lighting.shadows:
+            prompt_segments.append(f"with {lighting.shadows} shadows")
+        if lighting.highlights:
+            prompt_segments.append(lighting.highlights)
+
+        # === SEGMENT 5: Texture/surface ===
+        if texture.surface:
+            prompt_segments.append(texture.surface)
+        if texture.special_effects:
+            prompt_segments.extend(texture.special_effects[:2])
+
+        # === SEGMENT 6: Line/shape quality ===
+        if line_shape.line_quality:
+            prompt_segments.append(line_shape.line_quality)
+        if line_shape.shape_language:
+            prompt_segments.append(f"{line_shape.shape_language} forms")
+
+        # === SEGMENT 7: Composition/framing ===
+        if composition.camera:
+            prompt_segments.append(composition.camera)
+        if composition.framing:
+            prompt_segments.append(composition.framing)
+
+        # === SEGMENT 8: Additional technique keywords ===
+        if style_rules.technique_keywords:
+            prompt_segments.extend(style_rules.technique_keywords[1:4])
+
+        # === SEGMENT 9: Mood/atmosphere ===
         if style_rules.mood_keywords:
-            prompt_parts.extend(style_rules.mood_keywords)
+            prompt_segments.extend(style_rules.mood_keywords[:3])
 
-        # 12. Always include rules from training
+        # === SEGMENT 10: Always include from training ===
         if style_rules.always_include:
-            prompt_parts.extend(style_rules.always_include)
+            prompt_segments.extend(style_rules.always_include[:5])
 
-        # 13. Emphasis from training feedback
+        # === SEGMENT 11: Emphasis from training feedback ===
         if style_rules.emphasize:
-            prompt_parts.extend(style_rules.emphasize)
+            prompt_segments.extend(style_rules.emphasize[:4])
 
-        # 14. Recurring motifs (if not already in subject)
-        if style_profile.motifs.recurring_elements:
-            for motif in style_profile.motifs.recurring_elements:
-                if motif.lower() not in subject.lower():
-                    prompt_parts.append(motif)
+        # === SEGMENT 12: Additional context ===
+        if additional_context:
+            prompt_segments.append(additional_context.strip())
 
-        # Clean and join - remove duplicates while preserving order
+        # Clean and deduplicate
         seen = set()
         unique_parts = []
-        for part in prompt_parts:
+        for part in prompt_segments:
             if part and len(part.strip()) > 0:
-                normalized = part.strip().lower()
-                if normalized not in seen:
+                part_clean = part.strip()
+                normalized = part_clean.lower()
+                # Skip empty fields from defaults
+                if normalized and normalized not in seen:
                     seen.add(normalized)
-                    unique_parts.append(part.strip())
+                    unique_parts.append(part_clean)
 
         positive_prompt = ", ".join(unique_parts)
 
