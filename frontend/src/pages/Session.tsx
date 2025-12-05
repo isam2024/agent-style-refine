@@ -445,8 +445,23 @@ function Session() {
             />
           )}
 
-          {/* Iteration Details */}
-          {selectedIteration && !latestResult && (
+          {/* Iteration Details - show FeedbackPanel for unvoted iterations */}
+          {selectedIteration && !latestResult && selectedIteration.approved === null && selectedIteration.scores && (
+            <FeedbackPanel
+              critique={{
+                match_scores: selectedIteration.scores,
+                preserved_traits: selectedIteration.critique_data?.preserved_traits || [],
+                lost_traits: selectedIteration.critique_data?.lost_traits || [],
+                interesting_mutations: selectedIteration.critique_data?.interesting_mutations || [],
+              }}
+              onApprove={handleApprove}
+              onReject={handleReject}
+              isLoading={feedbackMutation.isPending || iterateMutation.isPending}
+            />
+          )}
+
+          {/* Iteration Details - show read-only view for already voted iterations */}
+          {selectedIteration && !latestResult && selectedIteration.approved !== null && (
             <div className="bg-white rounded-xl border border-slate-200 p-4">
               <h3 className="text-sm font-medium text-slate-700 mb-3">
                 Iteration #{selectedIteration.iteration_num}
@@ -476,34 +491,20 @@ function Session() {
                   ))}
                 </div>
               )}
-              {selectedIteration.prompt_used && (
+              {selectedIteration.feedback && (
                 <div className="mb-4">
+                  <p className="text-xs text-slate-500 uppercase mb-1">Your Feedback</p>
+                  <p className="text-xs text-slate-600 bg-slate-50 p-2 rounded">
+                    {selectedIteration.feedback}
+                  </p>
+                </div>
+              )}
+              {selectedIteration.prompt_used && (
+                <div>
                   <p className="text-xs text-slate-500 uppercase mb-1">Prompt Used</p>
                   <p className="text-xs text-slate-600 bg-slate-50 p-2 rounded">
                     {selectedIteration.prompt_used}
                   </p>
-                </div>
-              )}
-              {/* Show approve/reject for unvoted iterations */}
-              {selectedIteration.approved === null && (
-                <div className="border-t border-slate-200 pt-4 mt-4">
-                  <p className="text-xs text-slate-500 uppercase mb-3">Feedback Required</p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleApprove()}
-                      disabled={feedbackMutation.isPending || iterateMutation.isPending}
-                      className="flex-1 px-3 py-2 bg-green-500 text-white text-sm font-medium rounded-lg hover:bg-green-600 disabled:opacity-50"
-                    >
-                      ✓ Approve
-                    </button>
-                    <button
-                      onClick={() => handleReject()}
-                      disabled={feedbackMutation.isPending || iterateMutation.isPending}
-                      className="flex-1 px-3 py-2 bg-red-500 text-white text-sm font-medium rounded-lg hover:bg-red-600 disabled:opacity-50"
-                    >
-                      ✗ Reject
-                    </button>
-                  </div>
                 </div>
               )}
             </div>
