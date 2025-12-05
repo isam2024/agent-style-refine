@@ -170,99 +170,6 @@ function PromptWriter() {
             )}
           </div>
 
-          {/* Selected Style Info - shows prompt breakdown */}
-          {activeBreakdown && (
-            <div className="bg-white rounded-xl border border-slate-200 p-4">
-              <h3 className="text-sm font-medium text-slate-700 mb-3">
-                Style Agent: {activeStyleName}
-              </h3>
-
-              {/* Technique & Mood */}
-              <div className="space-y-3 text-xs">
-                {activeBreakdown.technique?.length > 0 && (
-                  <div>
-                    <span className="text-slate-400 font-medium block mb-1">Technique:</span>
-                    <div className="flex flex-wrap gap-1">
-                      {activeBreakdown.technique.map((t: string, i: number) => (
-                        <span key={i} className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
-                          {t}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-                {activeBreakdown.mood?.length > 0 && (
-                  <div>
-                    <span className="text-slate-400 font-medium block mb-1">Mood:</span>
-                    <div className="flex flex-wrap gap-1">
-                      {activeBreakdown.mood.map((m: string, i: number) => (
-                        <span key={i} className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded">
-                          {m}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Lighting, Texture, Composition */}
-                {activeBreakdown.lighting && (
-                  <div>
-                    <span className="text-slate-400 font-medium block mb-1">Lighting:</span>
-                    <div className="text-slate-600 space-y-0.5">
-                      <div>{activeBreakdown.lighting.type}</div>
-                      <div className="text-slate-400 text-[10px]">Shadows: {activeBreakdown.lighting.shadows}</div>
-                      <div className="text-slate-400 text-[10px]">Highlights: {activeBreakdown.lighting.highlights}</div>
-                    </div>
-                  </div>
-                )}
-                {activeBreakdown.texture && (
-                  <div>
-                    <span className="text-slate-400 font-medium block mb-1">Texture:</span>
-                    <div className="text-slate-600 space-y-0.5">
-                      <div>{activeBreakdown.texture.surface}</div>
-                      <div className="text-slate-400 text-[10px]">Noise: {activeBreakdown.texture.noise}</div>
-                    </div>
-                  </div>
-                )}
-                {activeBreakdown.composition && (
-                  <div>
-                    <span className="text-slate-400 font-medium block mb-1">Composition:</span>
-                    <div className="text-slate-600 space-y-0.5">
-                      <div>{activeBreakdown.composition.camera}</div>
-                      <div className="text-slate-400 text-[10px]">{activeBreakdown.composition.framing}</div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Palette */}
-                {activeBreakdown.palette?.length > 0 && (
-                  <div>
-                    <span className="text-slate-400 font-medium block mb-1">Color Palette:</span>
-                    <div className="flex flex-wrap gap-1">
-                      {activeBreakdown.palette.map((c: string, i: number) => (
-                        <span key={i} className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
-                          {c}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Core Invariants */}
-                {activeBreakdown.core_invariants?.length > 0 && (
-                  <div>
-                    <span className="text-slate-400 font-medium block mb-1">Core Invariants:</span>
-                    <ul className="list-disc list-inside text-slate-600 space-y-0.5">
-                      {activeBreakdown.core_invariants.slice(0, 3).map((r: string, i: number) => (
-                        <li key={i}>{r}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
           {/* Subject Input */}
           <div className="bg-white rounded-xl border border-slate-200 p-4">
             <label className="block text-sm font-medium text-slate-700 mb-2">
@@ -342,79 +249,85 @@ function PromptWriter() {
           )}
 
           {/* Prompt Output */}
-          {result && (
+          {(result || styleBreakdown) && (
             <div className="bg-white rounded-xl border border-slate-200 p-4">
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-medium text-slate-700">
-                  Styled Prompt
+                  {result ? 'Styled Prompt' : 'Style Agent Preview'}
                 </h3>
                 <span className="text-xs text-slate-400">
-                  Style: {result.style_name}
+                  Style: {activeStyleName}
                 </span>
               </div>
 
-              {/* Positive Prompt */}
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs text-green-600 uppercase font-medium">
-                    Positive Prompt
-                  </span>
-                  <button
-                    onClick={() =>
-                      copyToClipboard(result.positive_prompt, 'positive')
-                    }
-                    className="text-xs text-slate-500 hover:text-slate-700"
-                  >
-                    {copyFeedback === 'positive' ? 'Copied!' : 'Copy'}
-                  </button>
-                </div>
-                <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-slate-700 font-mono whitespace-pre-wrap">
-                  {result.positive_prompt}
-                </div>
-              </div>
+              {/* Positive Prompt - only show if user wrote a prompt */}
+              {result && (
+                <>
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-green-600 uppercase font-medium">
+                        Positive Prompt
+                      </span>
+                      <button
+                        onClick={() =>
+                          copyToClipboard(result.positive_prompt, 'positive')
+                        }
+                        className="text-xs text-slate-500 hover:text-slate-700"
+                      >
+                        {copyFeedback === 'positive' ? 'Copied!' : 'Copy'}
+                      </button>
+                    </div>
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 text-sm text-slate-700 font-mono whitespace-pre-wrap">
+                      {result.positive_prompt}
+                    </div>
+                  </div>
 
-              {/* Negative Prompt */}
-              {result.negative_prompt && (
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-red-600 uppercase font-medium">
-                      Negative Prompt
-                    </span>
-                    <button
-                      onClick={() =>
-                        copyToClipboard(result.negative_prompt!, 'negative')
-                      }
-                      className="text-xs text-slate-500 hover:text-slate-700"
-                    >
-                      {copyFeedback === 'negative' ? 'Copied!' : 'Copy'}
-                    </button>
-                  </div>
-                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-slate-700 font-mono whitespace-pre-wrap">
-                    {result.negative_prompt}
-                  </div>
-                </div>
+                  {/* Negative Prompt */}
+                  {result.negative_prompt && (
+                    <div className="mb-4">
+                      <div className="flex items-center justify-between mb-1">
+                        <span className="text-xs text-red-600 uppercase font-medium">
+                          Negative Prompt
+                        </span>
+                        <button
+                          onClick={() =>
+                            copyToClipboard(result.negative_prompt!, 'negative')
+                          }
+                          className="text-xs text-slate-500 hover:text-slate-700"
+                        >
+                          {copyFeedback === 'negative' ? 'Copied!' : 'Copy'}
+                        </button>
+                      </div>
+                      <div className="bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-slate-700 font-mono whitespace-pre-wrap">
+                        {result.negative_prompt}
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
 
               {/* Prompt Breakdown */}
-              {result.prompt_breakdown && (
-                <div className="mt-4 pt-4 border-t border-slate-100 space-y-4">
+              {activeBreakdown && (
+                <div className={result ? "mt-4 pt-4 border-t border-slate-100 space-y-4" : "space-y-4"}>
                   <span className="text-xs text-slate-400 uppercase">
-                    Prompt Breakdown
+                    {result ? 'Prompt Breakdown' : 'Style Agent Breakdown'}
                   </span>
 
-                  {/* Subject */}
-                  <div className="text-sm">
-                    <span className="text-slate-400 font-medium">Subject:</span>{' '}
-                    <span className="text-slate-700">{result.prompt_breakdown.subject}</span>
-                  </div>
+                  {/* Subject - only show if user wrote a prompt */}
+                  {result && (
+                    <div className="text-sm">
+                      <span className="text-slate-400 font-medium">Subject:</span>{' '}
+                      <span className="text-slate-700">{activeBreakdown.subject}</span>
+                    </div>
+                  )}
 
                   {/* Technique & Mood */}
                   <div className="grid grid-cols-2 gap-4 text-xs">
-                    {result.prompt_breakdown.technique?.length > 0 && (
+                    {activeBreakdown.technique?.length > 0 && (
                       <div>
                         <span className="text-slate-400 font-medium block mb-1">Technique:</span>
                         <div className="flex flex-wrap gap-1">
-                          {result.prompt_breakdown.technique.map((t: string, i: number) => (
+                          {activeBreakdown.technique.map((t: string, i: number) => (
                             <span key={i} className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
                               {t}
                             </span>
@@ -422,11 +335,11 @@ function PromptWriter() {
                         </div>
                       </div>
                     )}
-                    {result.prompt_breakdown.mood?.length > 0 && (
+                    {activeBreakdown.mood?.length > 0 && (
                       <div>
                         <span className="text-slate-400 font-medium block mb-1">Mood:</span>
                         <div className="flex flex-wrap gap-1">
-                          {result.prompt_breakdown.mood.map((m: string, i: number) => (
+                          {activeBreakdown.mood.map((m: string, i: number) => (
                             <span key={i} className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded">
                               {m}
                             </span>
@@ -438,45 +351,45 @@ function PromptWriter() {
 
                   {/* Lighting, Texture, Composition */}
                   <div className="grid grid-cols-3 gap-4 text-xs">
-                    {result.prompt_breakdown.lighting && (
+                    {activeBreakdown.lighting && (
                       <div>
                         <span className="text-slate-400 font-medium block mb-1">Lighting:</span>
                         <div className="text-slate-600 space-y-0.5">
-                          <div>{result.prompt_breakdown.lighting.type}</div>
-                          <div className="text-slate-400">Shadows: {result.prompt_breakdown.lighting.shadows}</div>
-                          <div className="text-slate-400">Highlights: {result.prompt_breakdown.lighting.highlights}</div>
+                          <div>{activeBreakdown.lighting.type}</div>
+                          <div className="text-slate-400">Shadows: {activeBreakdown.lighting.shadows}</div>
+                          <div className="text-slate-400">Highlights: {activeBreakdown.lighting.highlights}</div>
                         </div>
                       </div>
                     )}
-                    {result.prompt_breakdown.texture && (
+                    {activeBreakdown.texture && (
                       <div>
                         <span className="text-slate-400 font-medium block mb-1">Texture:</span>
                         <div className="text-slate-600 space-y-0.5">
-                          <div>{result.prompt_breakdown.texture.surface}</div>
-                          <div className="text-slate-400">Noise: {result.prompt_breakdown.texture.noise}</div>
-                          {result.prompt_breakdown.texture.effects?.length > 0 && (
-                            <div className="text-slate-400">Effects: {result.prompt_breakdown.texture.effects.join(', ')}</div>
+                          <div>{activeBreakdown.texture.surface}</div>
+                          <div className="text-slate-400">Noise: {activeBreakdown.texture.noise}</div>
+                          {activeBreakdown.texture.effects?.length > 0 && (
+                            <div className="text-slate-400">Effects: {activeBreakdown.texture.effects.join(', ')}</div>
                           )}
                         </div>
                       </div>
                     )}
-                    {result.prompt_breakdown.composition && (
+                    {activeBreakdown.composition && (
                       <div>
                         <span className="text-slate-400 font-medium block mb-1">Composition:</span>
                         <div className="text-slate-600 space-y-0.5">
-                          <div>{result.prompt_breakdown.composition.camera}</div>
-                          <div className="text-slate-400">{result.prompt_breakdown.composition.framing}</div>
+                          <div>{activeBreakdown.composition.camera}</div>
+                          <div className="text-slate-400">{activeBreakdown.composition.framing}</div>
                         </div>
                       </div>
                     )}
                   </div>
 
                   {/* Palette */}
-                  {result.prompt_breakdown.palette?.length > 0 && (
+                  {activeBreakdown.palette?.length > 0 && (
                     <div className="text-xs">
                       <span className="text-slate-400 font-medium block mb-1">Color Palette:</span>
                       <div className="flex flex-wrap gap-1">
-                        {result.prompt_breakdown.palette.map((c: string, i: number) => (
+                        {activeBreakdown.palette.map((c: string, i: number) => (
                           <span key={i} className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
                             {c}
                           </span>
@@ -487,21 +400,21 @@ function PromptWriter() {
 
                   {/* Style Rules */}
                   <div className="grid grid-cols-2 gap-4 text-xs">
-                    {result.prompt_breakdown.always_include?.length > 0 && (
+                    {activeBreakdown.always_include?.length > 0 && (
                       <div>
                         <span className="text-green-600 font-medium block mb-1">Always Include:</span>
                         <ul className="list-disc list-inside text-slate-600 space-y-0.5">
-                          {result.prompt_breakdown.always_include.map((r: string, i: number) => (
+                          {activeBreakdown.always_include.map((r: string, i: number) => (
                             <li key={i}>{r}</li>
                           ))}
                         </ul>
                       </div>
                     )}
-                    {result.prompt_breakdown.always_avoid?.length > 0 && (
+                    {activeBreakdown.always_avoid?.length > 0 && (
                       <div>
                         <span className="text-red-600 font-medium block mb-1">Always Avoid:</span>
                         <ul className="list-disc list-inside text-slate-600 space-y-0.5">
-                          {result.prompt_breakdown.always_avoid.map((r: string, i: number) => (
+                          {activeBreakdown.always_avoid.map((r: string, i: number) => (
                             <li key={i}>{r}</li>
                           ))}
                         </ul>
@@ -510,23 +423,23 @@ function PromptWriter() {
                   </div>
 
                   {/* Emphasize / De-emphasize from training */}
-                  {(result.prompt_breakdown.emphasize?.length > 0 || result.prompt_breakdown.de_emphasize?.length > 0) && (
+                  {(activeBreakdown.emphasize?.length > 0 || activeBreakdown.de_emphasize?.length > 0) && (
                     <div className="grid grid-cols-2 gap-4 text-xs border-t border-slate-100 pt-3">
-                      {result.prompt_breakdown.emphasize?.length > 0 && (
+                      {activeBreakdown.emphasize?.length > 0 && (
                         <div>
                           <span className="text-amber-600 font-medium block mb-1">Emphasize (from training):</span>
                           <ul className="list-disc list-inside text-slate-600 space-y-0.5">
-                            {result.prompt_breakdown.emphasize.map((r: string, i: number) => (
+                            {activeBreakdown.emphasize.map((r: string, i: number) => (
                               <li key={i}>{r}</li>
                             ))}
                           </ul>
                         </div>
                       )}
-                      {result.prompt_breakdown.de_emphasize?.length > 0 && (
+                      {activeBreakdown.de_emphasize?.length > 0 && (
                         <div>
                           <span className="text-slate-500 font-medium block mb-1">De-emphasize:</span>
                           <ul className="list-disc list-inside text-slate-400 space-y-0.5">
-                            {result.prompt_breakdown.de_emphasize.map((r: string, i: number) => (
+                            {activeBreakdown.de_emphasize.map((r: string, i: number) => (
                               <li key={i}>{r}</li>
                             ))}
                           </ul>
