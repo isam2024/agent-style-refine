@@ -72,7 +72,19 @@ Output ONLY valid JSON in this exact format:
     // Keep the exact same structure
     // Only modify values where refinement is needed
     // Be conservative - don't rewrite, refine
-  }
+  },
+  "corrections": [
+    {
+      "feature_id": "feature_from_registry",
+      "current_state": "What you see in the GENERATED image",
+      "target_state": "What it should look like (from ORIGINAL)",
+      "direction": "maintain|reinforce|reduce|rotate|simplify|exaggerate|redistribute|eliminate",
+      "magnitude": 0.0-1.0,
+      "spatial_hint": "Where in the image (quadrant, layer, etc)",
+      "diagnostic": "WHY the divergence occurred (root cause analysis)",
+      "confidence": 0.0-1.0
+    }
+  ]
 }
 ```
 
@@ -119,6 +131,83 @@ PROFILE UPDATE RULES (CRITICAL - FOLLOW EXACTLY):
    - Only update fields where you observed a specific visual difference
    - Do not randomly rewrite descriptions
    - Preserve what's working
+
+6. **VECTORIZED CORRECTIONS (NEW):**
+   - For each feature in the feature_registry, output a correction directive
+   - This provides ACTIONABLE FEEDBACK instead of just scores
+
+   **Direction Types:**
+   - `maintain`: Feature is correct, preserve exactly
+   - `reinforce`: Feature is weak, needs strengthening (increase opacity/size/prominence)
+   - `reduce`: Feature is too strong, needs weakening (decrease opacity/size/prominence)
+   - `rotate`: Feature has wrong angle/orientation
+   - `simplify`: Feature has excess detail, remove complexity
+   - `exaggerate`: Feature needs more dramatic curve/form
+   - `redistribute`: Feature is in wrong spatial position
+   - `eliminate`: Feature is unwanted artifact, remove completely
+
+   **Magnitude Scale:**
+   - 0.0-0.2: Tiny adjustment
+   - 0.2-0.4: Small adjustment
+   - 0.4-0.6: Moderate adjustment
+   - 0.6-0.8: Large adjustment
+   - 0.8-1.0: Dramatic adjustment
+
+   **Diagnostic Requirements:**
+   - Don't just say "it drifted"
+   - Explain WHY: color proximity? model hallucination? rendering artifact?
+   - Be specific: "upper-left quadrant" not "somewhere in the image"
+
+   **Example Corrections:**
+   ```json
+   "corrections": [
+     {
+       "feature_id": "circular_boundary",
+       "current_state": "Circular boundary at 85% strength, edges slightly soft",
+       "target_state": "Crisp circular boundary at 95% strength from original",
+       "direction": "reinforce",
+       "magnitude": 0.3,
+       "spatial_hint": "entire boundary perimeter",
+       "diagnostic": "Edge softness increased during rendering, needs sharper definition",
+       "confidence": 0.91
+     },
+     {
+       "feature_id": "foliage_extensions",
+       "current_state": "Leaf shapes appearing in 3 arc tips, density ~40%",
+       "target_state": "Minimal to no botanical elements in arcs",
+       "direction": "reduce",
+       "magnitude": 0.6,
+       "spatial_hint": "arc tips at 45°, 90°, 135° positions",
+       "diagnostic": "Model hallucinated botanical tonal substitutions due to color proximity to green/brown spectrum",
+       "confidence": 0.72
+     },
+     {
+       "feature_id": "watercolor_dispersion",
+       "current_state": "Radial gradient density at 60%, softer than original",
+       "target_state": "Radial gradient density at 70% matching original intensity",
+       "direction": "reinforce",
+       "magnitude": 0.2,
+       "spatial_hint": "background layer, radial from center",
+       "diagnostic": "Color dispersion under-rendered compared to reference, needs more saturation bleed",
+       "confidence": 0.68
+     },
+     {
+       "feature_id": "halo_outline",
+       "current_state": "Soft glow outline around subject, matches original",
+       "target_state": "Maintain current implementation",
+       "direction": "maintain",
+       "magnitude": 0.0,
+       "spatial_hint": "subject perimeter",
+       "diagnostic": "Feature correctly preserved from reference",
+       "confidence": 0.94
+     }
+   ]
+   ```
+
+   **Confidence Tracking:**
+   - Features with high confidence (>0.7) in corrections are likely true motifs
+   - Features with low confidence (<0.4) may be coincidences
+   - Use diagnostic to explain your confidence level
 
 LOST TRAITS FORMAT:
 - "lost_traits" should describe specific visual characteristics from the ORIGINAL IMAGE that are MISSING or DEGRADED in the generated image

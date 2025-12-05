@@ -50,7 +50,20 @@ Analyze the provided image and extract its characteristics. Output ONLY valid JS
     "forbidden_elements": []
   },
   "original_subject": "LITERAL IDENTITY: Describe exactly WHAT is shown using specific, concrete terms. Not 'a character' but 'a black cat'. Not 'flowing elements' but 'whiskers extending from face'. Be precise about the actual subject matter in 15-30 words.",
-  "suggested_test_prompt": "STRUCTURAL IDENTITY BASELINE (30-50 words): Describe ONLY structure/position/arrangement. NO style words (colors, moods, textures, lighting quality). ONLY: subject type, pose, orientation, position, spatial arrangement, framing, background elements. Example: 'Black cat facing left, centered in frame, whiskers extending horizontally from face, circular framing, abstract shapes positioned in background layer'. Do NOT include: 'flowing', 'organic', 'vivid', 'deep navy', 'painterly', or any aesthetic/style descriptions."
+  "suggested_test_prompt": "STRUCTURAL IDENTITY BASELINE (30-50 words): Describe ONLY structure/position/arrangement. NO style words (colors, moods, textures, lighting quality). ONLY: subject type, pose, orientation, position, spatial arrangement, framing, background elements. Example: 'Black cat facing left, centered in frame, whiskers extending horizontally from face, circular framing, abstract shapes positioned in background layer'. Do NOT include: 'flowing', 'organic', 'vivid', 'deep navy', 'painterly', or any aesthetic/style descriptions.",
+  "feature_registry": {
+    "features": {
+      "feature_id_example": {
+        "feature_id": "unique_snake_case_id",
+        "feature_type": "structural_motif | style_feature | scene_constraint | potential_coincidence",
+        "description": "Clear description of what this feature is",
+        "source_dimension": "palette | lighting | texture | composition | motifs | core_invariants",
+        "confidence": 0.5,
+        "first_seen": 1,
+        "persistence_count": 1
+      }
+    }
+  }
 }
 ```
 
@@ -105,6 +118,71 @@ CRITICAL INSTRUCTIONS - IDENTITY LOCK PROTOCOL:
    - Palette, lighting, texture can be REFINED through iteration
    - Motifs will be DISCOVERED if patterns emerge across multiple iterations
    - After training converges, the style can be applied to NEW subjects
+
+8. **FEATURE CLASSIFICATION (NEW):**
+   - After extracting all style elements, classify significant features in the feature_registry
+   - For each notable visual element, create a ClassifiedFeature entry
+
+   **Feature Types:**
+   - **structural_motif**: Repeating compositional element (swirl arcs, geometric patterns, recurring shapes)
+     - Example: "circular_boundary", "radial_arcs", "symmetrical_composition"
+   - **style_feature**: Aesthetic quality (brushstroke type, color treatment, texture rendering)
+     - Example: "watercolor_dispersion", "soft_edge_rendering", "radial_gradient"
+   - **scene_constraint**: Spatial/framing requirement (centered subject, specific camera angle, boundary shapes)
+     - Example: "centered_subject", "eye_level_camera", "rule_of_thirds_framing"
+   - **potential_coincidence**: Single-instance detail that may be artifact (random leaf, watermark ghost, compression artifact)
+     - Example: "leaf_shape_in_arc", "text_artifact", "random_splotch"
+
+   **Classification Guidelines:**
+   - Start with confidence=0.5 for all features (will adjust through training)
+   - Set first_seen=1 and persistence_count=1
+   - Use snake_case for feature_ids
+   - Be specific in descriptions
+   - Link to source_dimension (which part of the style this came from)
+
+   **Example feature_registry:**
+   ```json
+   "feature_registry": {
+     "features": {
+       "centered_cat_pose": {
+         "feature_id": "centered_cat_pose",
+         "feature_type": "scene_constraint",
+         "description": "Cat seated in center of frame facing left",
+         "source_dimension": "composition",
+         "confidence": 0.5,
+         "first_seen": 1,
+         "persistence_count": 1
+       },
+       "circular_boundary": {
+         "feature_id": "circular_boundary",
+         "feature_type": "structural_motif",
+         "description": "Circular frame containing the subject",
+         "source_dimension": "composition",
+         "confidence": 0.5,
+         "first_seen": 1,
+         "persistence_count": 1
+       },
+       "radial_color_dispersion": {
+         "feature_id": "radial_color_dispersion",
+         "feature_type": "style_feature",
+         "description": "Colors disperse radially from center with soft edges",
+         "source_dimension": "palette",
+         "confidence": 0.5,
+         "first_seen": 1,
+         "persistence_count": 1
+       },
+       "watercolor_texture": {
+         "feature_id": "watercolor_texture",
+         "feature_type": "style_feature",
+         "description": "Painterly brushstroke quality with color bleeding",
+         "source_dimension": "texture",
+         "confidence": 0.5,
+         "first_seen": 1,
+         "persistence_count": 1
+       }
+     }
+   }
+   ```
 
 EXTRACTION PHILOSOPHY:
 You are creating a REPLICATION BLUEPRINT, not a style guide.

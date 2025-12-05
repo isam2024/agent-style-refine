@@ -18,7 +18,128 @@ class SessionStatus(str, Enum):
     ERROR = "error"
 
 
+# ============================================================
+# Feature Classification & Directional Correction System
+# ============================================================
+
+class FeatureType(str, Enum):
+    """
+    Classification of extracted features for drift prevention.
+
+    - STRUCTURAL_MOTIF: Repeating compositional element (swirl arcs, geometric patterns)
+    - STYLE_FEATURE: Aesthetic quality (brushstroke type, color treatment, texture)
+    - SCENE_CONSTRAINT: Spatial/framing requirement (centered subject, circular boundary)
+    - POTENTIAL_COINCIDENCE: Single-instance detail that may be artifact (random leaf, watermark)
+    """
+    STRUCTURAL_MOTIF = "structural_motif"
+    STYLE_FEATURE = "style_feature"
+    SCENE_CONSTRAINT = "scene_constraint"
+    POTENTIAL_COINCIDENCE = "potential_coincidence"
+
+
+class ClassifiedFeature(BaseModel):
+    """
+    A single classified feature discovered during extraction or training.
+
+    Confidence tracking prevents artifacts from becoming permanent motifs:
+    - Confidence grows when feature appears in both original AND generated
+    - Confidence decays when feature disappears
+    - Features with low confidence (<0.3) are likely coincidences
+    """
+    feature_id: str = Field(description="Unique identifier (snake_case)")
+    feature_type: FeatureType = Field(description="Category of feature")
+    description: str = Field(description="What this feature is")
+    source_dimension: str = Field(
+        description="Which style dimension it came from (palette/lighting/texture/composition/motifs/core_invariants)"
+    )
+    confidence: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Confidence score (0.0-1.0), updated through iterations"
+    )
+    first_seen: int = Field(default=1, description="Iteration number when first discovered")
+    persistence_count: int = Field(default=1, description="How many iterations it has appeared in")
+
+
+class FeatureRegistry(BaseModel):
+    """
+    Registry of all classified features discovered during training.
+
+    This prevents drift by:
+    - Explicitly categorizing structural vs stylistic vs coincidental elements
+    - Tracking confidence to auto-detect artifacts
+    - Providing clear feature IDs for vectorized corrections
+    """
+    features: dict[str, ClassifiedFeature] = Field(
+        default={},
+        description="Map of feature_id -> feature"
+    )
+
+
+class CorrectionDirection(str, Enum):
+    """
+    Directional correction types for vectorized feedback.
+
+    These provide actionable guidance instead of just scores:
+    - MAINTAIN: Feature is correct, preserve exactly
+    - REINFORCE: Feature is weak, needs strengthening
+    - REDUCE: Feature is too strong, needs weakening
+    - ROTATE: Feature has wrong angle/orientation
+    - SIMPLIFY: Feature has excess detail
+    - EXAGGERATE: Feature needs more dramatic form
+    - REDISTRIBUTE: Feature is in wrong spatial position
+    - ELIMINATE: Feature is unwanted artifact
+    """
+    MAINTAIN = "maintain"
+    REINFORCE = "reinforce"
+    REDUCE = "reduce"
+    ROTATE = "rotate"
+    SIMPLIFY = "simplify"
+    EXAGGERATE = "exaggerate"
+    REDISTRIBUTE = "redistribute"
+    ELIMINATE = "eliminate"
+
+
+class VectorizedCorrection(BaseModel):
+    """
+    A single vectorized correction directive from the critic.
+
+    Instead of just saying "wrong", this provides:
+    - What it should be (target_state)
+    - How to change it (direction + magnitude)
+    - Where the issue is (spatial_hint)
+    - Why it diverged (diagnostic)
+    - Confidence in the correction
+    """
+    feature_id: str = Field(description="Links to FeatureRegistry feature")
+    current_state: str = Field(description="What is seen in the generated image")
+    target_state: str = Field(description="What it should look like (from original)")
+    direction: CorrectionDirection = Field(description="How to change")
+    magnitude: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="Strength of change (0.0=tiny, 1.0=dramatic)"
+    )
+    spatial_hint: str | None = Field(
+        default=None,
+        description="Where in the image (e.g., 'upper-left quadrant', 'background layer')"
+    )
+    diagnostic: str | None = Field(
+        default=None,
+        description="Root cause analysis - WHY the divergence occurred"
+    )
+    confidence: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Critic's certainty in this correction"
+    )
+
+
+# ============================================================
 # Style Profile Sub-Schemas
+# ============================================================
 class PaletteSchema(BaseModel):
     dominant_colors: list[str] = Field(default=[], description="Hex color codes for dominant colors")
     accents: list[str] = Field(default=[], description="Hex color codes for accent colors")
@@ -62,6 +183,8 @@ class MotifsSchema(BaseModel):
 
 # Main Style Profile
 class StyleProfile(BaseModel):
+    model_config = {"extra": "allow"}  # Allow extra fields for backward compatibility
+
     style_name: str = Field(default="Extracted Style", description="A descriptive name for this style")
     core_invariants: list[str] = Field(
         default=[],
@@ -86,6 +209,12 @@ class StyleProfile(BaseModel):
         description="Natural language description of the original image (reverse-engineered prompt)"
     )
 
+    # NEW: Feature classification and tracking system
+    feature_registry: FeatureRegistry = Field(
+        default_factory=FeatureRegistry,
+        description="Registry of classified features for drift prevention and confidence tracking"
+    )
+
 
 # Critique Result
 class CritiqueResult(BaseModel):
@@ -98,6 +227,12 @@ class CritiqueResult(BaseModel):
         description="New characteristics that could be incorporated"
     )
     updated_style_profile: StyleProfile
+
+    # NEW: Vectorized corrections for actionable feedback
+    corrections: list[VectorizedCorrection] = Field(
+        default=[],
+        description="Directional correction vectors for each feature (instead of just scores)"
+    )
 
 
 # API Request/Response Schemas
