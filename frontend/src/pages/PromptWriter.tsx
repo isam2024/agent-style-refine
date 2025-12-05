@@ -159,86 +159,95 @@ function PromptWriter() {
             )}
           </div>
 
-          {/* Selected Style Info */}
-          {selectedStyle && (
+          {/* Selected Style Info - shows prompt breakdown after first write */}
+          {result?.prompt_breakdown && (
             <div className="bg-white rounded-xl border border-slate-200 p-4">
-              <h3 className="font-medium text-slate-800">
-                {selectedStyle.style_profile.style_name}
+              <h3 className="text-sm font-medium text-slate-700 mb-3">
+                Style Agent: {result.style_name}
               </h3>
-              {selectedStyle.description && (
-                <p className="text-sm text-slate-500 mt-1">
-                  {selectedStyle.description}
-                </p>
-              )}
-              <div className="mt-3 space-y-2">
-                {/* Training Stats */}
-                <div className="text-xs text-slate-500">
-                  {selectedStyle.iterations_trained} iterations
-                  {selectedStyle.final_score && ` • Score: ${selectedStyle.final_score}/100`}
-                </div>
 
-                {/* Core Traits */}
-                <div>
-                  <span className="text-xs text-slate-400 uppercase">
-                    Core Traits
-                  </span>
-                  <div className="flex flex-wrap gap-1 mt-1">
-                    {selectedStyle.style_profile.core_invariants
-                      .slice(0, 3)
-                      .map((trait, i) => (
-                        <span
-                          key={i}
-                          className="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded"
-                        >
-                          {trait}
+              {/* Technique & Mood */}
+              <div className="space-y-3 text-xs">
+                {result.prompt_breakdown.technique?.length > 0 && (
+                  <div>
+                    <span className="text-slate-400 font-medium block mb-1">Technique:</span>
+                    <div className="flex flex-wrap gap-1">
+                      {result.prompt_breakdown.technique.map((t: string, i: number) => (
+                        <span key={i} className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
+                          {t}
                         </span>
                       ))}
+                    </div>
                   </div>
-                </div>
+                )}
+                {result.prompt_breakdown.mood?.length > 0 && (
+                  <div>
+                    <span className="text-slate-400 font-medium block mb-1">Mood:</span>
+                    <div className="flex flex-wrap gap-1">
+                      {result.prompt_breakdown.mood.map((m: string, i: number) => (
+                        <span key={i} className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded">
+                          {m}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Lighting, Texture, Composition */}
+                {result.prompt_breakdown.lighting && (
+                  <div>
+                    <span className="text-slate-400 font-medium block mb-1">Lighting:</span>
+                    <div className="text-slate-600 space-y-0.5">
+                      <div>{result.prompt_breakdown.lighting.type}</div>
+                      <div className="text-slate-400 text-[10px]">Shadows: {result.prompt_breakdown.lighting.shadows}</div>
+                      <div className="text-slate-400 text-[10px]">Highlights: {result.prompt_breakdown.lighting.highlights}</div>
+                    </div>
+                  </div>
+                )}
+                {result.prompt_breakdown.texture && (
+                  <div>
+                    <span className="text-slate-400 font-medium block mb-1">Texture:</span>
+                    <div className="text-slate-600 space-y-0.5">
+                      <div>{result.prompt_breakdown.texture.surface}</div>
+                      <div className="text-slate-400 text-[10px]">Noise: {result.prompt_breakdown.texture.noise}</div>
+                    </div>
+                  </div>
+                )}
+                {result.prompt_breakdown.composition && (
+                  <div>
+                    <span className="text-slate-400 font-medium block mb-1">Composition:</span>
+                    <div className="text-slate-600 space-y-0.5">
+                      <div>{result.prompt_breakdown.composition.camera}</div>
+                      <div className="text-slate-400 text-[10px]">{result.prompt_breakdown.composition.framing}</div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Palette */}
-                <div>
-                  <span className="text-xs text-slate-400 uppercase">
-                    Palette
-                  </span>
-                  <div className="flex gap-1 mt-1">
-                    {selectedStyle.style_profile.palette.dominant_colors.map(
-                      (color, i) => (
-                        <div
-                          key={i}
-                          className="w-6 h-6 rounded border border-slate-200"
-                          style={{ backgroundColor: color }}
-                          title={color}
-                        />
-                      )
-                    )}
+                {result.prompt_breakdown.palette?.length > 0 && (
+                  <div>
+                    <span className="text-slate-400 font-medium block mb-1">Color Palette:</span>
+                    <div className="flex flex-wrap gap-1">
+                      {result.prompt_breakdown.palette.map((c: string, i: number) => (
+                        <span key={i} className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded">
+                          {c}
+                        </span>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
 
-                {/* Agent Details (expandable) */}
-                <details className="text-xs">
-                  <summary className="cursor-pointer text-blue-600 hover:text-blue-700 mt-2">
-                    View agent details
-                  </summary>
-                  <div className="mt-2 space-y-2 text-slate-600">
-                    {selectedStyle.style_rules.technique_keywords.length > 0 && (
-                      <div>
-                        <span className="font-medium">Techniques:</span> {selectedStyle.style_rules.technique_keywords.slice(0, 3).join(', ')}
-                      </div>
-                    )}
-                    {selectedStyle.style_rules.mood_keywords.length > 0 && (
-                      <div>
-                        <span className="font-medium">Mood:</span> {selectedStyle.style_rules.mood_keywords.slice(0, 3).join(', ')}
-                      </div>
-                    )}
-                    <div>
-                      <span className="font-medium">Lighting:</span> {selectedStyle.style_profile.lighting.lighting_type}
-                    </div>
-                    <div>
-                      <span className="font-medium">Texture:</span> {selectedStyle.style_profile.texture.surface}
-                    </div>
+                {/* Core Invariants */}
+                {result.prompt_breakdown.core_invariants?.length > 0 && (
+                  <div>
+                    <span className="text-slate-400 font-medium block mb-1">Core Invariants:</span>
+                    <ul className="list-disc list-inside text-slate-600 space-y-0.5">
+                      {result.prompt_breakdown.core_invariants.slice(0, 3).map((r: string, i: number) => (
+                        <li key={i}>{r}</li>
+                      ))}
+                    </ul>
                   </div>
-                </details>
+                )}
               </div>
             </div>
           )}
