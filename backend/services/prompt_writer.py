@@ -26,8 +26,8 @@ class PromptWriter:
         """
         Write a styled prompt from a subject and trained style.
 
-        This uses a deterministic template-based approach for consistency.
-        Constructs a natural-reading prompt that integrates the subject with style metadata.
+        Constructs a natural-reading prompt with flowing prose that integrates
+        the subject with style metadata in human-readable format.
         """
         palette = style_profile.palette
         lighting = style_profile.lighting
@@ -35,109 +35,178 @@ class PromptWriter:
         line_shape = style_profile.line_and_shape
         composition = style_profile.composition
 
-        # Build an integrated prompt that reads naturally
-        prompt_segments = []
+        # Build prompt as natural flowing sentences
+        sentences = []
 
-        # === SEGMENT 1: Subject with immediate style context ===
-        # If we have an image description, use it as a style template
-        if style_profile.image_description:
-            # Use image description but inject our subject
-            # The description is already style-rich
-            desc = style_profile.image_description
-            # Try to replace the original subject if we can identify it
-            if style_profile.original_subject:
-                # Simple replacement strategy
-                desc_lower = desc.lower()
-                orig_subject_lower = style_profile.original_subject.lower()
-                if orig_subject_lower in desc_lower:
-                    desc = desc.replace(style_profile.original_subject, subject)
-                else:
-                    # Prepend new subject
-                    prompt_segments.append(subject.strip())
-                    prompt_segments.append(desc)
-            else:
-                # Prepend new subject
-                prompt_segments.append(subject.strip())
-                prompt_segments.append(desc)
-        else:
-            # No description - build from scratch
-            # Start with subject + core technique
-            subject_with_technique = subject.strip()
-            if style_rules.technique_keywords:
-                subject_with_technique += f", {style_rules.technique_keywords[0]}"
-            prompt_segments.append(subject_with_technique)
+        # === SENTENCE 1: Subject + Style Technique ===
+        opening = subject.strip().capitalize()
 
-            # Add style name
-            prompt_segments.append(f"{style_profile.style_name} style")
+        # Add primary technique
+        if style_rules.technique_keywords and len(style_rules.technique_keywords) > 0:
+            opening += f", rendered in {style_rules.technique_keywords[0]}"
+        elif texture.surface:
+            # Fallback to texture description as technique
+            opening += f", created with {texture.surface}"
 
-        # === SEGMENT 2: Core invariants (most important) ===
-        if style_profile.core_invariants:
-            prompt_segments.extend(style_profile.core_invariants[:3])
+        # Add style name if meaningful
+        if style_profile.style_name and style_profile.style_name.lower() not in ["extracted style", "unnamed style"]:
+            opening += f" {style_profile.style_name} style"
 
-        # === SEGMENT 3: Color palette (specific colors) ===
-        if palette.color_descriptions:
+        sentences.append(opening)
+
+        # === SENTENCE 2: Color Palette ===
+        if palette.color_descriptions and len(palette.color_descriptions) > 0:
             colors = palette.color_descriptions[:4]
-            prompt_segments.append(f"colors: {', '.join(colors)}")
 
-        # === SEGMENT 4: Lighting (key atmosphere driver) ===
+            # Build natural color description
+            if len(colors) == 1:
+                color_desc = f"The color palette features {colors[0]}"
+            elif len(colors) == 2:
+                color_desc = f"The scene features {colors[0]} and {colors[1]} tones"
+            elif len(colors) >= 3:
+                main_colors = ", ".join(colors[:-1])
+                color_desc = f"The composition uses {main_colors}, and {colors[-1]} tones"
+
+            # Add accent colors if available
+            if palette.accents and len(palette.accents) > 0:
+                accent_names = palette.color_descriptions[len(palette.dominant_colors):len(palette.dominant_colors) + 2]
+                if accent_names:
+                    if len(accent_names) == 1:
+                        color_desc += f" with {accent_names[0]} accents"
+                    else:
+                        color_desc += f" with {' and '.join(accent_names)} accents"
+
+            # Add saturation level
+            if palette.saturation:
+                sat = palette.saturation.lower()
+                if "high" in sat or "vivid" in sat:
+                    color_desc += ", creating a vibrant appearance"
+                elif "low" in sat or "muted" in sat:
+                    color_desc += ", creating a muted and subtle appearance"
+                elif "medium" in sat:
+                    color_desc += " with balanced saturation"
+
+            sentences.append(color_desc)
+
+        # === SENTENCE 3: Lighting + Atmosphere ===
+        lighting_parts = []
+
         if lighting.lighting_type:
-            prompt_segments.append(lighting.lighting_type)
+            lighting_parts.append(f"The scene is illuminated by {lighting.lighting_type}")
+
         if lighting.shadows:
-            prompt_segments.append(f"with {lighting.shadows} shadows")
+            lighting_parts.append(f"with {lighting.shadows}")
+
         if lighting.highlights:
-            prompt_segments.append(lighting.highlights)
+            lighting_parts.append(f"and {lighting.highlights}")
 
-        # === SEGMENT 5: Texture/surface ===
+        # Add mood keywords
+        if style_rules.mood_keywords and len(style_rules.mood_keywords) > 0:
+            mood = style_rules.mood_keywords[0]
+            if lighting_parts:
+                lighting_parts.append(f"creating {mood}")
+            else:
+                lighting_parts.append(f"The atmosphere features {mood}")
+
+        if lighting_parts:
+            sentences.append(", ".join(lighting_parts))
+
+        # === SENTENCE 4: Texture + Surface Quality ===
+        texture_parts = []
+
+        # Core texture description
         if texture.surface:
-            prompt_segments.append(texture.surface)
-        if texture.special_effects:
-            prompt_segments.extend(texture.special_effects[:2])
+            texture_parts.append(texture.surface.capitalize())
 
-        # === SEGMENT 6: Line/shape quality ===
+        # Add technique details
+        if style_rules.technique_keywords and len(style_rules.technique_keywords) > 1:
+            for technique in style_rules.technique_keywords[1:3]:
+                if technique.lower() not in texture.surface.lower():  # Avoid repetition
+                    texture_parts.append(technique)
+
+        # Add special effects
+        if texture.special_effects and len(texture.special_effects) > 0:
+            effects_str = " and ".join(texture.special_effects[:2])
+            texture_parts.append(effects_str)
+
+        if texture_parts:
+            texture_sentence = " with ".join(texture_parts[:2])
+            if len(texture_parts) > 2:
+                texture_sentence += f", featuring {', '.join(texture_parts[2:])}"
+            sentences.append(texture_sentence + " throughout")
+
+        # === SENTENCE 5: Line Quality + Shape Language ===
+        form_parts = []
+
         if line_shape.line_quality:
-            prompt_segments.append(line_shape.line_quality)
+            form_parts.append(line_shape.line_quality.capitalize())
+
         if line_shape.shape_language:
-            prompt_segments.append(f"{line_shape.shape_language} forms")
+            shape_desc = line_shape.shape_language
+            if "organic" in shape_desc.lower():
+                form_parts.append("flowing organic forms")
+            elif "geometric" in shape_desc.lower():
+                form_parts.append("geometric shapes")
+            elif "angular" in shape_desc.lower():
+                form_parts.append("angular forms")
+            else:
+                form_parts.append(f"{shape_desc} shapes")
 
-        # === SEGMENT 7: Composition/framing ===
-        if composition.camera:
-            prompt_segments.append(composition.camera)
+        if form_parts:
+            sentences.append(" and ".join(form_parts) + " define the visual structure")
+
+        # === SENTENCE 6: Composition + Framing ===
+        comp_parts = []
+
         if composition.framing:
-            prompt_segments.append(composition.framing)
+            framing = composition.framing.lower()
+            if "center" in framing:
+                comp_parts.append("The composition places the subject centrally in the frame")
+            elif "rule of thirds" in framing or "thirds" in framing:
+                comp_parts.append("The composition follows the rule of thirds")
+            elif "asymmetric" in framing:
+                comp_parts.append("The composition uses asymmetric framing")
+            else:
+                comp_parts.append(f"The composition uses {composition.framing}")
 
-        # === SEGMENT 8: Additional technique keywords ===
-        if style_rules.technique_keywords:
-            prompt_segments.extend(style_rules.technique_keywords[1:4])
+        if composition.camera:
+            camera = composition.camera.lower()
+            if "eye level" in camera:
+                comp_parts.append("at eye level perspective")
+            elif "low" in camera:
+                comp_parts.append("from a low angle perspective")
+            elif "high" in camera or "bird" in camera:
+                comp_parts.append("from an elevated perspective")
+            else:
+                comp_parts.append(f"with {composition.camera} camera angle")
 
-        # === SEGMENT 9: Mood/atmosphere ===
-        if style_rules.mood_keywords:
-            prompt_segments.extend(style_rules.mood_keywords[:3])
+        if comp_parts:
+            sentences.append(" ".join(comp_parts))
 
-        # === SEGMENT 10: Always include from training ===
-        if style_rules.always_include:
-            prompt_segments.extend(style_rules.always_include[:5])
+        # === SENTENCE 7: Core Invariants (Important Style Anchors) ===
+        if style_profile.core_invariants and len(style_profile.core_invariants) > 0:
+            # Add up to 2 most important invariants
+            for invariant in style_profile.core_invariants[:2]:
+                # Skip if already mentioned
+                invariant_lower = invariant.lower()
+                prompt_so_far = " ".join(sentences).lower()
+                if invariant_lower not in prompt_so_far:
+                    sentences.append(invariant.capitalize())
 
-        # === SEGMENT 11: Emphasis from training feedback ===
-        if style_rules.emphasize:
-            prompt_segments.extend(style_rules.emphasize[:4])
+        # === SENTENCE 8: Additional Context ===
+        if additional_context and additional_context.strip():
+            sentences.append(additional_context.strip())
 
-        # === SEGMENT 12: Additional context ===
-        if additional_context:
-            prompt_segments.append(additional_context.strip())
+        # === SENTENCE 9: Training Emphasis (What to emphasize) ===
+        if style_rules.emphasize and len(style_rules.emphasize) > 0:
+            # Add 1-2 top emphasis items that aren't already mentioned
+            prompt_so_far_lower = " ".join(sentences).lower()
+            for emphasis in style_rules.emphasize[:2]:
+                if emphasis.lower() not in prompt_so_far_lower:
+                    sentences.append(emphasis.capitalize())
 
-        # Clean and deduplicate
-        seen = set()
-        unique_parts = []
-        for part in prompt_segments:
-            if part and len(part.strip()) > 0:
-                part_clean = part.strip()
-                normalized = part_clean.lower()
-                # Skip empty fields from defaults
-                if normalized and normalized not in seen:
-                    seen.add(normalized)
-                    unique_parts.append(part_clean)
-
-        positive_prompt = ", ".join(unique_parts)
+        # Join sentences with proper punctuation
+        positive_prompt = ". ".join(s.strip().rstrip('.') for s in sentences if s.strip()) + "."
 
         # Build negative prompt
         negative_prompt = None
