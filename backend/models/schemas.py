@@ -48,7 +48,9 @@ class LightingSchema(BaseModel):
 class CompositionSchema(BaseModel):
     camera: str = Field(default="", description="e.g., 'mid shot, slight low angle'")
     framing: str = Field(default="", description="e.g., 'subject centered or slightly off-center'")
+    depth: str = Field(default="", description="Spatial layers and their relationships")
     negative_space_behavior: str = Field(default="", description="How negative space is treated")
+    structural_notes: str = Field(default="", description="Key spatial relationships and layout")
 
 
 class MotifsSchema(BaseModel):
