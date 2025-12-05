@@ -592,6 +592,7 @@ async def run_auto_improve(
     results = []
     baseline_scores = None  # Track scores from current iteration for weak dimension detection
     best_approved_score = None  # Track best approved overall score for incremental improvement
+    previous_corrections = None  # Track corrections from previous iteration for vectorized feedback
     approved_count = 0
     rejected_count = 0
 
@@ -657,6 +658,7 @@ async def run_auto_improve(
                 original_image_b64=original_b64,
                 feedback_history=feedback_history,
                 previous_scores=baseline_scores,  # Use for weak dimension detection
+                previous_corrections=previous_corrections,  # Vectorized feedback from previous iteration
                 creativity_level=data.creativity_level,
                 training_insights=training_insights,  # Use for threshold adaptation and lost traits
                 log_fn=log,
@@ -672,6 +674,17 @@ async def run_auto_improve(
                 training_insights=training_insights,
                 previous_scores=baseline_scores,  # For weighted delta calculation
             )
+
+            # Extract corrections for next iteration (always update, even from rejected iterations)
+            # Corrections from rejected iterations are especially important for recovery
+            critique_result = iteration_result["critique"]
+            if hasattr(critique_result, 'corrections') and critique_result.corrections:
+                # Convert Pydantic models to dicts for easy passing
+                previous_corrections = [corr.model_dump() if hasattr(corr, 'model_dump') else corr for corr in critique_result.corrections]
+                await log(f"Extracted {len(previous_corrections)} corrections for next iteration", "info", "corrections")
+            else:
+                await log("No corrections in critique result (VLM may not have provided them)", "warning", "corrections")
+                previous_corrections = None
 
             # DEBUG: Log comprehensive VLM metadata and decision analysis (to console AND file)
             iter_debug = []

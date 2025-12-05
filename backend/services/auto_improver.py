@@ -65,12 +65,16 @@ class AutoImprover:
         original_image_b64: str,
         feedback_history: list[dict],
         previous_scores: dict[str, int] | None = None,
+        previous_corrections: list[dict] | None = None,
         creativity_level: int = 50,
         training_insights: dict | None = None,
         log_fn: Callable[[str, str, str], Awaitable[None]] = None,
     ) -> dict:
         """
         Run one iteration with focus on weak dimensions.
+
+        Args:
+            previous_corrections: Vectorized corrections from previous iteration (optional)
 
         Returns: {
             "image_b64": str,
@@ -135,10 +139,13 @@ class AutoImprover:
 
         # Generate image with focused guidance
         await log("Generating prompt with weakness focus...", "info", "generate")
+        if previous_corrections:
+            await log(f"Including {len(previous_corrections)} vectorized corrections from previous iteration", "info", "generate")
         image_prompt = await style_agent.generate_image_prompt(
             style_profile=style_profile,
             subject=subject,
             feedback_history=feedback_history,
+            latest_corrections=previous_corrections,
             session_id=session_id,
         )
 
