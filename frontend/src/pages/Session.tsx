@@ -21,7 +21,13 @@ function Session() {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
 
-  const [subject, setSubject] = useState('')
+  // Load persisted subject from localStorage
+  const getPersistedSubject = () => {
+    if (!sessionId) return ''
+    return localStorage.getItem(`session_subject_${sessionId}`) || ''
+  }
+
+  const [subject, setSubject] = useState(getPersistedSubject)
   const [creativityLevel, setCreativityLevel] = useState(50)
   const [currentIteration, setCurrentIteration] = useState<number | null>(null)
   const [latestResult, setLatestResult] = useState<IterationStepResult | null>(null)
@@ -37,6 +43,13 @@ function Session() {
     refetchInterval: activeStep ? 2000 : false,
   })
 
+  // Persist subject to localStorage whenever it changes
+  useEffect(() => {
+    if (sessionId && subject) {
+      localStorage.setItem(`session_subject_${sessionId}`, subject)
+    }
+  }, [sessionId, subject])
+
   // Reset current iteration when session loads
   useEffect(() => {
     if (session?.iterations.length) {
@@ -44,16 +57,25 @@ function Session() {
     }
   }, [session?.iterations.length])
 
-  // Pre-fill subject with suggested test prompt when style is first extracted
+  // Pre-fill subject: use last iteration's prompt extract, or suggested test prompt
   useEffect(() => {
-    if (
-      session?.style_profile?.profile?.suggested_test_prompt &&
-      !subject &&
-      session.iterations.length === 0
-    ) {
-      setSubject(session.style_profile.profile.suggested_test_prompt)
+    if (!subject && session) {
+      // First, try to get subject from last iteration
+      if (session.iterations.length > 0) {
+        const lastIteration = session.iterations[session.iterations.length - 1]
+        if (lastIteration.prompt_used) {
+          // Extract a reasonable subject from the prompt (first sentence or 100 chars)
+          const extracted = lastIteration.prompt_used.split('.')[0].slice(0, 100)
+          setSubject(extracted)
+          return
+        }
+      }
+      // Otherwise, use suggested test prompt
+      if (session.style_profile?.profile?.suggested_test_prompt) {
+        setSubject(session.style_profile.profile.suggested_test_prompt)
+      }
     }
-  }, [session?.style_profile?.profile?.suggested_test_prompt])
+  }, [session?.iterations.length, session?.style_profile?.profile?.suggested_test_prompt])
 
   const extractMutation = useMutation({
     mutationFn: () => extractStyle(sessionId!),
@@ -315,21 +337,38 @@ function Session() {
           {/* Generation Controls */}
           {hasStyleProfile && (
             <div className="mt-4 bg-white rounded-xl border border-slate-200 p-4">
-              <div className="flex gap-4">
-                <input
-                  type="text"
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  placeholder="Enter subject to generate (e.g., a fox in a moonlit forest)"
-                  className="flex-1 px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                />
-                <button
-                  onClick={() => iterateMutation.mutate()}
-                  disabled={!subject.trim() || iterateMutation.isPending}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {iterateMutation.isPending ? 'Generating...' : 'Generate'}
-                </button>
+              <div className="space-y-3">
+                <div className="relative">
+                  <textarea
+                    value={subject}
+                    onChange={(e) => {
+                      setSubject(e.target.value)
+                      // Auto-expand textarea
+                      e.target.style.height = 'auto'
+                      e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`
+                    }}
+                    onFocus={(e) => {
+                      // Ensure proper height on focus
+                      e.target.style.height = 'auto'
+                      e.target.style.height = `${Math.min(e.target.scrollHeight, 200)}px`
+                    }}
+                    placeholder="Enter subject to generate (e.g., a fox in a moonlit forest, a cozy cabin in snowy mountains at dusk)"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none overflow-hidden min-h-[60px]"
+                    rows={2}
+                  />
+                  <span className="absolute bottom-2 right-2 text-xs text-slate-400">
+                    {subject.length} chars
+                  </span>
+                </div>
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => iterateMutation.mutate()}
+                    disabled={!subject.trim() || iterateMutation.isPending}
+                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
+                  >
+                    {iterateMutation.isPending ? 'Generating...' : 'Generate Image'}
+                  </button>
+                </div>
               </div>
               <div className="mt-3 flex items-center gap-4">
                 <label className="text-sm text-slate-600">Creativity:</label>
