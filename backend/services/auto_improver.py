@@ -22,10 +22,14 @@ class AutoImprover:
         self.weak_dimension_threshold = 65  # Dimensions below this need focus
         self.improvement_boost = 1.5  # How much to emphasize weak areas
 
-        # Absolute threshold criteria (no baseline comparison)
-        self.min_overall_score = 70  # Minimum overall score to pass
-        self.min_dimension_score = 55  # Minimum for any individual dimension
+        # Absolute threshold criteria (ideal quality bars)
+        self.target_overall_score = 70  # Target overall score (ideal)
+        self.target_dimension_score = 55  # Target for dimensions (ideal)
         self.catastrophic_threshold = 40  # Any dimension below this = catastrophic fail
+
+        # Incremental improvement criteria (for climbing from low scores)
+        self.min_improvement = 3  # Must improve by at least this much to approve
+        self.allow_incremental = True  # Allow gradual improvement from bad starting points
 
     async def run_focused_iteration(
         self,
@@ -55,17 +59,38 @@ class AutoImprover:
                 await log_fn(msg, level, step)
             logger.info(f"[{step}] {msg}")
 
-        # Identify weak dimensions from previous iteration
+        # Identify weak dimensions using two-phase approach
         weak_dimensions = []
+        broad_stroke_threshold = 60  # Major issues below this
+        refinement_threshold = self.weak_dimension_threshold  # 65
         focused_areas = []
+
+        broad_stroke_issues = []
+        refinement_issues = []
 
         if previous_scores:
             for dimension, score in previous_scores.items():
-                if dimension != "overall" and score < self.weak_dimension_threshold:
-                    weak_dimensions.append(dimension)
+                if dimension != "overall":
+                    if score < broad_stroke_threshold:
+                        broad_stroke_issues.append((dimension, score))
+                    elif score < refinement_threshold:
+                        refinement_issues.append((dimension, score))
 
-            if weak_dimensions:
-                await log(f"Identified weak dimensions: {', '.join(weak_dimensions)}", "warning", "analysis")
+            # Phase 1: Broad strokes - fix ALL major issues simultaneously
+            if broad_stroke_issues:
+                weak_dimensions = [dim for dim, _ in broad_stroke_issues]
+                await log(f"Phase 1 (Broad Strokes): Fixing major issues in {', '.join(weak_dimensions)}", "warning", "analysis")
+                for dim, score in broad_stroke_issues:
+                    await log(f"  - {dim}: {score} (< {broad_stroke_threshold})", "warning", "detail")
+
+            # Phase 2: Refinement - polish one dimension at a time
+            elif refinement_issues:
+                # Sort by score, focus on worst dimension
+                refinement_issues.sort(key=lambda x: x[1])
+                weakest_dim, weakest_score = refinement_issues[0]
+                weak_dimensions = [weakest_dim]
+                await log(f"Phase 2 (Refinement): Polishing {weakest_dim} (score: {weakest_score})", "info", "analysis")
+
             else:
                 await log("All dimensions above threshold, maintaining current approach", "info", "analysis")
 
@@ -186,77 +211,95 @@ class AutoImprover:
     def evaluate_iteration(
         self,
         new_scores: dict[str, int],
+        best_approved_score: int | None = None,
         training_insights: dict | None = None,
     ) -> tuple[bool, str, dict]:
         """
         Determine if iteration should be approved (pass) or rejected (fail).
 
-        Uses ABSOLUTE thresholds (not baseline comparison) since VLM scoring is non-deterministic.
+        Two-tier approval system:
+        1. IDEAL: Meets absolute quality targets (70 overall, 55 dimensions)
+        2. INCREMENTAL: Improves on best approved score by min_improvement (allows climbing from bad starts)
 
         Returns: (should_approve, reason, analysis)
 
-        Pass criteria:
-        - Overall score >= min_overall_score (default 70)
-        - All dimensions >= min_dimension_score (default 55)
-        - No catastrophic failures (dimension < 40)
-        - Thresholds adapt based on training insights
+        Pass criteria (EITHER):
+        - Tier 1: Overall >= target_overall AND all dimensions >= target_dimension
+        - Tier 2: Overall improves by >= min_improvement over best_approved
+        - Always: No catastrophic failures (dimension < 40)
 
         Fail criteria:
-        - Overall score below threshold
-        - Any dimension below minimum
         - Catastrophic failure in any dimension
+        - Doesn't meet Tier 1 AND doesn't improve in Tier 2
         """
         overall_score = new_scores.get("overall", 0)
 
-        # Adapt thresholds based on training insights
-        min_overall = self.min_overall_score
-        min_dimension = self.min_dimension_score
-
-        if training_insights and training_insights.get("dimension_averages"):
-            # If historical average is low, be slightly more lenient
-            hist_overall = training_insights.get("historical_best")
-            if hist_overall and hist_overall < 65:
-                min_overall = max(60, hist_overall - 5)  # Aim slightly below historical best
-
-            # Adjust dimension thresholds based on historical performance
-            dimension_avgs = training_insights["dimension_averages"]
-
-        # Check catastrophic failures first
+        # Check catastrophic failures first (always reject)
         catastrophic_failures = []
-        dimension_failures = []
-
         for dimension, score in new_scores.items():
             if dimension == "overall":
                 continue
-
             if score < self.catastrophic_threshold:
                 catastrophic_failures.append(f"{dimension}={score}")
-            elif score < min_dimension:
-                dimension_failures.append(f"{dimension}={score}")
+
+        if catastrophic_failures:
+            analysis = {
+                "overall_score": overall_score,
+                "catastrophic_failures": catastrophic_failures,
+            }
+            return False, f"FAIL: Catastrophic failure in {', '.join(catastrophic_failures)}", analysis
+
+        # Tier 1: Check if meets absolute targets (ideal case)
+        target_overall = self.target_overall_score
+        target_dimension = self.target_dimension_score
+
+        dimension_below_target = []
+        for dimension, score in new_scores.items():
+            if dimension == "overall":
+                continue
+            if score < target_dimension:
+                dimension_below_target.append(f"{dimension}={score}")
+
+        meets_targets = (overall_score >= target_overall) and (not dimension_below_target)
+
+        # Tier 2: Check if improves on best approved (incremental case)
+        improvement = None
+        improves_incrementally = False
+
+        if best_approved_score is not None and self.allow_incremental:
+            improvement = overall_score - best_approved_score
+            improves_incrementally = improvement >= self.min_improvement
 
         # Build analysis
         analysis = {
             "overall_score": overall_score,
-            "min_overall_threshold": min_overall,
-            "min_dimension_threshold": min_dimension,
-            "catastrophic_failures": catastrophic_failures,
-            "dimension_failures": dimension_failures,
-            "dimension_scores": {k: v for k, v in new_scores.items() if k != "overall"},
+            "target_overall": target_overall,
+            "target_dimension": target_dimension,
+            "meets_targets": meets_targets,
+            "best_approved_score": best_approved_score,
+            "improvement": improvement,
+            "improves_incrementally": improves_incrementally,
+            "dimension_below_target": dimension_below_target,
         }
 
-        # Fail conditions
-        if catastrophic_failures:
-            return False, f"FAIL: Catastrophic failure in {', '.join(catastrophic_failures)}", analysis
+        # Decision logic
+        if meets_targets:
+            # Tier 1: Meets quality targets
+            return True, f"PASS (Tier 1): Overall {overall_score}/{target_overall}, all dimensions meet target", analysis
 
-        if overall_score < min_overall:
-            return False, f"FAIL: Overall score {overall_score} < {min_overall} threshold", analysis
+        if improves_incrementally:
+            # Tier 2: Incremental improvement
+            return True, f"PASS (Tier 2 - Incremental): Overall {overall_score} (+{improvement} from {best_approved_score})", analysis
 
-        if dimension_failures:
-            return False, f"FAIL: Dimensions below threshold: {', '.join(dimension_failures)}", analysis
+        if best_approved_score is None:
+            # First iteration - be lenient, establish baseline
+            return True, f"PASS (Baseline): First iteration with overall {overall_score}", analysis
 
-        # Pass!
-        passed_dims = len([s for s in new_scores.values() if s >= min_dimension]) - 1  # -1 for overall
-        return True, f"PASS: Overall {overall_score}/{min_overall}, all {passed_dims} dimensions meet threshold", analysis
+        # Fail - neither meets targets nor improves incrementally
+        if improvement is not None:
+            return False, f"FAIL: Overall {overall_score} doesn't meet target ({target_overall}) and improvement (+{improvement}) < threshold ({self.min_improvement})", analysis
+        else:
+            return False, f"FAIL: Overall {overall_score} < target {target_overall}, dimensions: {', '.join(dimension_below_target[:3]) if dimension_below_target else 'OK'}", analysis
 
     def _build_focused_feedback(
         self,

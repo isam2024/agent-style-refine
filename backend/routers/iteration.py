@@ -468,6 +468,7 @@ async def run_auto_improve(
 
     results = []
     baseline_scores = None  # Track scores from current iteration for weak dimension detection
+    best_approved_score = None  # Track best approved overall score for incremental improvement
     approved_count = 0
     rejected_count = 0
 
@@ -527,6 +528,7 @@ async def run_auto_improve(
             new_scores = iteration_result["critique"].match_scores
             should_approve, eval_reason, eval_analysis = auto_improver.evaluate_iteration(
                 new_scores=new_scores,
+                best_approved_score=best_approved_score,
                 training_insights=training_insights,
             )
 
@@ -573,6 +575,12 @@ async def run_auto_improve(
                 )
                 db.add(new_profile_db)
                 await log(f"Profile updated to v{new_version}", "success", "update")
+
+                # Update best approved score
+                overall_score = new_scores.get("overall", 0)
+                if best_approved_score is None or overall_score > best_approved_score:
+                    best_approved_score = overall_score
+                    await log(f"New best approved score: {best_approved_score}", "success", "milestone")
             else:
                 await log("Profile not updated (iteration rejected)", "info", "update")
 
