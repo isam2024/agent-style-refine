@@ -205,6 +205,43 @@ class VLMService:
         model = self.text_model if use_text_model else self.vlm_model
         return await self.analyze(prompt=prompt, system=system, request_id=request_id, model=model)
 
+    async def describe_image(
+        self,
+        image_b64: str,
+        request_id: str | None = None,
+    ) -> str:
+        """
+        Generate a natural language description of an image suitable for image generation.
+
+        This extracts a "reverse prompt" - describing the image as if writing a prompt
+        that would recreate it in an image generation model.
+
+        Args:
+            image_b64: Base64 encoded image
+            request_id: Optional ID to track/cancel this request
+
+        Returns:
+            Natural language description of the image
+        """
+        prompt = """Describe this image as if writing a prompt for an AI image generator.
+
+Focus on:
+1. Subject matter and composition
+2. Art style and technique (e.g., digital art, watercolor, photorealistic, anime)
+3. Color palette and mood
+4. Lighting and atmosphere
+5. Any distinctive visual elements or textures
+
+Write a single detailed paragraph (50-100 words) that captures the essence of this image.
+Do NOT start with "This image shows" - write it as a direct image generation prompt.
+Output ONLY the description, no explanation or preamble."""
+
+        return await self.analyze(
+            prompt=prompt,
+            images=[image_b64],
+            request_id=request_id,
+        )
+
     def get_active_requests(self) -> list[str]:
         """Get list of active request IDs."""
         return [k for k, v in self._active_requests.items() if v]

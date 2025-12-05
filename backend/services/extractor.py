@@ -146,6 +146,16 @@ IMPORTANT:
             for inv in profile_dict["core_invariants"]:
                 await log(f"  • {inv}")
 
+        # Extract natural language image description (reverse prompt)
+        await log("Extracting natural language image description...")
+        try:
+            image_description = await vlm_service.describe_image(image_b64)
+            profile_dict["image_description"] = image_description.strip()
+            await log(f"Image description: {image_description[:100]}...", "success")
+        except Exception as e:
+            await log(f"Image description extraction failed: {e}", "warning")
+            profile_dict["image_description"] = None
+
         return StyleProfile(**profile_dict)
 
     def _parse_json_response(self, response: str) -> dict:

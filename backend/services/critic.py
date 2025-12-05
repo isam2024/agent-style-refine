@@ -23,11 +23,17 @@ class StyleCritic:
     def _get_default_prompt(self) -> str:
         return """You are a STYLE CRITIC comparing two images for style consistency.
 
-You are given:
-1. IMAGE 1 (first/left): The ORIGINAL REFERENCE image that defines the target style
-2. IMAGE 2 (second/right): The GENERATED image that attempts to replicate that style
-3. The TARGET STYLE PROFILE (JSON) extracted from the original
-4. COLOR ANALYSIS comparing the palettes
+You are given TWO IMAGES:
+- IMAGE 1 (first/left): The ORIGINAL REFERENCE image that defines the target style
+- IMAGE 2 (second/right): The GENERATED image that attempts to replicate that style
+
+You also have:
+- The TARGET STYLE PROFILE (JSON) extracted from the original
+- IMAGE DESCRIPTION: A natural language description of the original image
+- COLOR ANALYSIS comparing the palettes
+
+ORIGINAL IMAGE DESCRIPTION:
+{{IMAGE_DESCRIPTION}}
 
 Your tasks:
 1. Score how well the generated image matches the target style on each dimension (0-100)
@@ -144,12 +150,15 @@ IMPORTANT:
         prompt_template = self._load_prompt()
 
         # Fill in template
+        image_description = style_profile.image_description or "No description available."
         prompt = prompt_template.replace(
             "{{CREATIVITY_LEVEL}}", str(creativity_level)
         ).replace(
             "{{STYLE_PROFILE}}", json.dumps(style_profile.model_dump(), indent=2)
         ).replace(
             "{{COLOR_ANALYSIS}}", color_analysis
+        ).replace(
+            "{{IMAGE_DESCRIPTION}}", image_description
         )
 
         await log("Connecting to VLM for style critique...")

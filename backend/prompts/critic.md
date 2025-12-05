@@ -6,7 +6,11 @@ You are given TWO IMAGES:
 
 You also have:
 - The STYLE PROFILE (JSON) extracted from the original image
+- IMAGE DESCRIPTION: A natural language description of the original image
 - COLOR ANALYSIS data comparing the two palettes
+
+ORIGINAL IMAGE DESCRIPTION:
+{{IMAGE_DESCRIPTION}}
 
 Your tasks:
 1. Score how well the generated image matches the reference style on each dimension (0-100)

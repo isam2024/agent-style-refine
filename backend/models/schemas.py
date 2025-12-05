@@ -76,6 +76,10 @@ class StyleProfile(BaseModel):
         default=None,
         description="A suggested prompt featuring similar subject matter for style comparison"
     )
+    image_description: str | None = Field(
+        default=None,
+        description="Natural language description of the original image (reverse-engineered prompt)"
+    )
 
 
 # Critique Result

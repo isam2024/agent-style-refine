@@ -46,6 +46,7 @@ export interface StyleProfile {
   motifs: MotifsSchema;
   original_subject?: string | null;
   suggested_test_prompt?: string | null;
+  image_description?: string | null;
 }
 
 export interface CritiqueResult {
