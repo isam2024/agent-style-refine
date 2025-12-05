@@ -677,14 +677,33 @@ async def run_auto_improve(
 
             # Extract corrections for next iteration (always update, even from rejected iterations)
             # Corrections from rejected iterations are especially important for recovery
-            critique_result = iteration_result["critique"]
-            if hasattr(critique_result, 'corrections') and critique_result.corrections:
-                # Convert Pydantic models to dicts for easy passing
-                previous_corrections = [corr.model_dump() if hasattr(corr, 'model_dump') else corr for corr in critique_result.corrections]
-                await log(f"Extracted {len(previous_corrections)} corrections for next iteration", "info", "corrections")
-            else:
-                await log("No corrections in critique result (VLM may not have provided them)", "warning", "corrections")
-                previous_corrections = None
+            try:
+                critique_result = iteration_result["critique"]
+                if hasattr(critique_result, 'corrections') and critique_result.corrections:
+                    # Convert Pydantic models to dicts for easy passing
+                    previous_corrections = []
+                    for corr in critique_result.corrections:
+                        try:
+                            if hasattr(corr, 'model_dump'):
+                                previous_corrections.append(corr.model_dump())
+                            elif isinstance(corr, dict):
+                                previous_corrections.append(corr)
+                            else:
+                                await log(f"Skipping invalid correction type: {type(corr)}", "warning", "corrections")
+                        except Exception as e:
+                            await log(f"Failed to convert correction: {e}", "warning", "corrections")
+
+                    if previous_corrections:
+                        await log(f"Extracted {len(previous_corrections)} corrections for next iteration", "info", "corrections")
+                    else:
+                        await log("No valid corrections could be extracted", "warning", "corrections")
+                        previous_corrections = None
+                else:
+                    await log("No corrections in critique result (VLM may not have provided them)", "warning", "corrections")
+                    previous_corrections = None
+            except Exception as e:
+                await log(f"Error extracting corrections: {e}", "error", "corrections")
+                previous_corrections = None  # Continue without corrections if extraction fails
 
             # DEBUG: Log comprehensive VLM metadata and decision analysis (to console AND file)
             iter_debug = []
