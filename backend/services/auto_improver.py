@@ -22,6 +22,12 @@ class AutoImprover:
         self.weak_dimension_threshold = 65  # Dimensions below this need focus
         self.improvement_boost = 1.5  # How much to emphasize weak areas
 
+        # Pass/Fail criteria
+        self.overall_weight = 0.6  # Overall score gets 60% weight
+        self.dimensions_weight = 0.4  # Dimension scores get 40% weight
+        self.catastrophic_regression_threshold = 20  # Dimension drop > this = catastrophic
+        self.min_improvement = 0.5  # Minimum weighted score improvement to pass
+
     async def run_focused_iteration(
         self,
         session_id: str,
@@ -129,6 +135,97 @@ class AutoImprover:
             "weak_dimensions": weak_dimensions,
             "focused_areas": focused_areas,
         }
+
+    def calculate_weighted_score(self, scores: dict[str, int]) -> float:
+        """
+        Calculate weighted composite score.
+
+        Overall score gets 60% weight, dimension average gets 40% weight.
+        This makes the overall score more important in decision-making.
+        """
+        overall = scores.get("overall", 0)
+
+        # Calculate average of dimension scores (excluding 'overall')
+        dimension_scores = [v for k, v in scores.items() if k != "overall"]
+        dimension_avg = sum(dimension_scores) / len(dimension_scores) if dimension_scores else 0
+
+        # Weighted composite
+        weighted = (overall * self.overall_weight) + (dimension_avg * self.dimensions_weight)
+        return weighted
+
+    def evaluate_iteration(
+        self,
+        new_scores: dict[str, int],
+        baseline_scores: dict[str, int] | None,
+    ) -> tuple[bool, str, dict]:
+        """
+        Determine if iteration should be approved (pass) or rejected (fail).
+
+        Returns: (should_approve, reason, analysis)
+
+        Pass criteria:
+        - Weighted score improves by at least min_improvement
+        - No catastrophic regression (dimension drop > 20 points)
+        - Overall score doesn't regress
+
+        Fail criteria:
+        - Weighted score regresses or doesn't improve enough
+        - Catastrophic regression in any dimension
+        - Overall score regresses
+        """
+        # If no baseline, first iteration always passes
+        if not baseline_scores:
+            return True, "First iteration - establishing baseline", {
+                "weighted_score": self.calculate_weighted_score(new_scores),
+                "overall_score": new_scores.get("overall", 0),
+            }
+
+        # Calculate weighted scores
+        new_weighted = self.calculate_weighted_score(new_scores)
+        baseline_weighted = self.calculate_weighted_score(baseline_scores)
+        weighted_delta = new_weighted - baseline_weighted
+
+        # Check overall score
+        new_overall = new_scores.get("overall", 0)
+        baseline_overall = baseline_scores.get("overall", 0)
+        overall_delta = new_overall - baseline_overall
+
+        # Check for catastrophic regressions
+        catastrophic_regressions = []
+        dimension_deltas = {}
+
+        for dimension, new_score in new_scores.items():
+            if dimension == "overall":
+                continue
+            baseline_score = baseline_scores.get(dimension, 0)
+            delta = new_score - baseline_score
+            dimension_deltas[dimension] = delta
+
+            if delta < -self.catastrophic_regression_threshold:
+                catastrophic_regressions.append(f"{dimension} ({baseline_score} → {new_score}, Δ{delta})")
+
+        # Build analysis
+        analysis = {
+            "weighted_score": new_weighted,
+            "weighted_delta": weighted_delta,
+            "overall_score": new_overall,
+            "overall_delta": overall_delta,
+            "dimension_deltas": dimension_deltas,
+            "catastrophic_regressions": catastrophic_regressions,
+        }
+
+        # Fail conditions
+        if catastrophic_regressions:
+            return False, f"FAIL: Catastrophic regression in {', '.join(catastrophic_regressions)}", analysis
+
+        if overall_delta < -2:  # Allow small fluctuation
+            return False, f"FAIL: Overall score regressed ({baseline_overall} → {new_overall}, Δ{overall_delta:.1f})", analysis
+
+        if weighted_delta < self.min_improvement:
+            return False, f"FAIL: Insufficient improvement (weighted Δ{weighted_delta:.1f} < {self.min_improvement})", analysis
+
+        # Pass!
+        return True, f"PASS: Weighted score improved by {weighted_delta:.1f} (overall Δ{overall_delta:.1f})", analysis
 
     def _build_focused_feedback(
         self,

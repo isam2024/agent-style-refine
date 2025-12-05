@@ -460,7 +460,9 @@ async def run_auto_improve(
     original_b64 = await storage_service.load_image_raw(session.original_image_path)
 
     results = []
-    previous_scores = None
+    baseline_scores = None  # Scores from last approved iteration
+    approved_count = 0
+    rejected_count = 0
 
     for i in range(data.max_iterations):
         iteration_num = i + 1
@@ -483,14 +485,14 @@ async def run_auto_improve(
         latest_profile_db = max(session.style_profiles, key=lambda sp: sp.version)
         style_profile = StyleProfile(**latest_profile_db.profile_json)
 
-        # Gather feedback history
+        # Gather feedback history (only from approved iterations)
         feedback_history = []
         for it in session.iterations:
-            if it.approved is not None or it.feedback:
+            if it.approved:  # Only use approved iterations for feedback
                 entry = {
                     "iteration": it.iteration_num,
                     "approved": it.approved,
-                    "notes": it.feedback,
+                    "notes": it.feedback or "Auto-approved",
                 }
                 if it.critique_json:
                     entry["preserved_traits"] = it.critique_json.get("preserved_traits", [])
@@ -508,10 +510,25 @@ async def run_auto_improve(
                 style_profile=style_profile,
                 original_image_b64=original_b64,
                 feedback_history=feedback_history,
-                previous_scores=previous_scores,
+                previous_scores=baseline_scores,  # Use baseline from last approved iteration
                 creativity_level=data.creativity_level,
                 log_fn=log,
             )
+
+            # Evaluate iteration: should it be approved or rejected?
+            new_scores = iteration_result["critique"].match_scores
+            should_approve, eval_reason, eval_analysis = auto_improver.evaluate_iteration(
+                new_scores=new_scores,
+                baseline_scores=baseline_scores,
+            )
+
+            # Log evaluation
+            if should_approve:
+                await log(f"✓ {eval_reason}", "success", "evaluation")
+                approved_count += 1
+            else:
+                await log(f"✗ {eval_reason}", "warning", "evaluation")
+                rejected_count += 1
 
             # Save iteration
             iteration_num_db = len(session.iterations) + 1
@@ -520,60 +537,77 @@ async def run_auto_improve(
                 session.id, iteration_result["image_b64"], filename
             )
 
+            feedback_msg = eval_reason
             iteration = Iteration(
                 session_id=session.id,
                 iteration_num=iteration_num_db,
                 image_path=str(image_path),
                 prompt_used=iteration_result["prompt_used"],
-                scores_json=iteration_result["critique"].match_scores,
+                scores_json=new_scores,
                 critique_json={
                     "preserved_traits": iteration_result["critique"].preserved_traits,
                     "lost_traits": iteration_result["critique"].lost_traits,
                     "interesting_mutations": iteration_result["critique"].interesting_mutations,
                 },
-                approved=True,  # Auto-approved
+                approved=should_approve,
+                feedback=feedback_msg,
             )
             db.add(iteration)
             await db.flush()
 
-            # Apply updated profile
-            new_version = latest_profile_db.version + 1
-            new_profile_db = StyleProfileDB(
-                session_id=session.id,
-                version=new_version,
-                profile_json=iteration_result["critique"].updated_style_profile.model_dump(),
-            )
-            db.add(new_profile_db)
+            # Only apply updated profile if approved
+            if should_approve:
+                new_version = latest_profile_db.version + 1
+                new_profile_db = StyleProfileDB(
+                    session_id=session.id,
+                    version=new_version,
+                    profile_json=iteration_result["critique"].updated_style_profile.model_dump(),
+                )
+                db.add(new_profile_db)
+                await log(f"Profile updated to v{new_version}", "success", "update")
+
+                # Update baseline to this approved iteration
+                baseline_scores = new_scores
+            else:
+                await log("Profile not updated (iteration rejected)", "info", "update")
 
             await db.commit()
             await db.refresh(iteration)
 
             # Store results
-            overall_score = iteration_result["critique"].match_scores.get("overall", 0)
-            previous_scores = iteration_result["critique"].match_scores
+            overall_score = new_scores.get("overall", 0)
 
             results.append({
                 "iteration_num": iteration_num_db,
                 "overall_score": overall_score,
                 "weak_dimensions": iteration_result["weak_dimensions"],
                 "focused_areas": iteration_result["focused_areas"],
-                "scores": iteration_result["critique"].match_scores,
+                "scores": new_scores,
+                "approved": should_approve,
+                "eval_reason": eval_reason,
+                "weighted_score": eval_analysis.get("weighted_score"),
+                "weighted_delta": eval_analysis.get("weighted_delta"),
             })
 
-            # Check stopping conditions
-            should_continue, reason = auto_improver.should_continue(
-                current_score=overall_score,
-                target_score=data.target_score,
-                iteration=iteration_num,
-                max_iterations=data.max_iterations,
-            )
+            # Check stopping conditions (only consider approved iterations)
+            if should_approve:
+                # Check if we've reached target with this approved iteration
+                should_continue, reason = auto_improver.should_continue(
+                    current_score=overall_score,
+                    target_score=data.target_score,
+                    iteration=iteration_num,
+                    max_iterations=data.max_iterations,
+                )
 
-            await log(reason, "success" if not should_continue else "info", "decision")
+                await log(reason, "success" if not should_continue else "info", "decision")
 
-            if not should_continue:
-                session.status = SessionStatus.COMPLETED.value
-                await db.commit()
-                break
+                if not should_continue:
+                    session.status = SessionStatus.COMPLETED.value
+                    await db.commit()
+                    break
+            else:
+                # Rejected iteration - continue trying
+                await log(f"Continuing (iteration rejected, need improvement)", "info", "decision")
 
         except Exception as e:
             error_msg = str(e)
@@ -595,13 +629,24 @@ async def run_auto_improve(
     session.status = SessionStatus.READY.value
     await db.commit()
 
-    await log(f"Auto-Improve complete! Ran {len(results)} iterations", "success")
+    # Find best approved iteration
+    approved_results = [r for r in results if r.get("approved")]
+    best_score = max([r["overall_score"] for r in approved_results]) if approved_results else None
+
+    await log(
+        f"Auto-Improve complete! {len(results)} iterations ({approved_count} approved, {rejected_count} rejected)",
+        "success"
+    )
+    await log(f"Best score achieved: {best_score if best_score else 'N/A'}", "success")
     await manager.broadcast_progress(session_id, "complete", 100, "Auto-Improve complete")
     await manager.broadcast_complete(session_id)
 
     return {
         "iterations_run": len(results),
+        "approved_count": approved_count,
+        "rejected_count": rejected_count,
         "results": results,
         "final_score": results[-1].get("overall_score") if results else None,
-        "target_reached": results[-1].get("overall_score", 0) >= data.target_score if results else False,
+        "best_score": best_score,
+        "target_reached": (best_score >= data.target_score) if best_score else False,
     }

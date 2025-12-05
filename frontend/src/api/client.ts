@@ -203,15 +203,22 @@ export async function runAutoImprove(
   creativityLevel: number = 50
 ): Promise<{
   iterations_run: number;
+  approved_count: number;
+  rejected_count: number;
   results: Array<{
     iteration_num: number;
     overall_score?: number;
     weak_dimensions?: string[];
     focused_areas?: string[];
     scores?: Record<string, number>;
+    approved?: boolean;
+    eval_reason?: string;
+    weighted_score?: number;
+    weighted_delta?: number;
     error?: string;
   }>;
   final_score: number | null;
+  best_score: number | null;
   target_reached: boolean;
 }> {
   return fetchJson(`${API_BASE}/iterate/auto-improve`, {
