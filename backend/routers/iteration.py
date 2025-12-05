@@ -435,6 +435,7 @@ async def run_auto_improve(
         logger.info(f"[{step}] {msg}")
         await manager.broadcast_log(session_id, msg, level, step)
 
+    logger.info(f"=== AUTO-IMPROVE ENDPOINT CALLED === Session: {session_id}")
     await log(f"Starting Auto-Improve mode (target: {data.target_score}, max: {data.max_iterations})", "info")
 
     # Get session with all related data
@@ -845,10 +846,15 @@ async def run_auto_improve(
     debug_lines.append(f"Target reached: {(best_score >= data.target_score) if best_score else False}")
     debug_lines.append("=" * 80)
 
-    with open(debug_log_path, 'w') as f:
-        f.write('\n'.join(debug_lines))
-
-    await log(f"Debug log written to: {debug_log_path.name}", "info", "debug")
+    try:
+        import aiofiles
+        async with aiofiles.open(debug_log_path, 'w') as f:
+            await f.write('\n'.join(debug_lines))
+        await log(f"Debug log written to: {debug_log_path}", "success", "debug")
+        logger.info(f"DEBUG LOG WRITTEN TO: {debug_log_path}")
+    except Exception as e:
+        await log(f"ERROR writing debug log: {e}", "error", "debug")
+        logger.error(f"Failed to write debug log to {debug_log_path}: {e}")
 
     await manager.broadcast_progress(session_id, "complete", 100, "Auto-Improve complete")
     await manager.broadcast_complete(session_id)
