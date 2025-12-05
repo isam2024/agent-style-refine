@@ -41,8 +41,8 @@ Analyze the provided image and extract its visual style characteristics. Output 
     "recurring_elements": ["visual elements that characterize this style, not specific subjects"],
     "forbidden_elements": ["elements that would break this style's coherence"]
   },
-  "original_subject": "Describe WHAT is depicted in this image (the subject matter, scene, characters, objects) in 10-20 words",
-  "suggested_test_prompt": "A DETAILED scene description (30-50 words) featuring the SAME or very similar subject matter as the original image. Describe the same type of subject/scene/character but with slight variations (different pose, angle, or minor details). This allows direct style comparison. Include setting, atmosphere, and style-appropriate details."
+  "original_subject": "Describe exactly WHAT is shown: the main subject, setting, objects, and scene in 15-30 words. Be specific and visual.",
+  "suggested_test_prompt": "Write a CONCRETE image generation prompt (40-60 words) that describes the SAME scene you see in this image. Describe it as if instructing an artist to recreate it: specific subject, exact setting, objects present, lighting conditions, mood, colors. Do NOT use vague terms like 'similar to' or 'different angle' - describe the actual visual content you see."
 }
 ```
 

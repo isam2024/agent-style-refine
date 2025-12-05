@@ -21,13 +21,13 @@ class StyleExtractor:
         return self._get_default_prompt()
 
     def _get_default_prompt(self) -> str:
-        return """You are a STYLE EXTRACTION ENGINE. Your task is to analyze visual style, NOT content or narrative.
+        return """You are a STYLE EXTRACTION ENGINE. Analyze the image and extract both its visual style AND describe what is depicted.
 
-Analyze the provided image and extract its visual style characteristics. Output ONLY valid JSON that matches this exact schema:
+Output ONLY valid JSON matching this schema:
 
 ```json
 {
-  "style_name": "A descriptive, evocative name for this style (3-5 words)",
+  "style_name": "A descriptive name for this style (3-5 words)",
   "core_invariants": [
     "List 3-5 fundamental style traits that define this image",
     "These should be visual qualities, not subject matter"
@@ -36,40 +36,42 @@ Analyze the provided image and extract its visual style characteristics. Output 
     "dominant_colors": ["#hex1", "#hex2", "#hex3"],
     "accents": ["#hex1", "#hex2"],
     "color_descriptions": ["name each color, e.g., 'deep navy', 'warm orange'"],
-    "saturation": "low/medium/high/medium-high/medium-low",
+    "saturation": "low/medium/high",
     "value_range": "describe the light/dark distribution"
   },
   "line_and_shape": {
     "line_quality": "describe edge treatment and line character",
-    "shape_language": "describe predominant shapes (organic/geometric/mixed)",
+    "shape_language": "describe predominant shapes",
     "geometry_notes": "additional observations about form"
   },
   "texture": {
-    "surface": "describe surface quality (smooth/rough/painterly/etc)",
+    "surface": "describe surface quality",
     "noise_level": "low/medium/high",
-    "special_effects": ["list any special visual effects like bloom, grain, etc"]
+    "special_effects": ["list any special visual effects"]
   },
   "lighting": {
     "lighting_type": "describe primary lighting setup",
-    "shadows": "describe shadow quality and color",
+    "shadows": "describe shadow quality",
     "highlights": "describe highlight treatment"
   },
   "composition": {
-    "camera": "describe implied camera position/angle",
+    "camera": "describe camera position/angle",
     "framing": "describe subject placement",
     "negative_space_behavior": "how empty space is treated"
   },
   "motifs": {
     "recurring_elements": ["visual elements that characterize this style"],
     "forbidden_elements": ["elements that would break this style"]
-  }
+  },
+  "original_subject": "Describe exactly WHAT is shown in this image: main subject, setting, objects, scene details in 15-30 words",
+  "suggested_test_prompt": "Write a CONCRETE 40-60 word prompt describing the SAME scene. Include: specific subject, setting, objects, lighting, mood, colors. Describe what you SEE, not abstract concepts."
 }
 ```
 
 IMPORTANT:
-- Extract STYLE, not content. Do not describe what is depicted, describe HOW it is depicted.
-- Focus on reproducible visual characteristics.
-- Output ONLY the JSON, no explanation or markdown code blocks."""
+- For style fields: describe HOW it looks (visual qualities)
+- For original_subject and suggested_test_prompt: describe WHAT you see (concrete content)
+- Output ONLY valid JSON, no markdown or explanation."""
 
     async def extract(self, image_b64: str, session_id: str | None = None) -> StyleProfile:
         """
