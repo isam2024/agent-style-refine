@@ -1,5 +1,6 @@
 import logging
 import traceback
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -456,6 +457,18 @@ async def run_auto_improve(
         await log("No original image found", "error")
         raise HTTPException(status_code=400, detail="No original image found")
 
+    # Initialize debug log file
+    debug_log_path = storage_service.get_session_dir(session.id) / "auto_improve_debug.txt"
+    debug_lines = []
+    debug_lines.append("=" * 80)
+    debug_lines.append(f"AUTO-IMPROVE DEBUG LOG")
+    debug_lines.append(f"Session: {session.id} - {session.name}")
+    debug_lines.append(f"Subject: {data.subject}")
+    debug_lines.append(f"Target Score: {data.target_score}, Max Iterations: {data.max_iterations}")
+    debug_lines.append(f"Started: {datetime.utcnow().isoformat()}")
+    debug_lines.append("=" * 80)
+    debug_lines.append("")
+
     # Load original image once
     original_b64 = await storage_service.load_image_raw(session.original_image_path)
 
@@ -534,7 +547,13 @@ async def run_auto_improve(
                 training_insights=training_insights,
             )
 
-            # DEBUG: Log detailed score breakdown and decision analysis
+            # DEBUG: Log detailed score breakdown and decision analysis (to console AND file)
+            debug_lines.append(f"\n{'='*60}")
+            debug_lines.append(f"ITERATION {iteration_num}")
+            debug_lines.append(f"{'='*60}")
+            debug_lines.append(f"Overall Score: {new_scores.get('overall', 0)}")
+            debug_lines.append(f"Dimension Scores: {', '.join([f'{k}={v}' for k, v in new_scores.items() if k != 'overall'])}")
+
             await log(f"[DEBUG] Overall Score: {new_scores.get('overall', 0)}", "info", "debug")
             await log(f"[DEBUG] Dimension Scores: {', '.join([f'{k}={v}' for k, v in new_scores.items() if k != 'overall'])}", "info", "debug")
 
@@ -542,24 +561,41 @@ async def run_auto_improve(
             if eval_analysis.get("dimension_improvements"):
                 improved = [f"{d}({'+' if delta > 0 else ''}{delta:.0f})" for d, delta in eval_analysis["dimension_improvements"].items() if abs(delta) > 2]
                 if improved:
+                    debug_lines.append(f"Dimension Changes vs History: {', '.join(improved)}")
                     await log(f"[DEBUG] Dimension Changes vs History: {', '.join(improved)}", "info", "debug")
 
             # DEBUG: Log vs best approved
             if eval_analysis.get("best_approved_score"):
-                await log(f"[DEBUG] vs Best Approved: {eval_analysis.get('improvement', 0):+.0f} ({eval_analysis['best_approved_score']} → {new_scores.get('overall', 0)})", "info", "debug")
+                vs_best = f"vs Best Approved: {eval_analysis.get('improvement', 0):+.0f} ({eval_analysis['best_approved_score']} → {new_scores.get('overall', 0)})"
+                debug_lines.append(vs_best)
+                await log(f"[DEBUG] {vs_best}", "info", "debug")
 
             # DEBUG: Log approval decision details
+            debug_lines.append(f"\nDecision Analysis:")
+            debug_lines.append(f"  - Meets targets (Tier 1): {eval_analysis.get('meets_targets', False)}")
+            debug_lines.append(f"  - Incremental improvement (Tier 2): {eval_analysis.get('improves_incrementally', False)} (need +3)")
+            debug_lines.append(f"  - Net progress (Tier 2b): {eval_analysis.get('net_progress', False)}")
+            debug_lines.append(f"  - First iteration: {best_approved_score is None}")
+
             await log(f"[DEBUG] Decision Analysis:", "info", "debug")
             await log(f"  - Meets targets (Tier 1): {eval_analysis.get('meets_targets', False)}", "info", "debug")
             await log(f"  - Incremental improvement (Tier 2): {eval_analysis.get('improves_incrementally', False)} (need +3)", "info", "debug")
             await log(f"  - Net progress (Tier 2b): {eval_analysis.get('net_progress', False)}", "info", "debug")
             await log(f"  - First iteration: {best_approved_score is None}", "info", "debug")
+
             if eval_analysis.get('subject_drift_failures'):
-                await log(f"  - Subject drift detected: {eval_analysis['subject_drift_failures'][:1]}", "warning", "debug")
+                drift_msg = f"  - Subject drift detected: {eval_analysis['subject_drift_failures'][:1]}"
+                debug_lines.append(drift_msg)
+                await log(drift_msg, "warning", "debug")
             if eval_analysis.get('catastrophic_failures'):
-                await log(f"  - Catastrophic failures: {eval_analysis['catastrophic_failures']}", "error", "debug")
+                cat_msg = f"  - Catastrophic failures: {eval_analysis['catastrophic_failures']}"
+                debug_lines.append(cat_msg)
+                await log(cat_msg, "error", "debug")
 
             # Log evaluation
+            decision_status = "✓ APPROVED" if should_approve else "✗ REJECTED"
+            debug_lines.append(f"\n{decision_status}: {eval_reason}")
+
             if should_approve:
                 await log(f"✓ {eval_reason}", "success", "evaluation")
                 approved_count += 1
@@ -708,15 +744,36 @@ async def run_auto_improve(
 
     # DEBUG: Log score progression summary
     await log("=== SCORE PROGRESSION SUMMARY ===", "info", "summary")
+    debug_lines.append("\n" + "=" * 80)
+    debug_lines.append("SCORE PROGRESSION SUMMARY")
+    debug_lines.append("=" * 80)
+
     for idx, result in enumerate(results, 1):
         status = "✓ APPROVED" if result.get("approved") else "✗ REJECTED"
         overall = result.get("overall_score", "N/A")
         await log(f"Iteration {idx}: Overall {overall} - {status}", "info", "summary")
+        debug_lines.append(f"\nIteration {idx}: Overall {overall} - {status}")
+
         if result.get("scores"):
             dim_str = ", ".join([f"{k}={v}" for k, v in result["scores"].items() if k != "overall"])
             await log(f"  Dimensions: {dim_str}", "info", "summary")
+            debug_lines.append(f"  Dimensions: {dim_str}")
         if result.get("eval_reason"):
             await log(f"  Reason: {result['eval_reason']}", "info", "summary")
+            debug_lines.append(f"  Reason: {result['eval_reason']}")
+
+    # Write debug log to disk
+    debug_lines.append("\n" + "=" * 80)
+    debug_lines.append(f"Completed: {datetime.utcnow().isoformat()}")
+    debug_lines.append(f"Total: {len(results)} iterations ({approved_count} approved, {rejected_count} rejected)")
+    debug_lines.append(f"Best score: {best_score if best_score else 'N/A'}")
+    debug_lines.append(f"Target reached: {(best_score >= data.target_score) if best_score else False}")
+    debug_lines.append("=" * 80)
+
+    with open(debug_log_path, 'w') as f:
+        f.write('\n'.join(debug_lines))
+
+    await log(f"Debug log written to: {debug_log_path.name}", "info", "debug")
 
     await manager.broadcast_progress(session_id, "complete", 100, "Auto-Improve complete")
     await manager.broadcast_complete(session_id)
