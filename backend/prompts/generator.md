@@ -61,4 +61,9 @@ Use this feedback to improve. Emphasize what worked, avoid what was criticized.
 ## OUTPUT FORMAT:
 
 When given a subject, respond with ONLY the image generation prompt.
-No explanation, no markdown, no quotes, just the raw prompt text ready to paste into an image generator.
+- NO markdown headers (no # symbols)
+- NO markdown code blocks (no ```)
+- NO explanatory text or meta-commentary
+- NO quotes around the prompt
+- JUST the raw prompt text ready to paste into an image generator
+- Start directly with descriptive words, not formatting symbols

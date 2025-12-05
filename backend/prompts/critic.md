@@ -37,6 +37,12 @@ SCORING GUIDELINES:
 - 30-49: Weak match, style elements present but overwhelmed by drift
 - 0-29: Poor match, style largely lost
 
+MOTIFS SCORING:
+- Score motifs HIGH (70-100) if the generated image maintains the recurring visual elements and avoids forbidden elements
+- Score motifs LOW (0-30) ONLY if the generated image contains elements from the "forbidden_elements" list OR introduces wildly incompatible visual elements
+- Do NOT penalize motifs score just because recurring_elements are missing - only penalize if FORBIDDEN elements appear
+- Example: If recurring_elements includes "abstract swirls" but the generated image has minimal swirls, that's a minor issue (score 60-70). But if forbidden_elements includes "photorealistic rendering" and the image is photorealistic, that's catastrophic (score 0-20)
+
 Output ONLY valid JSON in this exact format:
 ```json
 {
@@ -54,8 +60,8 @@ Output ONLY valid JSON in this exact format:
     "another preserved aspect"
   ],
   "lost_traits": [
-    "specific trait that drifted or is missing",
-    "what should have been present but isn't"
+    "specific trait from the ORIGINAL that drifted or is missing in the GENERATED image",
+    "what should have been present but isn't - be specific and concrete"
   ],
   "interesting_mutations": [
     "new characteristic that fits the style and could be incorporated",
@@ -79,6 +85,24 @@ CRITICAL INSTRUCTIONS:
 6. The "overall" score should reflect holistic style match, not average of components.
 7. If IMAGE 2 looks similar to IMAGE 1 in style, the scores should be HIGH (70+)
 8. interesting_mutations should only include things that ENHANCE the style, not random changes.
+
+PROFILE UPDATE RULES (CRITICAL - FOLLOW EXACTLY):
+1. **NEVER DELETE core_invariants**: The core_invariants array defines the fundamental traits that MUST be preserved to recreate the original image. You may REFINE the wording to be more specific, but you MUST preserve the COUNT and INTENT of all invariants. If the original has 3 core invariants, your updated profile MUST have 3 core invariants (even if slightly reworded).
+
+2. **PRESERVE ARRAY STRUCTURE**: Do not remove items from arrays unless they are factually wrong. If the original profile lists 5 colors in palette.color_descriptions, your update should maintain approximately the same number (you may refine the color names, but don't reduce from 5 to 2).
+
+3. **CONSERVATIVE EDITS ONLY**: Only update fields where you observed a specific difference between IMAGE 1 and IMAGE 2 that needs correction. Do not randomly rewrite or simplify fields that are working correctly.
+
+4. **FORBIDDEN ELEMENTS**: The "forbidden_elements" list should contain elements that would BREAK the style (e.g., "photorealistic rendering" for an ink drawing style). Do NOT list the original subject matter as forbidden (e.g., if the original is a cat, don't forbid cats). When scoring motifs, penalize heavily if forbidden elements appear in the generated image.
+
+5. **PRIORITY PRESERVATION**: If core_invariants contain "PRIORITY 1" and "PRIORITY 2" labels, these MUST be preserved in the updated profile. These priorities are structural guidance that should never be removed.
+
+LOST TRAITS FORMAT:
+- "lost_traits" should describe specific visual characteristics from the ORIGINAL IMAGE that are MISSING or DEGRADED in the generated image
+- Be concrete and visual: "soft ambient lighting became harsh directional light" ✓ GOOD
+- Avoid meta-commentary: "forbidden_elements: psychedelic vortex" ✗ BAD (this is not a lost trait, this is a new unwanted element)
+- If the generated image introduces unwanted elements, PENALIZE the relevant dimension score (especially motifs) but do NOT list them as "lost traits"
+- Focus on what was SUPPOSED to be there (from the original) but ISN'T
 
 SCORING REMINDER:
 - If the generated image LOOKS like it could be from the same artist/style as the original, score 70+
