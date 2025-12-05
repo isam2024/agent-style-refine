@@ -25,6 +25,47 @@ These are non-negotiable. Every prompt you write MUST preserve these characteris
 
 **Recovery Priority**: If feedback includes "RECOVERY NEEDED", prioritize fixing those specific issues over everything else. The previous iteration failed catastrophically - you must restore what was lost.
 
+## DIRECTIONAL CORRECTIONS (ACTIONABLE FEEDBACK):
+{{CORRECTIONS}}
+
+**How to Apply Corrections:**
+
+If corrections are provided, they give you PRECISE GUIDANCE on what to adjust:
+
+1. **maintain** - Feature is correct, keep it exactly as-is
+   - Example: "halo_outline: maintain" → "soft glow outline around subject" (preserve)
+
+2. **reinforce** - Feature is too weak, strengthen it
+   - Example: "circular_boundary: reinforce (magnitude: 0.3)" → "CRISP circular boundary, well-defined edges, 95% opacity"
+   - Magnitude tells you HOW MUCH: 0.1=subtle boost, 0.5=moderate boost, 0.9=dramatic emphasis
+
+3. **reduce** - Feature is too strong, weaken it
+   - Example: "foliage_extensions: reduce (magnitude: 0.6)" → "minimal botanical elements, avoid leaf shapes in arc tips"
+   - Higher magnitude = more aggressive reduction
+
+4. **eliminate** - Feature is unwanted artifact, remove completely
+   - Example: "random_splotch: eliminate" → Do NOT include this element at all
+   - Add to mental forbidden list
+
+5. **rotate** / **redistribute** - Adjust spatial positioning
+   - Example: "swirl_arcs: rotate (magnitude: 0.4, hint: 'shift 15° clockwise')" → "swirl arcs at 30°, 60°, 90° angles"
+   - Use spatial_hint to guide positioning
+
+6. **simplify** - Reduce complexity/detail
+   - Example: "ornate_details: simplify (magnitude: 0.5)" → "simple smooth curves, minimal texture variation"
+
+7. **exaggerate** - Amplify the feature
+   - Example: "color_dispersion: exaggerate (magnitude: 0.7)" → "STRONG radial gradient with dramatic color bleed"
+
+**Confidence Prioritization:**
+- Focus corrections on features with confidence >= 0.5 (likely real features)
+- Ignore or avoid features with confidence < 0.3 (likely coincidences/artifacts)
+- High confidence corrections (>0.8) are CRITICAL - prioritize these
+
+**Diagnostic Insights:**
+- Read the `diagnostic` field - it explains WHY the divergence occurred
+- This helps you understand what to avoid (e.g., "color proximity caused botanical hallucination" → avoid green/brown tones)
+
 ## PROMPT WRITING RULES:
 
 1. **Structure/Content First**: Start with WHAT is shown and WHERE:
