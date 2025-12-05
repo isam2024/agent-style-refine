@@ -13,7 +13,11 @@ class Settings(BaseSettings):
     comfyui_url: str = "http://localhost:8188"
     outputs_dir: Path = Path("./outputs")
     database_url: str = "sqlite+aiosqlite:///./refine_agent.db"
+
+    # Vision model for image analysis (extraction, critique)
     vlm_model: str = "llama3.2-vision:11b"
+    # Text model for prompt generation (faster, no vision needed)
+    text_model: str = "llama3.2:3b"
 
     def ensure_outputs_dir(self) -> Path:
         self.outputs_dir.mkdir(parents=True, exist_ok=True)

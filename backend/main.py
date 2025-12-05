@@ -39,7 +39,8 @@ async def lifespan(app: FastAPI):
     logger.info("Starting Style Refine Agent...")
     logger.info(f"Ollama URL: {settings.ollama_url}")
     logger.info(f"ComfyUI URL: {settings.comfyui_url}")
-    logger.info(f"VLM Model: {settings.vlm_model}")
+    logger.info(f"VLM Model (vision): {settings.vlm_model}")
+    logger.info(f"Text Model (prompts): {settings.text_model}")
 
     await init_db()
     logger.info("Database initialized")
@@ -54,10 +55,15 @@ async def lifespan(app: FastAPI):
     if vlm_ok:
         logger.info("Ollama: Connected")
         model_info = await vlm_service.check_model()
-        if model_info.get("model_found"):
-            logger.info(f"VLM Model '{settings.vlm_model}': Available")
+        if model_info.get("vlm_model_found"):
+            logger.info(f"Vision Model '{settings.vlm_model}': Available")
         else:
-            logger.warning(f"VLM Model '{settings.vlm_model}': NOT FOUND")
+            logger.warning(f"Vision Model '{settings.vlm_model}': NOT FOUND")
+        if model_info.get("text_model_found"):
+            logger.info(f"Text Model '{settings.text_model}': Available")
+        else:
+            logger.warning(f"Text Model '{settings.text_model}': NOT FOUND")
+        if not model_info.get("vlm_model_found") or not model_info.get("text_model_found"):
             logger.warning(f"Available models: {model_info.get('available_models', [])}")
     else:
         logger.error("Ollama: NOT CONNECTED - VLM features will fail")
@@ -116,11 +122,13 @@ async def health_check():
     return {
         "status": "ok" if vlm_ok and comfyui_ok else "degraded",
         "services": {
-            "vlm": {
+            "ollama": {
                 "status": "ok" if vlm_ok else "unavailable",
                 "url": settings.ollama_url,
-                "model": settings.vlm_model,
-                "model_found": model_info.get("model_found", False),
+                "vlm_model": settings.vlm_model,
+                "vlm_model_found": model_info.get("vlm_model_found", False),
+                "text_model": settings.text_model,
+                "text_model_found": model_info.get("text_model_found", False),
                 "available_models": model_info.get("available_models", []),
             },
             "comfyui": {

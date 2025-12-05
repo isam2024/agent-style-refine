@@ -12,7 +12,8 @@ logger = logging.getLogger(__name__)
 class VLMService:
     def __init__(self):
         self.base_url = settings.ollama_url
-        self.model = settings.vlm_model
+        self.vlm_model = settings.vlm_model  # Vision model for image analysis
+        self.text_model = settings.text_model  # Text model for prompt generation
         self._active_requests: dict[str, bool] = {}  # Track active requests
 
     def cancel_request(self, request_id: str):
@@ -32,6 +33,7 @@ class VLMService:
         system: str | None = None,
         request_id: str | None = None,
         timeout: float = 300.0,
+        model: str | None = None,
     ) -> str:
         """
         Send a prompt to the VLM with optional images.
@@ -42,6 +44,7 @@ class VLMService:
             system: Optional system prompt
             request_id: Optional ID to track/cancel this request
             timeout: Request timeout in seconds (default 5 minutes)
+            model: Override model to use (defaults to vlm_model)
 
         Returns:
             The model's response text
@@ -49,6 +52,9 @@ class VLMService:
         # Track this request if ID provided
         if request_id:
             self._active_requests[request_id] = True
+
+        # Use specified model or default to vlm_model
+        use_model = model or self.vlm_model
 
         messages = []
 
@@ -63,19 +69,19 @@ class VLMService:
                     img = img.split(",", 1)[1]
                 clean_images.append(img)
             user_message["images"] = clean_images
-            logger.info(f"VLM: Sending request with {len(clean_images)} image(s)")
+            logger.info(f"VLM: Sending request with {len(clean_images)} image(s) to {use_model}")
         else:
-            logger.info(f"VLM: Sending text-only request")
+            logger.info(f"VLM: Sending text-only request to {use_model}")
 
         messages.append(user_message)
 
         payload = {
-            "model": self.model,
+            "model": use_model,
             "messages": messages,
             "stream": False,
         }
 
-        logger.debug(f"VLM: Using model {self.model}")
+        logger.debug(f"VLM: Using model {use_model}")
         logger.debug(f"VLM: Prompt preview: {prompt[:200]}...")
 
         # Use streaming internally so we can detect cancellation
@@ -185,11 +191,19 @@ class VLMService:
         prompt: str,
         system: str | None = None,
         request_id: str | None = None,
+        use_text_model: bool = True,
     ) -> str:
         """
         Generate text without images (for the style agent prompt generation).
+
+        Args:
+            prompt: The user prompt
+            system: Optional system prompt
+            request_id: Optional ID to track/cancel this request
+            use_text_model: If True, use faster text model instead of VLM (default True)
         """
-        return await self.analyze(prompt=prompt, system=system, request_id=request_id)
+        model = self.text_model if use_text_model else self.vlm_model
+        return await self.analyze(prompt=prompt, system=system, request_id=request_id, model=model)
 
     def get_active_requests(self) -> list[str]:
         """Get list of active request IDs."""
@@ -205,7 +219,8 @@ class VLMService:
         """Get Ollama status including any running processes."""
         status = {
             "connected": False,
-            "model": self.model,
+            "vlm_model": self.vlm_model,
+            "text_model": self.text_model,
             "active_requests": len(self.get_active_requests()),
             "ollama_running": None,
         }
@@ -236,12 +251,15 @@ class VLMService:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(f"{self.base_url}/api/tags")
                 if response.status_code == 200:
-                    # Also check if our model is available
+                    # Check if our models are available
                     data = response.json()
                     models = [m.get("name", "") for m in data.get("models", [])]
-                    model_available = any(self.model in m for m in models)
-                    if not model_available:
-                        logger.warning(f"VLM: Model '{self.model}' not found. Available: {models}")
+                    vlm_available = any(self.vlm_model in m for m in models)
+                    text_available = any(self.text_model in m for m in models)
+                    if not vlm_available:
+                        logger.warning(f"VLM: Vision model '{self.vlm_model}' not found. Available: {models}")
+                    if not text_available:
+                        logger.warning(f"VLM: Text model '{self.text_model}' not found. Available: {models}")
                     return True
                 return False
         except Exception as e:
@@ -249,7 +267,7 @@ class VLMService:
             return False
 
     async def check_model(self) -> dict:
-        """Check if the configured model is available and return info."""
+        """Check if the configured models are available and return info."""
         try:
             async with httpx.AsyncClient(timeout=10.0) as client:
                 response = await client.get(f"{self.base_url}/api/tags")
@@ -258,22 +276,30 @@ class VLMService:
                     models = data.get("models", [])
                     model_names = [m.get("name", "") for m in models]
 
-                    found = None
+                    vlm_found = None
+                    text_found = None
                     for m in models:
-                        if self.model in m.get("name", ""):
-                            found = m
-                            break
+                        name = m.get("name", "")
+                        if self.vlm_model in name:
+                            vlm_found = m
+                        if self.text_model in name:
+                            text_found = m
 
                     return {
-                        "configured_model": self.model,
-                        "model_found": found is not None,
-                        "model_info": found,
+                        "vlm_model": self.vlm_model,
+                        "vlm_model_found": vlm_found is not None,
+                        "vlm_model_info": vlm_found,
+                        "text_model": self.text_model,
+                        "text_model_found": text_found is not None,
+                        "text_model_info": text_found,
                         "available_models": model_names,
                     }
         except Exception as e:
             return {
-                "configured_model": self.model,
-                "model_found": False,
+                "vlm_model": self.vlm_model,
+                "vlm_model_found": False,
+                "text_model": self.text_model,
+                "text_model_found": False,
                 "error": str(e),
                 "available_models": [],
             }
