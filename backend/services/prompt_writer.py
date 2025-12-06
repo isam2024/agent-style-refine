@@ -8,6 +8,7 @@ import random
 from pathlib import Path
 
 from backend.models.schemas import StyleProfile, StyleRules, PromptWriteResponse
+from backend.services.vlm import vlm_service
 
 logger = logging.getLogger(__name__)
 
@@ -15,6 +16,7 @@ logger = logging.getLogger(__name__)
 class PromptWriter:
     def __init__(self):
         self.prompt_template_path = Path(__file__).parent.parent / "prompts" / "prompt_writer.md"
+        self.style_guided_prompt_path = Path(__file__).parent.parent / "prompts" / "style_guided_writer.md"
 
     def _select_item(self, items: list, variation_level: int, index: int = 0):
         """Select item from list with variation. Higher variation = more random."""
@@ -63,26 +65,175 @@ class PromptWriter:
             # High variation - random choice
             return random.choice(options)
 
-    def write_prompt(
+    async def _creative_rewrite(
+        self,
+        subject: str,
+        style_profile: StyleProfile,
+        style_rules: StyleRules,
+        variation_level: int,
+    ) -> str:
+        """
+        Use LLM to creatively rewrite the subject with style as constraints.
+
+        Instead of mechanically assembling traits, this method uses the VLM to
+        integrate the style into the description naturally.
+        """
+        # Load system prompt
+        system_prompt = self.style_guided_prompt_path.read_text()
+
+        # Build style rules context for the LLM
+        # Use variation to select which keywords/colors to provide
+        palette = style_profile.palette
+        lighting = style_profile.lighting
+        texture = style_profile.texture
+        line_shape = style_profile.line_and_shape
+        composition = style_profile.composition
+
+        # Select technique keywords (1-3 depending on variation)
+        technique_count = 1 if variation_level < 30 else (2 if variation_level < 70 else 3)
+        techniques = self._select_items(
+            style_rules.technique_keywords or ["rendered style"],
+            technique_count,
+            variation_level
+        )
+
+        # Select colors (3-5 depending on variation)
+        color_count = 3 if variation_level < 30 else (4 if variation_level < 70 else 5)
+        colors = self._select_items(
+            palette.color_descriptions or [],
+            color_count,
+            variation_level
+        )
+
+        # Select mood keywords (1-2)
+        mood_count = 1 if variation_level < 50 else 2
+        moods = self._select_items(
+            style_rules.mood_keywords or [],
+            mood_count,
+            variation_level
+        )
+
+        # Filter core invariants to remove subject-specific ones
+        style_invariants = []
+        subject_keywords = [
+            "cat", "dog", "person", "human", "animal", "bird", "fish",
+            "facing", "centered", "standing", "sitting", "lying",
+            "positioned", "placed", "located", "foreground", "background",
+            "subject", "figure", "character", "creature",
+            "left", "right", "front", "back", "side view"
+        ]
+        for invariant in style_profile.core_invariants:
+            if not any(keyword in invariant.lower() for keyword in subject_keywords):
+                style_invariants.append(invariant)
+
+        # Build style rules as a structured context
+        style_context = {
+            "technique_keywords": ", ".join(techniques),
+            "color_descriptions": ", ".join(colors),
+            "lighting": lighting.lighting_type or "ambient lighting",
+            "shadows": lighting.shadows or "",
+            "highlights": lighting.highlights or "",
+            "texture": texture.surface or "",
+            "noise_grain": texture.noise_level or "",
+            "special_effects": ", ".join(texture.special_effects) if texture.special_effects else "",
+            "line_quality": line_shape.line_quality or "",
+            "shape_language": line_shape.shape_language or "",
+            "composition_framing": composition.framing or "",
+            "camera_angle": composition.camera or "",
+            "mood": ", ".join(moods),
+            "core_invariants": "; ".join(style_invariants[:3]),
+            "emphasize": ", ".join(style_rules.emphasize[:3]) if style_rules.emphasize else "",
+            "always_include": ", ".join(style_rules.always_include[:3]) if style_rules.always_include else "",
+        }
+
+        # Build user message with subject and style rules
+        user_message = f"""**Subject:** {subject}
+
+**Style Rules:**
+- Technique: {style_context['technique_keywords']}
+- Colors: {style_context['color_descriptions']}
+- Lighting: {style_context['lighting']}"""
+
+        if style_context['shadows']:
+            user_message += f" with {style_context['shadows']}"
+        if style_context['highlights']:
+            user_message += f" and {style_context['highlights']}"
+
+        user_message += f"""
+- Texture: {style_context['texture']}"""
+
+        if style_context['special_effects']:
+            user_message += f", {style_context['special_effects']}"
+        if style_context['noise_grain']:
+            user_message += f", {style_context['noise_grain']}"
+
+        user_message += f"""
+- Line quality: {style_context['line_quality']}
+- Shape language: {style_context['shape_language']}
+- Composition: {style_context['composition_framing']}"""
+
+        if style_context['camera_angle']:
+            user_message += f", {style_context['camera_angle']}"
+
+        user_message += f"""
+- Mood: {style_context['mood']}"""
+
+        if style_context['core_invariants']:
+            user_message += f"""
+- Core invariants: {style_context['core_invariants']}"""
+
+        if style_context['emphasize']:
+            user_message += f"""
+- Emphasize: {style_context['emphasize']}"""
+
+        user_message += """
+
+**Your Response:**"""
+
+        # Call VLM with system prompt and user message
+        logger.info(f"Requesting creative style rewrite from VLM for subject: {subject[:50]}...")
+
+        try:
+            response = await vlm_service.generate_text(
+                prompt=user_message,
+                system=system_prompt,
+                use_text_model=True,  # Use faster text model since no images
+            )
+
+            # Clean up the response (remove any labels or meta-commentary)
+            styled_prompt = response.strip()
+
+            # Remove common prefixes if present
+            for prefix in ["Prompt:", "Output:", "Response:", "Result:"]:
+                if styled_prompt.startswith(prefix):
+                    styled_prompt = styled_prompt[len(prefix):].strip()
+
+            # Remove markdown code blocks if present
+            if styled_prompt.startswith("```"):
+                lines = styled_prompt.split("\n")
+                styled_prompt = "\n".join(lines[1:-1] if len(lines) > 2 else lines).strip()
+
+            logger.info(f"Creative rewrite completed: {len(styled_prompt)} chars")
+            return styled_prompt
+
+        except Exception as e:
+            logger.error(f"Creative rewrite failed: {e}")
+            # Fallback to mechanical assembly if LLM fails
+            logger.warning("Falling back to mechanical prompt assembly")
+            return None
+
+    def _mechanical_assembly(
         self,
         style_profile: StyleProfile,
         style_rules: StyleRules,
-        subject: str,
         additional_context: str | None = None,
-        include_negative: bool = True,
         variation_level: int = 0,
-    ) -> PromptWriteResponse:
+    ) -> str:
         """
-        Write a styled prompt from a subject and trained style.
+        Mechanical assembly of style traits into a prompt.
 
-        Constructs a natural-reading prompt with flowing prose that integrates
-        the subject with style metadata in human-readable format.
-
-        Args:
-            variation_level: 0-100, controls prompt variation
-                0 = Always same (deterministic)
-                50 = Moderate variation (shuffled keywords, varied phrasing)
-                100 = Maximum variation (random selection, different structures)
+        This is the fallback method when LLM-based creative rewriting fails.
+        Builds a prompt by sequentially listing style attributes.
         """
         palette = style_profile.palette
         lighting = style_profile.lighting
@@ -289,8 +440,6 @@ class PromptWriter:
 
         # === SENTENCE 7: Core Invariants (Important Style Anchors) ===
         # NOTE: Only include TRUE STYLE invariants, not subject-specific ones
-        # Subject-specific: "Black cat facing left", "Person standing centered"
-        # Style invariants: "Impressionistic style with bold brushstrokes"
         if style_profile.core_invariants and len(style_profile.core_invariants) > 0:
             # Filter to only style invariants (skip subject-specific ones)
             style_invariants = []
@@ -322,11 +471,7 @@ class PromptWriter:
                 if invariant_lower not in prompt_so_far:
                     sentences.append(invariant.capitalize())
 
-        # === SENTENCE 8: Additional Context ===
-        if additional_context and additional_context.strip():
-            sentences.append(additional_context.strip())
-
-        # === SENTENCE 9: Training Emphasis (What to emphasize) ===
+        # === SENTENCE 8: Training Emphasis (What to emphasize) ===
         # NOTE: Also filter out subject-specific emphasis items
         if style_rules.emphasize and len(style_rules.emphasize) > 0:
             # Filter out subject-specific emphasis items
@@ -357,7 +502,58 @@ class PromptWriter:
                         break
 
         # Join sentences with proper punctuation
-        positive_prompt = ". ".join(s.strip().rstrip('.') for s in sentences if s.strip()) + "."
+        return ". ".join(s.strip().rstrip('.') for s in sentences if s.strip()) + "."
+
+    async def write_prompt(
+        self,
+        style_profile: StyleProfile,
+        style_rules: StyleRules,
+        subject: str,
+        additional_context: str | None = None,
+        include_negative: bool = True,
+        variation_level: int = 0,
+    ) -> PromptWriteResponse:
+        """
+        Write a styled prompt from a subject and trained style.
+
+        Uses LLM-based creative rewriting to integrate style as constraints,
+        producing natural flowing prose instead of mechanical trait assembly.
+
+        Falls back to mechanical assembly if LLM call fails.
+
+        Args:
+            variation_level: 0-100, controls prompt variation
+                0 = Always same (deterministic)
+                50 = Moderate variation (shuffled keywords, varied phrasing)
+                100 = Maximum variation (random selection, different structures)
+        """
+        # Try creative LLM-based rewriting first
+        creative_prompt = await self._creative_rewrite(
+            subject=subject,
+            style_profile=style_profile,
+            style_rules=style_rules,
+            variation_level=variation_level,
+        )
+
+        # If creative rewrite succeeded, use it as the style prompt
+        if creative_prompt:
+            style_prompt_only = creative_prompt
+        else:
+            # Fallback to mechanical assembly
+            logger.warning("Using mechanical prompt assembly as fallback")
+            style_prompt_only = self._mechanical_assembly(
+                style_profile=style_profile,
+                style_rules=style_rules,
+                additional_context=additional_context,
+                variation_level=variation_level,
+            )
+
+        # Add additional context if provided
+        if additional_context and additional_context.strip():
+            style_prompt_only = f"{style_prompt_only} {additional_context.strip()}"
+
+        # Build full prompt with subject
+        positive_prompt = f"{subject.strip()}. {style_prompt_only}"
 
         # Build negative prompt
         negative_prompt = None
@@ -387,6 +583,11 @@ class PromptWriter:
             )
 
         # Build breakdown for transparency
+        palette = style_profile.palette
+        lighting = style_profile.lighting
+        texture = style_profile.texture
+        composition = style_profile.composition
+
         prompt_breakdown = {
             "subject": subject,
             "additional_context": additional_context,
@@ -417,8 +618,8 @@ class PromptWriter:
 
         return PromptWriteResponse(
             subject=subject,  # Subject returned separately
-            style_prompt=positive_prompt,  # Only style information
-            positive_prompt=f"{subject.strip()}. {positive_prompt}",  # Combined for convenience
+            style_prompt=style_prompt_only,  # Only style information (LLM-generated or mechanical)
+            positive_prompt=positive_prompt,  # Combined for convenience
             negative_prompt=negative_prompt,
             style_name=style_profile.style_name,
             prompt_breakdown=prompt_breakdown,

@@ -512,7 +512,7 @@ async def write_prompt(
     style_profile = StyleProfile(**style.style_profile_json)
     style_rules = StyleRules(**style.style_rules_json)
 
-    return prompt_writer.write_prompt(
+    return await prompt_writer.write_prompt(
         style_profile=style_profile,
         style_rules=style_rules,
         subject=data.subject,
@@ -543,7 +543,7 @@ async def write_and_generate(
     style_rules = StyleRules(**style.style_rules_json)
 
     # Write the prompt
-    prompt_result = prompt_writer.write_prompt(
+    prompt_result = await prompt_writer.write_prompt(
         style_profile=style_profile,
         style_rules=style_rules,
         subject=data.subject,
@@ -612,7 +612,7 @@ async def batch_write_prompts(
 
     results = []
     for subject in subjects:
-        prompt_result = prompt_writer.write_prompt(
+        prompt_result = await prompt_writer.write_prompt(
             style_profile=style_profile,
             style_rules=style_rules,
             subject=subject,
