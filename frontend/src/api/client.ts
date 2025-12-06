@@ -323,7 +323,8 @@ export async function writePrompt(
   styleId: string,
   subject: string,
   additionalContext?: string,
-  includeNegative: boolean = true
+  includeNegative: boolean = true,
+  variationLevel: number = 50
 ): Promise<PromptWriteResponse> {
   return fetchJson<PromptWriteResponse>(`${API_BASE}/styles/write-prompt`, {
     method: 'POST',
@@ -332,6 +333,7 @@ export async function writePrompt(
       subject,
       additional_context: additionalContext,
       include_negative: includeNegative,
+      variation_level: variationLevel,
     }),
   });
 }
@@ -339,7 +341,8 @@ export async function writePrompt(
 export async function writeAndGenerate(
   styleId: string,
   subject: string,
-  additionalContext?: string
+  additionalContext?: string,
+  variationLevel: number = 50
 ): Promise<PromptGenerateResponse> {
   return fetchJson<PromptGenerateResponse>(`${API_BASE}/styles/write-and-generate`, {
     method: 'POST',
@@ -348,6 +351,7 @@ export async function writeAndGenerate(
       style_id: styleId,
       subject,
       additional_context: additionalContext,
+      variation_level: variationLevel,
     }),
   });
 }

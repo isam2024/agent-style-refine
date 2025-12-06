@@ -518,6 +518,7 @@ async def write_prompt(
         subject=data.subject,
         additional_context=data.additional_context,
         include_negative=data.include_negative,
+        variation_level=data.variation_level,
     )
 
 
@@ -548,6 +549,7 @@ async def write_and_generate(
         subject=data.subject,
         additional_context=data.additional_context,
         include_negative=True,
+        variation_level=data.variation_level,
     )
 
     # Generate the image

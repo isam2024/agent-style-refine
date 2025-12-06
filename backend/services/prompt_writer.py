@@ -4,6 +4,7 @@ Prompt Writer Service
 Takes a trained style and a subject, produces a styled prompt ready for image generation.
 """
 import logging
+import random
 from pathlib import Path
 
 from backend.models.schemas import StyleProfile, StyleRules, PromptWriteResponse
@@ -15,6 +16,53 @@ class PromptWriter:
     def __init__(self):
         self.prompt_template_path = Path(__file__).parent.parent / "prompts" / "prompt_writer.md"
 
+    def _select_item(self, items: list, variation_level: int, index: int = 0):
+        """Select item from list with variation. Higher variation = more random."""
+        if not items:
+            return None
+        if variation_level == 0:
+            # Deterministic - always use specified index
+            return items[index] if index < len(items) else items[0]
+        elif variation_level < 50:
+            # Low variation - slight shuffle, prefer earlier items
+            if random.random() < (variation_level / 100):
+                return random.choice(items[:min(3, len(items))])
+            return items[index] if index < len(items) else items[0]
+        else:
+            # High variation - random selection from all items
+            return random.choice(items)
+
+    def _select_items(self, items: list, count: int, variation_level: int):
+        """Select multiple items with variation."""
+        if not items:
+            return []
+        if variation_level == 0:
+            # Deterministic - first N items
+            return items[:count]
+        elif variation_level < 50:
+            # Low variation - mostly first items, occasional shuffle
+            if random.random() < (variation_level / 100):
+                shuffled = items.copy()
+                random.shuffle(shuffled)
+                return shuffled[:count]
+            return items[:count]
+        else:
+            # High variation - random selection
+            available = items.copy()
+            random.shuffle(available)
+            return available[:min(count, len(available))]
+
+    def _vary_phrasing(self, options: list[str], variation_level: int) -> str:
+        """Choose from phrasing options based on variation level."""
+        if variation_level == 0 or not options:
+            return options[0] if options else ""
+        if variation_level < 50:
+            # Low variation - prefer first option
+            return options[0] if random.random() > 0.3 else random.choice(options)
+        else:
+            # High variation - random choice
+            return random.choice(options)
+
     def write_prompt(
         self,
         style_profile: StyleProfile,
@@ -22,12 +70,19 @@ class PromptWriter:
         subject: str,
         additional_context: str | None = None,
         include_negative: bool = True,
+        variation_level: int = 0,
     ) -> PromptWriteResponse:
         """
         Write a styled prompt from a subject and trained style.
 
         Constructs a natural-reading prompt with flowing prose that integrates
         the subject with style metadata in human-readable format.
+
+        Args:
+            variation_level: 0-100, controls prompt variation
+                0 = Always same (deterministic)
+                50 = Moderate variation (shuffled keywords, varied phrasing)
+                100 = Maximum variation (random selection, different structures)
         """
         palette = style_profile.palette
         lighting = style_profile.lighting
@@ -42,9 +97,17 @@ class PromptWriter:
         # === SENTENCE 1: Style Technique ===
         opening_parts = []
 
-        # Add primary technique
+        # Add primary technique - use variation to select
         if style_rules.technique_keywords and len(style_rules.technique_keywords) > 0:
-            opening_parts.append(f"Rendered in {style_rules.technique_keywords[0]}")
+            technique = self._select_item(style_rules.technique_keywords, variation_level, index=0)
+            # Vary phrasing
+            phrasing = self._vary_phrasing([
+                f"Rendered in {technique}",
+                f"Created in {technique}",
+                f"Styled as {technique}",
+                f"{technique.capitalize()}"
+            ], variation_level)
+            opening_parts.append(phrasing)
         elif texture.surface:
             # Fallback to texture description as technique
             opening_parts.append(f"Created with {texture.surface}")
@@ -58,16 +121,30 @@ class PromptWriter:
 
         # === SENTENCE 2: Color Palette ===
         if palette.color_descriptions and len(palette.color_descriptions) > 0:
-            colors = palette.color_descriptions[:4]
+            # Use variation to select colors (3-5 colors)
+            color_count = 4 if variation_level < 50 else random.randint(3, min(5, len(palette.color_descriptions)))
+            colors = self._select_items(palette.color_descriptions, color_count, variation_level)
 
-            # Build natural color description
+            # Build natural color description with varied phrasing
             if len(colors) == 1:
-                color_desc = f"The color palette features {colors[0]}"
+                color_desc = self._vary_phrasing([
+                    f"The color palette features {colors[0]}",
+                    f"Dominated by {colors[0]} tones",
+                    f"Features {colors[0]}"
+                ], variation_level)
             elif len(colors) == 2:
-                color_desc = f"The scene features {colors[0]} and {colors[1]} tones"
+                color_desc = self._vary_phrasing([
+                    f"The scene features {colors[0]} and {colors[1]} tones",
+                    f"Combines {colors[0]} with {colors[1]}",
+                    f"Features {colors[0]} and {colors[1]} hues"
+                ], variation_level)
             elif len(colors) >= 3:
                 main_colors = ", ".join(colors[:-1])
-                color_desc = f"The composition uses {main_colors}, and {colors[-1]} tones"
+                color_desc = self._vary_phrasing([
+                    f"The composition uses {main_colors}, and {colors[-1]} tones",
+                    f"Features a palette of {main_colors}, and {colors[-1]}",
+                    f"Combines {main_colors} with {colors[-1]} accents"
+                ], variation_level)
 
             # Add accent colors if available
             if palette.accents and len(palette.accents) > 0:
@@ -117,13 +194,23 @@ class PromptWriter:
             else:
                 lighting_parts.append(f"The scene features {highlights}")
 
-        # Add mood keywords
+        # Add mood keywords - use variation to select
         if style_rules.mood_keywords and len(style_rules.mood_keywords) > 0:
-            mood = style_rules.mood_keywords[0]
+            mood = self._select_item(style_rules.mood_keywords, variation_level, index=0)
             if lighting_parts:
-                lighting_parts.append(f"creating {mood}")
+                mood_phrase = self._vary_phrasing([
+                    f"creating {mood}",
+                    f"evoking {mood}",
+                    f"with {mood}"
+                ], variation_level)
+                lighting_parts.append(mood_phrase)
             else:
-                lighting_parts.append(f"The atmosphere features {mood}")
+                mood_phrase = self._vary_phrasing([
+                    f"The atmosphere features {mood}",
+                    f"Atmosphere: {mood}",
+                    f"{mood.capitalize()} mood"
+                ], variation_level)
+                lighting_parts.append(mood_phrase)
 
         if lighting_parts:
             sentences.append(", ".join(lighting_parts))

@@ -19,6 +19,7 @@ function PromptWriter() {
   const [subject, setSubject] = useState('')
   const [additionalContext, setAdditionalContext] = useState('')
   const [includeNegative, setIncludeNegative] = useState(true)
+  const [variationLevel, setVariationLevel] = useState(50)
   const [result, setResult] = useState<PromptWriteResponse | null>(null)
   const [generatedImage, setGeneratedImage] = useState<string | null>(null)
   const [copyFeedback, setCopyFeedback] = useState<string | null>(null)
@@ -41,10 +42,10 @@ function PromptWriter() {
     enabled: !!selectedStyleId,
   })
 
-  // Fetch style breakdown when style is selected
+  // Fetch style breakdown when style is selected (use deterministic variation for preview)
   const { data: styleBreakdown } = useQuery({
     queryKey: ['style-breakdown', selectedStyleId],
-    queryFn: () => writePrompt(selectedStyleId!, 'preview', undefined, false),
+    queryFn: () => writePrompt(selectedStyleId!, 'preview', undefined, false, 0),
     enabled: !!selectedStyleId,
   })
 
@@ -54,7 +55,8 @@ function PromptWriter() {
         selectedStyleId!,
         subject,
         additionalContext || undefined,
-        includeNegative
+        includeNegative,
+        variationLevel
       ),
     onSuccess: (data) => {
       setResult(data)
@@ -67,7 +69,8 @@ function PromptWriter() {
       writeAndGenerate(
         selectedStyleId!,
         subject,
-        additionalContext || undefined
+        additionalContext || undefined,
+        variationLevel
       ),
     onSuccess: (data: PromptGenerateResponse) => {
       setResult({
@@ -197,6 +200,34 @@ function PromptWriter() {
                 Include negative prompt
               </span>
             </label>
+
+            <div className="mt-4">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-sm font-medium text-slate-700">
+                  Variation Level
+                </label>
+                <span className="text-xs text-slate-500">
+                  {variationLevel === 0 && 'Deterministic'}
+                  {variationLevel > 0 && variationLevel < 30 && 'Low'}
+                  {variationLevel >= 30 && variationLevel < 70 && 'Moderate'}
+                  {variationLevel >= 70 && 'High'}
+                  {' '}({variationLevel})
+                </span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                step="10"
+                value={variationLevel}
+                onChange={(e) => setVariationLevel(parseInt(e.target.value))}
+                className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-green-600"
+              />
+              <div className="flex justify-between text-xs text-slate-400 mt-1">
+                <span>Same every time</span>
+                <span>Random & varied</span>
+              </div>
+            </div>
 
             <div className="flex gap-2 mt-4">
               <button

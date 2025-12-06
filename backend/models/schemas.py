@@ -294,6 +294,12 @@ class PromptWriteRequest(BaseModel):
         default=True,
         description="Whether to include negative prompt"
     )
+    variation_level: int = Field(
+        default=50,
+        ge=0,
+        le=100,
+        description="Prompt variation: 0=deterministic, 50=moderate, 100=maximum"
+    )
 
 
 class PromptWriteResponse(BaseModel):
@@ -315,6 +321,12 @@ class PromptGenerateRequest(BaseModel):
     style_id: str
     subject: str
     additional_context: str | None = None
+    variation_level: int = Field(
+        default=50,
+        ge=0,
+        le=100,
+        description="Prompt variation: 0=deterministic, 50=moderate, 100=maximum"
+    )
 
 
 class PromptGenerateResponse(BaseModel):
