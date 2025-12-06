@@ -112,6 +112,11 @@ IMPORTANT:
         )
 
         await log(f"VLM response received ({len(response)} chars)")
+
+        # DEBUG: Log first part of VLM response to see what we're getting
+        response_preview = response[:500] if len(response) > 500 else response
+        await log(f"VLM response preview: {response_preview}", "warning")
+
         await log("Parsing style profile from VLM response...")
 
         # Parse JSON from response
@@ -233,6 +238,7 @@ IMPORTANT:
 
         # Fallback: Parse markdown-style response
         logger.warning("JSON parsing failed, attempting markdown fallback parse")
+        logger.warning(f"Failed to parse JSON from response: {response[:200]}")
         return self._parse_markdown_fallback(response)
 
     def _parse_markdown_fallback(self, response: str) -> dict:
