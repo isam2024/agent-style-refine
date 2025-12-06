@@ -223,6 +223,14 @@ IMPORTANT:
                     updated_profile["composition"]["structural_notes"] = ", ".join(structural_notes) if structural_notes else ""
                     await log(f"Fixed structural_notes type: list -> string", "warning")
 
+            # Fix special_effects: should be list, not string
+            if "texture" in updated_profile:
+                special_effects = updated_profile["texture"].get("special_effects", [])
+                if isinstance(special_effects, str):
+                    # Convert string to list (split on comma if has commas, otherwise empty list if empty string)
+                    updated_profile["texture"]["special_effects"] = [e.strip() for e in special_effects.split(",") if e.strip()] if special_effects else []
+                    await log(f"Fixed special_effects type: string -> list", "warning")
+
             result_dict["updated_style_profile"] = updated_profile
         except Exception as e:
             await log(f"Warning: Failed to fix VLM type mismatches: {e}", "warning")

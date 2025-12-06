@@ -155,3 +155,31 @@ async def delete_session(
     await db.commit()
 
     return {"status": "deleted", "session_id": session_id}
+
+
+@router.delete("/")
+async def delete_all_sessions(db: AsyncSession = Depends(get_db)):
+    """Delete ALL sessions and their files. Use with caution!"""
+    # Get all sessions
+    result = await db.execute(select(Session))
+    sessions = result.scalars().all()
+
+    deleted_count = 0
+    for session in sessions:
+        try:
+            # Delete files
+            storage_service.delete_session(session.id)
+            # Delete from database
+            await db.delete(session)
+            deleted_count += 1
+        except Exception as e:
+            # Continue even if one fails
+            print(f"Failed to delete session {session.id}: {e}")
+
+    await db.commit()
+
+    return {
+        "status": "deleted",
+        "count": deleted_count,
+        "message": f"Deleted {deleted_count} sessions and their files"
+    }

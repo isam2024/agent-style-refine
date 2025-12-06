@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { listSessions, createSession, deleteSession } from '../api/client'
+import { listSessions, createSession, deleteSession, deleteAllSessions } from '../api/client'
 import ImageUpload from '../components/ImageUpload'
 import SessionList from '../components/SessionList'
 
@@ -33,6 +33,19 @@ function Home() {
     },
   })
 
+  const deleteAllMutation = useMutation({
+    mutationFn: deleteAllSessions,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['sessions'] })
+    },
+  })
+
+  const handleDeleteAll = () => {
+    if (window.confirm('⚠️ Are you sure? This will permanently delete ALL sessions and their files. This cannot be undone!')) {
+      deleteAllMutation.mutate()
+    }
+  }
+
   const handleCreate = () => {
     if (!newSessionName.trim() || !uploadedImage) return
     createMutation.mutate({ name: newSessionName.trim(), imageB64: uploadedImage })
@@ -48,12 +61,23 @@ function Home() {
             Upload an image to extract and refine its visual style
           </p>
         </div>
-        <button
-          onClick={() => setShowCreate(true)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-        >
-          New Session
-        </button>
+        <div className="flex gap-2">
+          {sessions && sessions.length > 0 && (
+            <button
+              onClick={handleDeleteAll}
+              disabled={deleteAllMutation.isPending}
+              className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+            >
+              {deleteAllMutation.isPending ? 'Deleting...' : 'Clear All'}
+            </button>
+          )}
+          <button
+            onClick={() => setShowCreate(true)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          >
+            New Session
+          </button>
+        </div>
       </div>
 
       {/* Create Modal */}

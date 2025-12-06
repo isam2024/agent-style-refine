@@ -463,6 +463,30 @@ async def update_style(
     )
 
 
+@router.delete("/bulk/all")
+async def delete_all_styles(db: AsyncSession = Depends(get_db)):
+    """Delete ALL trained styles. Use with caution!"""
+    # Get all styles
+    result = await db.execute(select(TrainedStyle))
+    styles = result.scalars().all()
+
+    deleted_count = 0
+    for style in styles:
+        try:
+            await db.delete(style)
+            deleted_count += 1
+        except Exception as e:
+            print(f"Failed to delete style {style.id}: {e}")
+
+    await db.commit()
+
+    return {
+        "status": "deleted",
+        "count": deleted_count,
+        "message": f"Deleted {deleted_count} trained styles"
+    }
+
+
 # ============================================================
 # Prompt Writer Endpoints
 # ============================================================

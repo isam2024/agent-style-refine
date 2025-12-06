@@ -78,6 +78,10 @@ export async function deleteSession(sessionId: string): Promise<void> {
   await fetchJson(`${API_BASE}/sessions/${sessionId}`, { method: 'DELETE' });
 }
 
+export async function deleteAllSessions(): Promise<{ count: number; message: string }> {
+  return fetchJson(`${API_BASE}/sessions/`, { method: 'DELETE' });
+}
+
 // Extraction
 export async function extractStyle(sessionId: string): Promise<StyleProfile> {
   return fetchJson<StyleProfile>(`${API_BASE}/extract/`, {
@@ -297,6 +301,10 @@ export async function finalizeStyle(
 
 export async function deleteStyle(styleId: string): Promise<void> {
   await fetchJson(`${API_BASE}/styles/${styleId}`, { method: 'DELETE' });
+}
+
+export async function deleteAllStyles(): Promise<{ count: number; message: string }> {
+  return fetchJson(`${API_BASE}/styles/bulk/all`, { method: 'DELETE' });
 }
 
 export async function reextractStyle(sessionId: string): Promise<StyleProfile> {

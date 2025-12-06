@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
-import { listStyles, deleteStyle, regenerateThumbnail } from '../api/client'
+import { listStyles, deleteStyle, deleteAllStyles, regenerateThumbnail } from '../api/client'
 import { TrainedStyleSummary } from '../types'
 
 function StyleLibrary() {
@@ -27,6 +27,13 @@ function StyleLibrary() {
     },
   })
 
+  const deleteAllMutation = useMutation({
+    mutationFn: deleteAllStyles,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['styles'] })
+    },
+  })
+
   // Collect all unique tags
   const allTags = Array.from(
     new Set(styles?.flatMap((s) => s.tags) || [])
@@ -42,6 +49,12 @@ function StyleLibrary() {
     regenerateThumbnailMutation.mutate(style.id)
   }
 
+  const handleDeleteAll = () => {
+    if (window.confirm('⚠️ Are you sure? This will permanently delete ALL trained styles. This cannot be undone!')) {
+      deleteAllMutation.mutate()
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -51,6 +64,15 @@ function StyleLibrary() {
             Trained styles ready for prompt writing
           </p>
         </div>
+        {styles && styles.length > 0 && (
+          <button
+            onClick={handleDeleteAll}
+            disabled={deleteAllMutation.isPending}
+            className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 transition-colors"
+          >
+            {deleteAllMutation.isPending ? 'Deleting...' : 'Clear All Styles'}
+          </button>
+        )}
       </div>
 
       {/* Tag Filter */}
