@@ -254,6 +254,59 @@ async def finalize_style(
     return await _create_style_snapshot(data, db, is_checkpoint=False)
 
 
+def sanitize_style_profile(profile: StyleProfile) -> StyleProfile:
+    """
+    Remove subject-specific information from a style profile.
+
+    This ensures that finalized styles contain ONLY style metadata,
+    not references to the training subject (e.g., "lion", "cat").
+    """
+    # Create a copy to avoid modifying original
+    profile_dict = profile.model_dump()
+
+    # Remove subject-specific fields
+    profile_dict["original_subject"] = None
+    profile_dict["suggested_test_prompt"] = None
+    profile_dict["image_description"] = None
+
+    # Filter subject-specific terms from core_invariants
+    subject_keywords = [
+        "cat", "dog", "lion", "tiger", "bear", "wolf", "fox", "rabbit", "deer",
+        "person", "human", "woman", "man", "child", "baby", "face", "portrait",
+        "animal", "bird", "fish", "creature", "dragon", "monster",
+        "tree", "forest", "mountain", "ocean", "sky", "cloud", "sun", "moon",
+        "car", "vehicle", "building", "house", "city", "landscape",
+        "facing", "centered", "standing", "sitting", "lying", "walking", "running",
+        "positioned", "placed", "located", "foreground", "background", "middle ground",
+        "subject", "figure", "character", "main", "central",
+        "left", "right", "front", "back", "side view", "profile",
+        "expression", "eyes", "gaze", "look", "stare", "mouth", "nose"
+    ]
+
+    filtered_invariants = []
+    for invariant in profile_dict.get("core_invariants", []):
+        invariant_lower = invariant.lower()
+        # Check if it contains any subject-specific keywords
+        is_subject_specific = any(keyword in invariant_lower for keyword in subject_keywords)
+        if not is_subject_specific:
+            filtered_invariants.append(invariant)
+
+    profile_dict["core_invariants"] = filtered_invariants
+
+    # Also filter composition.structural_notes which may contain subject positioning
+    if "composition" in profile_dict and profile_dict["composition"]:
+        structural_notes = profile_dict["composition"].get("structural_notes", "")
+        if structural_notes:
+            # Check if structural notes are subject-specific
+            notes_lower = structural_notes.lower()
+            is_subject_specific = any(keyword in notes_lower for keyword in subject_keywords)
+            if is_subject_specific:
+                # Clear subject-specific structural notes
+                profile_dict["composition"]["structural_notes"] = ""
+
+    return StyleProfile(**profile_dict)
+
+
 async def _create_style_snapshot(
     data: TrainedStyleCreate,
     db: AsyncSession,
@@ -282,7 +335,10 @@ async def _create_style_snapshot(
 
     # Get the latest style profile
     latest_profile_db = max(session.style_profiles, key=lambda p: p.version)
-    style_profile = StyleProfile(**latest_profile_db.profile_json)
+    style_profile_raw = StyleProfile(**latest_profile_db.profile_json)
+
+    # Sanitize: remove subject-specific information
+    style_profile = sanitize_style_profile(style_profile_raw)
 
     # Gather FULL iteration history with critique data
     iteration_history = []
