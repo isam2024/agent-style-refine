@@ -1,5 +1,6 @@
 import logging
 import traceback
+import asyncio
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -651,6 +652,21 @@ async def run_auto_improve(
                 feedback_history.append(entry)
 
         try:
+            # Check if stop was requested before starting iteration
+            if _stop_requests.get(session_id, False):
+                await log(f"Training stopped by user before iteration {iteration_num}", "warning", "stop")
+                _stop_requests.pop(session_id, None)
+                session.status = SessionStatus.READY.value
+                await db.commit()
+                await manager.broadcast_complete(session_id, {"stopped": True, "message": "Training stopped by user"})
+                return {
+                    "iterations_run": len(results),
+                    "results": results,
+                    "final_score": results[-1].get("overall_score") if results else None,
+                    "stopped_by_user": True,
+                    "message": f"Training stopped by user before iteration {iteration_num}",
+                }
+
             # Run focused iteration
             session.status = SessionStatus.GENERATING.value
             await db.commit()
@@ -1008,6 +1024,21 @@ async def run_auto_improve(
             else:
                 # Rejected iteration - continue trying
                 await log(f"Continuing (iteration rejected, need improvement)", "info", "decision")
+
+        except asyncio.CancelledError:
+            # User cancelled via stop button - clean exit
+            await log(f"Training cancelled by user during iteration {iteration_num}", "warning", "stop")
+            _stop_requests.pop(session_id, None)
+            session.status = SessionStatus.READY.value
+            await db.commit()
+            await manager.broadcast_complete(session_id, {"stopped": True, "message": "Training cancelled by user"})
+            return {
+                "iterations_run": len(results),
+                "results": results,
+                "final_score": results[-1].get("overall_score") if results else None,
+                "stopped_by_user": True,
+                "message": f"Training cancelled by user during iteration {iteration_num}",
+            }
 
         except Exception as e:
             error_msg = str(e)
