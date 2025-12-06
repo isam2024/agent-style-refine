@@ -15,8 +15,12 @@ class Settings(BaseSettings):
     database_url: str = "sqlite+aiosqlite:///./refine_agent.db"
 
     # Vision model for image analysis (extraction, critique)
-    # Options: llama3.2-vision:11b (slow but accurate), moondream (fast, 1.8b), llava:7b
-    vlm_model: str = "moondream"
+    # Options:
+    #   - blaifa/InternVL3:8b-Q4_K_M (8b quantized, good balance)
+    #   - llama3.2-vision:11b (slow but accurate)
+    #   - moondream (fast, 1.8b)
+    #   - llava:7b
+    vlm_model: str = "blaifa/InternVL3:8b-Q4_K_M"
     # Text model for prompt generation (faster, no vision needed)
     text_model: str = "llama3.2:3b"
 
