@@ -30,6 +30,7 @@ from backend.models.schemas import (
 from backend.services.storage import storage_service
 from backend.services.prompt_writer import prompt_writer
 from backend.services.comfyui import comfyui_service
+from backend.services.abstractor import style_abstractor
 
 router = APIRouter(prefix="/api/styles", tags=["styles"])
 logger = logging.getLogger(__name__)
@@ -432,8 +433,9 @@ async def _create_style_snapshot(
     latest_profile_db = max(session.style_profiles, key=lambda p: p.version)
     style_profile_raw = StyleProfile(**latest_profile_db.profile_json)
 
-    # Sanitize: remove subject-specific information from profile
-    style_profile = sanitize_style_profile(style_profile_raw)
+    # Abstract: use VLM to convert subject-specific descriptions to generic style rules
+    logger.info(f"[finalize] Abstracting style profile to remove subject references...")
+    style_profile = await style_abstractor.abstract_style_profile(style_profile_raw)
 
     # Gather FULL iteration history with critique data
     iteration_history = []
