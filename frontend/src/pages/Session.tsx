@@ -72,6 +72,28 @@ function Session() {
     }
   }, [session?.style_profile?.profile?.suggested_test_prompt])
 
+  // Restore activeStep from session status (when navigating back to running session)
+  useEffect(() => {
+    if (session?.status) {
+      const statusToStep: Record<string, string | null> = {
+        extracting: 'extracting',
+        generating: 'generating',
+        critiquing: 'critiquing',
+        auto_improving: 'auto-improving',
+        ready: null,
+        created: null,
+        completed: null,
+        error: null,
+      }
+      const step = statusToStep[session.status]
+      if (step && step !== activeStep) {
+        setActiveStep(step)
+      } else if (!step && activeStep) {
+        setActiveStep(null)
+      }
+    }
+  }, [session?.status])
+
   const extractMutation = useMutation({
     mutationFn: () => extractStyle(sessionId!),
     onMutate: () => setActiveStep('extracting'),
@@ -273,6 +295,10 @@ function Session() {
       <LogWindow
         sessionId={sessionId!}
         isActive={!!activeStep}
+        onComplete={() => {
+          // Force immediate refresh when operation completes to show final iteration
+          queryClient.invalidateQueries({ queryKey: ['session', sessionId] })
+        }}
       />
 
       {/* Main Content */}

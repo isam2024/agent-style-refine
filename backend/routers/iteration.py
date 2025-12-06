@@ -454,6 +454,10 @@ async def run_auto_improve(
         await log("Session not found", "error")
         raise HTTPException(status_code=404, detail="Session not found")
 
+    # Set status to AUTO_IMPROVING so frontend knows this is running
+    session.status = SessionStatus.AUTO_IMPROVING.value
+    await db.commit()
+
     if not session.style_profiles:
         await log("No style profile found - extract style first", "error")
         raise HTTPException(status_code=400, detail="No style profile found")

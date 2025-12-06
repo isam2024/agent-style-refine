@@ -18,9 +18,10 @@ interface LogWindowProps {
   sessionId: string
   isActive: boolean
   onClose?: () => void
+  onComplete?: () => void
 }
 
-function LogWindow({ sessionId, isActive, onClose }: LogWindowProps) {
+function LogWindow({ sessionId, isActive, onClose, onComplete }: LogWindowProps) {
   const [logs, setLogs] = useState<LogEntry[]>([])
   const [progress, setProgress] = useState<ProgressState | null>(null)
   const [connected, setConnected] = useState(false)
@@ -44,6 +45,10 @@ function LogWindow({ sessionId, isActive, onClose }: LogWindowProps) {
     ws.onopen = () => {
       setConnected(true)
       addLog('Connected to server', 'info')
+      // Check if we're reconnecting to an already-running operation
+      if (logs.length === 0) {
+        addLog('Note: If operation was already running, some previous logs may be missing', 'warning')
+      }
     }
 
     ws.onmessage = (event) => {
@@ -67,6 +72,10 @@ function LogWindow({ sessionId, isActive, onClose }: LogWindowProps) {
         } else if (data.event === 'complete') {
           addLog('Operation completed', 'success')
           setProgress(null)
+          // Trigger final data refresh in parent component
+          if (onComplete) {
+            onComplete()
+          }
         }
       } catch (e) {
         console.error('Failed to parse WebSocket message:', e)

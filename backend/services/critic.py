@@ -202,6 +202,31 @@ IMPORTANT:
                 await log(f"Failed to update palette in critique result: {e}", "warning")
 
         await log("Building critique result...")
+
+        # Fix VLM type mismatches before validation
+        # Sometimes VLM returns lists instead of strings for certain fields
+        try:
+            updated_profile = result_dict.get("updated_style_profile", {})
+
+            # Fix geometry_notes: should be string, not list
+            if "line_and_shape" in updated_profile:
+                geometry_notes = updated_profile["line_and_shape"].get("geometry_notes", "")
+                if isinstance(geometry_notes, list):
+                    # Convert list to string (join if multiple items, empty string if empty)
+                    updated_profile["line_and_shape"]["geometry_notes"] = ", ".join(geometry_notes) if geometry_notes else ""
+                    await log(f"Fixed geometry_notes type: list -> string", "warning")
+
+            # Fix structural_notes: should be string, not list
+            if "composition" in updated_profile:
+                structural_notes = updated_profile["composition"].get("structural_notes", "")
+                if isinstance(structural_notes, list):
+                    updated_profile["composition"]["structural_notes"] = ", ".join(structural_notes) if structural_notes else ""
+                    await log(f"Fixed structural_notes type: list -> string", "warning")
+
+            result_dict["updated_style_profile"] = updated_profile
+        except Exception as e:
+            await log(f"Warning: Failed to fix VLM type mismatches: {e}", "warning")
+
         try:
             critique_result = CritiqueResult(**result_dict)
             await log("Critique result created successfully", "success")

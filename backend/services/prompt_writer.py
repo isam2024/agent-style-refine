@@ -94,13 +94,28 @@ class PromptWriter:
         lighting_parts = []
 
         if lighting.lighting_type:
-            lighting_parts.append(f"The scene is illuminated by {lighting.lighting_type}")
+            # Check if lighting_type is a full phrase or just a word
+            lighting_type = lighting.lighting_type.strip()
+            if len(lighting_type.split()) == 1:
+                # Single word like "subtle" - needs context
+                lighting_parts.append(f"The scene features {lighting_type} lighting")
+            else:
+                # Full phrase like "soft ambient lighting"
+                lighting_parts.append(f"The scene is illuminated by {lighting_type}")
 
         if lighting.shadows:
-            lighting_parts.append(f"with {lighting.shadows}")
+            shadows = lighting.shadows.strip()
+            if lighting_parts:
+                lighting_parts.append(f"with {shadows}")
+            else:
+                lighting_parts.append(f"The scene features {shadows}")
 
         if lighting.highlights:
-            lighting_parts.append(f"and {lighting.highlights}")
+            highlights = lighting.highlights.strip()
+            if lighting_parts:
+                lighting_parts.append(f"and {highlights}")
+            else:
+                lighting_parts.append(f"The scene features {highlights}")
 
         # Add mood keywords
         if style_rules.mood_keywords and len(style_rules.mood_keywords) > 0:
@@ -186,9 +201,34 @@ class PromptWriter:
             sentences.append(" ".join(comp_parts))
 
         # === SENTENCE 7: Core Invariants (Important Style Anchors) ===
+        # NOTE: Only include TRUE STYLE invariants, not subject-specific ones
+        # Subject-specific: "Black cat facing left", "Person standing centered"
+        # Style invariants: "Impressionistic style with bold brushstrokes"
         if style_profile.core_invariants and len(style_profile.core_invariants) > 0:
-            # Add up to 2 most important invariants
-            for invariant in style_profile.core_invariants[:2]:
+            # Filter to only style invariants (skip subject-specific ones)
+            style_invariants = []
+
+            # Keywords that indicate subject-specific descriptions (not style)
+            subject_keywords = [
+                "cat", "dog", "person", "human", "animal", "bird", "fish",
+                "facing", "centered", "standing", "sitting", "lying",
+                "positioned", "placed", "located", "foreground", "background",
+                "subject", "figure", "character", "creature",
+                "left", "right", "front", "back", "side view"
+            ]
+
+            for invariant in style_profile.core_invariants:
+                invariant_lower = invariant.lower()
+
+                # Check if it's subject-specific
+                is_subject_specific = any(keyword in invariant_lower for keyword in subject_keywords)
+
+                if not is_subject_specific:
+                    # This is a true style invariant
+                    style_invariants.append(invariant)
+
+            # Add up to 2 style invariants (not subject-specific)
+            for invariant in style_invariants[:2]:
                 # Skip if already mentioned
                 invariant_lower = invariant.lower()
                 prompt_so_far = " ".join(sentences).lower()
@@ -200,12 +240,34 @@ class PromptWriter:
             sentences.append(additional_context.strip())
 
         # === SENTENCE 9: Training Emphasis (What to emphasize) ===
+        # NOTE: Also filter out subject-specific emphasis items
         if style_rules.emphasize and len(style_rules.emphasize) > 0:
-            # Add 1-2 top emphasis items that aren't already mentioned
+            # Filter out subject-specific emphasis items
+            subject_keywords = [
+                "cat", "dog", "person", "human", "animal", "bird", "fish",
+                "facing", "centered", "standing", "sitting", "lying",
+                "positioned", "placed", "located", "foreground", "background",
+                "subject", "figure", "character", "creature",
+                "left", "right", "front", "back", "side view",
+                "expression", "face", "eyes", "gaze", "look"
+            ]
+
+            # Add 1-2 top emphasis items that aren't already mentioned AND aren't subject-specific
             prompt_so_far_lower = " ".join(sentences).lower()
-            for emphasis in style_rules.emphasize[:2]:
-                if emphasis.lower() not in prompt_so_far_lower:
+            for emphasis in style_rules.emphasize[:5]:  # Check more since we're filtering
+                emphasis_lower = emphasis.lower()
+
+                # Skip if subject-specific
+                is_subject_specific = any(keyword in emphasis_lower for keyword in subject_keywords)
+                if is_subject_specific:
+                    continue
+
+                # Skip if already mentioned
+                if emphasis_lower not in prompt_so_far_lower:
                     sentences.append(emphasis.capitalize())
+                    # Only add up to 2 emphasis items
+                    if len([s for s in sentences if s.lower() in [e.lower() for e in style_rules.emphasize]]) >= 2:
+                        break
 
         # Join sentences with proper punctuation
         positive_prompt = ". ".join(s.strip().rstrip('.') for s in sentences if s.strip()) + "."
@@ -510,11 +572,16 @@ class PromptWriter:
             other_lost = [trait for trait in all_lost_traits if trait not in frequent_lost]
             emphasize.extend(other_lost[:3])
 
-            # Add approved feedback notes
-            emphasize.extend(approved_notes[:2])
+            # Add approved feedback notes (skip if they're system messages)
+            for note in approved_notes[:2]:
+                # Only add if it's a user note, not a system message
+                if not note.startswith(("PASS", "FAIL", "Weighted")):
+                    emphasize.append(note)
 
-            # De-emphasize: rejected notes
-            de_emphasize.extend(rejected_notes[:3])
+            # De-emphasize: Don't include rejected notes (they're system messages)
+            # Instead, rely on lost_traits which are actual visual elements
+            # rejected_notes contain things like "FAIL: Weighted Δ=-54.0..." which are debug info
+            pass  # Intentionally not adding rejected_notes to de_emphasize
 
             # Identify consistently weak dimensions
             weak_dims = []

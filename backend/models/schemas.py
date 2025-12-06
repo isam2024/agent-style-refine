@@ -14,6 +14,7 @@ class SessionStatus(str, Enum):
     READY = "ready"
     GENERATING = "generating"
     CRITIQUING = "critiquing"
+    AUTO_IMPROVING = "auto_improving"
     COMPLETED = "completed"
     ERROR = "error"
 

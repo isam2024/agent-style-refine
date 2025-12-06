@@ -234,7 +234,7 @@ function PromptWriter() {
                 Generated Image
               </h3>
               <img
-                src={generatedImage}
+                src={`data:image/png;base64,${generatedImage}`}
                 alt="Generated"
                 className="w-full rounded-lg"
               />
