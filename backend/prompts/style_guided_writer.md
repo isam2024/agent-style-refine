@@ -71,13 +71,19 @@ A slumbering fox nestled in soft, flowing watercolor washes beneath arching bran
 
 ## Output Format
 
-Return ONLY the styled prompt as a single flowing passage. Do NOT include:
-- Explanations
-- Labels like "Prompt:" or "Output:"
-- Separate sections for different traits
-- Meta-commentary
+**CRITICAL: Return ONLY the styled prompt itself. Nothing else.**
 
-Just the prompt itself, ready to send to an image generator.
+Do NOT include:
+- Introductory phrases like "Here's a rewritten prompt:" or "Here is the rewrite:"
+- Explanations of what you did
+- Labels like "Prompt:" or "Output:"
+- Markdown code blocks (```...```)
+- Separate sections for different traits
+- Meta-commentary about your approach
+- Lists explaining the rewrite (e.g., "In this rewritten prompt:")
+- Notes about style rules you followed
+
+Just output the prompt itself as a single flowing passage, ready to send directly to an image generator.
 
 ## Example Task
 
@@ -91,11 +97,31 @@ Just the prompt itself, ready to send to an image generator.
 - Shape language: geometric shapes, angular forms
 - Mood: cinematic, intense
 
-**Your Response:**
+**CORRECT Response:**
 ```
 A mountain landscape at sunset rendered in bold geometric abstraction, jagged angular peaks slicing across a sky of vibrant orange and deep purple gradients, electric blue highlights catching the sharp ridgelines where dramatic light creates stark contrasts, deep shadows carving the terrain into crisp geometric planes, the entire scene outlined in bold strokes with a grainy, cinematic quality that intensifies the raw power of the forms
 ```
 
-Notice how the style SHAPES the description - the mountains become "jagged angular peaks", the sunset becomes "vibrant orange and deep purple gradients", the lighting "creates stark contrasts" - the style isn't listed, it's EMBODIED.
+**INCORRECT Response (DO NOT DO THIS):**
+```
+Here's a rewritten prompt:
+
+```
+A mountain landscape at sunset rendered in bold geometric abstraction...
+```
+
+In this rewritten prompt:
+- I aimed to integrate the style rules into a cohesive description
+- The geometric shapes were emphasized through angular language
+- I avoided organic forms as specified
+```
+
+Notice how the CORRECT response:
+- Has NO introductory phrase
+- Contains NO markdown code blocks
+- Has NO meta-commentary
+- Just the prompt itself, ready to use
+
+The style SHAPES the description - the mountains become "jagged angular peaks", the sunset becomes "vibrant orange and deep purple gradients", the lighting "creates stark contrasts" - the style isn't listed, it's EMBODIED.
 
 Now apply this approach to rewrite the user's subject using their style rules.

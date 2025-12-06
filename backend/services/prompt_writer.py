@@ -203,15 +203,52 @@ class PromptWriter:
             # Clean up the response (remove any labels or meta-commentary)
             styled_prompt = response.strip()
 
-            # Remove common prefixes if present
+            # 1. Remove introductory phrases
+            intro_phrases = [
+                "Here's a rewritten prompt:",
+                "Here is a rewritten prompt:",
+                "Rewritten prompt:",
+                "Here's the rewrite:",
+                "Here is the rewrite:",
+                "Prompt:",
+                "Output:",
+                "Response:",
+                "Result:",
+            ]
+            for phrase in intro_phrases:
+                if styled_prompt.lower().startswith(phrase.lower()):
+                    styled_prompt = styled_prompt[len(phrase):].strip()
+                    break
+
+            # 2. Extract content from markdown code blocks if present
+            import re
+            # Match code blocks: ```...``` or ```language\n...\n```
+            code_block_pattern = r'```(?:\w+)?\s*\n?(.*?)\n?```'
+            code_blocks = re.findall(code_block_pattern, styled_prompt, re.DOTALL)
+            if code_blocks:
+                # Use the first code block content
+                styled_prompt = code_blocks[0].strip()
+
+            # 3. Remove meta-commentary sections at the end
+            # These typically start with phrases like "In this rewritten prompt:", "Note:", etc.
+            meta_markers = [
+                "\n\nIn this rewritten prompt:",
+                "\n\nIn this rewrite:",
+                "\n\nNote:",
+                "\n\nThis prompt:",
+                "\n\nI aimed to",
+                "\n\nI've",
+                "\n\n-",  # Lists explaining the rewrite
+            ]
+            for marker in meta_markers:
+                if marker in styled_prompt:
+                    styled_prompt = styled_prompt.split(marker)[0].strip()
+                    break
+
+            # 4. Final cleanup - remove any remaining prefixes at start
             for prefix in ["Prompt:", "Output:", "Response:", "Result:"]:
                 if styled_prompt.startswith(prefix):
                     styled_prompt = styled_prompt[len(prefix):].strip()
-
-            # Remove markdown code blocks if present
-            if styled_prompt.startswith("```"):
-                lines = styled_prompt.split("\n")
-                styled_prompt = "\n".join(lines[1:-1] if len(lines) > 2 else lines).strip()
 
             logger.info(f"Creative rewrite completed: {len(styled_prompt)} chars")
             return styled_prompt
