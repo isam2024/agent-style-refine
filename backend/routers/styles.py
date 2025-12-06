@@ -280,7 +280,11 @@ def sanitize_style_profile(profile: StyleProfile) -> StyleProfile:
         "positioned", "placed", "located", "foreground", "background", "middle ground",
         "subject", "figure", "character", "main", "central",
         "left", "right", "front", "back", "side view", "profile",
-        "expression", "eyes", "gaze", "look", "stare", "mouth", "nose"
+        "expression", "eyes", "gaze", "look", "stare", "mouth", "nose", "ears",
+        "mane", "fur", "tail", "paw", "claw", "wing", "beak", "feather",
+        "silhouette", "pose", "posture", "stance",
+        "sleeping", "resting", "awake", "alert", "majestic", "regal", "elegant",
+        "lion's", "cat's", "dog's", "fox's", "bird's", "person's"  # possessives
     ]
 
     filtered_invariants = []
@@ -305,6 +309,62 @@ def sanitize_style_profile(profile: StyleProfile) -> StyleProfile:
                 profile_dict["composition"]["structural_notes"] = ""
 
     return StyleProfile(**profile_dict)
+
+
+def sanitize_style_rules(rules: StyleRules) -> StyleRules:
+    """
+    Remove subject-specific information from style rules.
+
+    This filters out subject references that may have leaked from:
+    - core_invariants (before sanitization)
+    - iteration history (lost_traits, preserved_traits from critique)
+    """
+    rules_dict = rules.model_dump()
+
+    # Same keywords as profile sanitization
+    subject_keywords = [
+        "cat", "dog", "lion", "tiger", "bear", "wolf", "fox", "rabbit", "deer",
+        "person", "human", "woman", "man", "child", "baby", "face", "portrait",
+        "animal", "bird", "fish", "creature", "dragon", "monster",
+        "tree", "forest", "mountain", "ocean", "sky", "cloud", "sun", "moon",
+        "car", "vehicle", "building", "house", "city", "landscape",
+        "facing", "centered", "standing", "sitting", "lying", "walking", "running",
+        "positioned", "placed", "located", "foreground", "background", "middle ground",
+        "subject", "figure", "character", "main", "central",
+        "left", "right", "front", "back", "side view", "profile",
+        "expression", "eyes", "gaze", "look", "stare", "mouth", "nose", "ears",
+        "mane", "fur", "tail", "paw", "claw", "wing", "beak", "feather",
+        "silhouette", "pose", "posture", "stance",
+        "sleeping", "resting", "awake", "alert", "majestic", "regal", "elegant",
+        "lion's", "cat's", "dog's", "fox's", "bird's", "person's"  # possessives
+    ]
+
+    def filter_list(items: list[str]) -> list[str]:
+        """Filter subject-specific items from a list."""
+        filtered = []
+        for item in items:
+            item_lower = item.lower()
+            is_subject_specific = any(keyword in item_lower for keyword in subject_keywords)
+            if not is_subject_specific:
+                filtered.append(item)
+        return filtered
+
+    # Filter all list fields that might contain subject data
+    if rules_dict.get("always_include"):
+        rules_dict["always_include"] = filter_list(rules_dict["always_include"])
+
+    if rules_dict.get("emphasize"):
+        rules_dict["emphasize"] = filter_list(rules_dict["emphasize"])
+
+    if rules_dict.get("de_emphasize"):
+        rules_dict["de_emphasize"] = filter_list(rules_dict["de_emphasize"])
+
+    # always_avoid and forbidden_elements should be fine - they're about what NOT to include
+    # But sanitize them anyway for completeness
+    if rules_dict.get("always_avoid"):
+        rules_dict["always_avoid"] = filter_list(rules_dict["always_avoid"])
+
+    return StyleRules(**rules_dict)
 
 
 async def _create_style_snapshot(
@@ -337,7 +397,7 @@ async def _create_style_snapshot(
     latest_profile_db = max(session.style_profiles, key=lambda p: p.version)
     style_profile_raw = StyleProfile(**latest_profile_db.profile_json)
 
-    # Sanitize: remove subject-specific information
+    # Sanitize: remove subject-specific information from profile
     style_profile = sanitize_style_profile(style_profile_raw)
 
     # Gather FULL iteration history with critique data
@@ -359,9 +419,13 @@ async def _create_style_snapshot(
             iteration_history.append(iteration_data)
 
     # Extract style rules with full iteration data
-    style_rules = prompt_writer.extract_rules_from_profile(
+    style_rules_raw = prompt_writer.extract_rules_from_profile(
         style_profile, iteration_history
     )
+
+    # Sanitize: remove subject-specific information from rules
+    # (may have leaked from iteration history critique data)
+    style_rules = sanitize_style_rules(style_rules_raw)
 
     # Calculate final score from last iteration
     final_score = None
