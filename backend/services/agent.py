@@ -195,6 +195,7 @@ Remember:
             response = await vlm_service.generate_text(
                 prompt=user_prompt,
                 system=system_prompt,
+                request_id=session_id,  # Use session_id as request_id for cancellation
             )
             await log(f"VLM response received ({len(response)} chars)", "success")
         except Exception as e:

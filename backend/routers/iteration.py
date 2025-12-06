@@ -20,6 +20,7 @@ from backend.models.db_models import Session, StyleProfileDB, Iteration
 from backend.services.storage import storage_service
 from backend.services.agent import style_agent
 from backend.services.comfyui import comfyui_service
+from backend.services.vlm import vlm_service
 from backend.services.critic import style_critic
 from backend.services.auto_improver import auto_improver
 from backend.websocket import manager
@@ -1092,8 +1093,8 @@ async def stop_auto_improve(
     db: AsyncSession = Depends(get_db),
 ):
     """
-    Request graceful stop of auto-improve loop for a session.
-    The loop will finish the current iteration and exit cleanly.
+    Request immediate stop of auto-improve loop for a session.
+    Cancels ongoing ComfyUI and VLM requests.
     """
     # Verify session exists
     result = await db.execute(
@@ -1107,15 +1108,24 @@ async def stop_auto_improve(
     # Set stop flag
     _stop_requests[session_id] = True
 
-    logger.info(f"Stop requested for session {session_id}")
+    # Cancel ongoing VLM requests for this session
+    vlm_service.cancel_request(session_id)
+
+    # Cancel ongoing ComfyUI requests for this session
+    comfyui_service.cancel_request(session_id)
+
+    # Send interrupt to ComfyUI to stop current generation immediately
+    await comfyui_service.interrupt_generation()
+
+    logger.info(f"Stop requested for session {session_id} - cancelled VLM and ComfyUI requests")
     await manager.broadcast_log(
         session_id,
-        "Stop requested - training will halt after current iteration completes",
+        "Stop requested - cancelling ongoing operations...",
         "warning",
         "stop"
     )
 
     return {
         "session_id": session_id,
-        "message": "Stop requested - training will halt after current iteration completes",
+        "message": "Stop requested - cancelling ongoing operations",
     }

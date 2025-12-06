@@ -170,6 +170,7 @@ IMPORTANT:
             response = await vlm_service.analyze(
                 prompt=prompt,
                 images=[original_image_b64, generated_image_b64],
+                request_id=session_id,  # Use session_id as request_id for cancellation
             )
             await log(f"VLM response received ({len(response)} chars)", "success")
         except Exception as e:

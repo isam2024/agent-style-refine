@@ -15,6 +15,8 @@ class ComfyUIService:
     def __init__(self):
         self.base_url = settings.comfyui_url
         self.client_id = str(uuid.uuid4())
+        self._active_requests: dict[str, str] = {}  # request_id -> prompt_id mapping
+        self._cancel_flags: dict[str, bool] = {}  # request_id -> cancelled flag
 
     def _get_default_workflow(self, prompt: str, seed: int | None = None, negative_prompt: str | None = None) -> dict:
         """
@@ -100,6 +102,31 @@ class ComfyUIService:
             }
         }
 
+    def cancel_request(self, request_id: str):
+        """Mark a request as cancelled."""
+        if request_id in self._active_requests:
+            self._cancel_flags[request_id] = True
+            logger.info(f"ComfyUI: Request {request_id} marked for cancellation")
+
+    def is_cancelled(self, request_id: str) -> bool:
+        """Check if a request has been cancelled."""
+        return self._cancel_flags.get(request_id, False)
+
+    async def interrupt_generation(self):
+        """Send interrupt signal to ComfyUI to stop current generation."""
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                response = await client.post(f"{self.base_url}/interrupt")
+                if response.status_code == 200:
+                    logger.info("ComfyUI: Sent interrupt signal")
+                    return True
+                else:
+                    logger.warning(f"ComfyUI: Interrupt failed with status {response.status_code}")
+                    return False
+        except Exception as e:
+            logger.error(f"ComfyUI: Failed to send interrupt: {e}")
+            return False
+
     async def generate(
         self,
         prompt: str,
@@ -107,6 +134,7 @@ class ComfyUIService:
         seed: int | None = None,
         session_id: str | None = None,
         negative_prompt: str | None = None,
+        request_id: str | None = None,
     ) -> str:
         """
         Generate an image using ComfyUI.
@@ -117,10 +145,16 @@ class ComfyUIService:
             seed: Random seed (optional)
             session_id: Optional session ID for WebSocket logging
             negative_prompt: Negative prompt for what to avoid (optional)
+            request_id: Optional ID to track/cancel this request
 
         Returns:
             Base64 encoded generated image
         """
+        # Track this request if ID provided
+        if request_id:
+            self._active_requests[request_id] = ""  # Will be set to prompt_id once we have it
+            self._cancel_flags[request_id] = False
+
         async def log(msg: str, level: str = "info"):
             logger.info(f"[comfyui] {msg}")
             if session_id:
@@ -138,6 +172,11 @@ class ComfyUIService:
 
         async with httpx.AsyncClient(timeout=600.0) as client:
             try:
+                # Check if cancelled before starting
+                if request_id and self.is_cancelled(request_id):
+                    await log("Generation cancelled before submission", "warning")
+                    raise asyncio.CancelledError("Generation cancelled by user")
+
                 await log("Submitting workflow to queue...")
                 response = await client.post(
                     f"{self.base_url}/prompt",
@@ -146,12 +185,20 @@ class ComfyUIService:
                 response.raise_for_status()
                 result = response.json()
                 prompt_id = result["prompt_id"]
+
+                # Track the prompt_id for this request
+                if request_id:
+                    self._active_requests[request_id] = prompt_id
+
                 await log(f"Queued job: {prompt_id}", "success")
 
-                image_data = await self._wait_for_completion(client, prompt_id, session_id)
+                image_data = await self._wait_for_completion(client, prompt_id, session_id, request_id)
                 await log("Image generation complete!", "success")
                 return image_data
 
+            except asyncio.CancelledError:
+                await log("Generation cancelled by user", "warning")
+                raise
             except httpx.HTTPStatusError as e:
                 error_detail = e.response.text if e.response else str(e)
                 await log(f"HTTP error {e.response.status_code}: {error_detail}", "error")
@@ -162,6 +209,11 @@ class ComfyUIService:
             except Exception as e:
                 await log(f"Generation failed: {e}", "error")
                 raise
+            finally:
+                # Clean up request tracking
+                if request_id:
+                    self._active_requests.pop(request_id, None)
+                    self._cancel_flags.pop(request_id, None)
 
     def _inject_prompt(
         self, workflow: dict, prompt: str, seed: int | None, negative_prompt: str | None = None
@@ -183,7 +235,7 @@ class ComfyUIService:
         return workflow
 
     async def _wait_for_completion(
-        self, client: httpx.AsyncClient, prompt_id: str, session_id: str | None = None
+        self, client: httpx.AsyncClient, prompt_id: str, session_id: str | None = None, request_id: str | None = None
     ) -> str:
         """Poll for generation completion and return the image."""
         async def log(msg: str, level: str = "info"):
@@ -197,6 +249,12 @@ class ComfyUIService:
         await log("Waiting for ComfyUI to process...")
 
         while attempt < max_attempts:
+            # Check if cancelled
+            if request_id and self.is_cancelled(request_id):
+                await log("Generation cancelled - sending interrupt to ComfyUI", "warning")
+                await self.interrupt_generation()
+                raise asyncio.CancelledError("Generation cancelled by user")
+
             try:
                 response = await client.get(f"{self.base_url}/history/{prompt_id}")
 

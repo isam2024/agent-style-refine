@@ -148,7 +148,8 @@ class AutoImprover:
         await log("Generating image...", "info", "generate")
         image_b64 = await comfyui_service.generate(
             prompt=image_prompt,
-            session_id=session_id
+            session_id=session_id,
+            request_id=session_id,  # Use session_id as request_id for cancellation
         )
         await log("Image generated", "success", "generate")
 
