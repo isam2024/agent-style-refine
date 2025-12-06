@@ -284,29 +284,63 @@ def sanitize_style_profile(profile: StyleProfile) -> StyleProfile:
         "mane", "fur", "tail", "paw", "claw", "wing", "beak", "feather",
         "silhouette", "pose", "posture", "stance",
         "sleeping", "resting", "awake", "alert", "majestic", "regal", "elegant",
-        "lion's", "cat's", "dog's", "fox's", "bird's", "person's"  # possessives
+        "lion's", "cat's", "dog's", "fox's", "bird's", "person's", "bunny",
+        "head", "body", "form"  # added generic anatomy
     ]
 
-    filtered_invariants = []
-    for invariant in profile_dict.get("core_invariants", []):
-        invariant_lower = invariant.lower()
-        # Check if it contains any subject-specific keywords
-        is_subject_specific = any(keyword in invariant_lower for keyword in subject_keywords)
-        if not is_subject_specific:
-            filtered_invariants.append(invariant)
+    def contains_subject(text: str) -> bool:
+        """Check if text contains subject-specific keywords."""
+        if not text:
+            return False
+        text_lower = text.lower()
+        return any(keyword in text_lower for keyword in subject_keywords)
 
+    def sanitize_text(text: str) -> str:
+        """Return empty string if text contains subject keywords."""
+        return "" if contains_subject(text) else text
+
+    # Filter core_invariants (list of strings)
+    filtered_invariants = [
+        inv for inv in profile_dict.get("core_invariants", [])
+        if not contains_subject(inv)
+    ]
     profile_dict["core_invariants"] = filtered_invariants
 
-    # Also filter composition.structural_notes which may contain subject positioning
+    # Sanitize nested lighting fields
+    if "lighting" in profile_dict and profile_dict["lighting"]:
+        lighting = profile_dict["lighting"]
+        lighting["lighting_type"] = sanitize_text(lighting.get("lighting_type", ""))
+        lighting["shadows"] = sanitize_text(lighting.get("shadows", ""))
+        lighting["highlights"] = sanitize_text(lighting.get("highlights", ""))
+
+    # Sanitize nested line_and_shape fields
+    if "line_and_shape" in profile_dict and profile_dict["line_and_shape"]:
+        line_shape = profile_dict["line_and_shape"]
+        line_shape["line_quality"] = sanitize_text(line_shape.get("line_quality", ""))
+        line_shape["shape_language"] = sanitize_text(line_shape.get("shape_language", ""))
+        line_shape["geometry_notes"] = sanitize_text(line_shape.get("geometry_notes", ""))
+
+    # Sanitize nested texture fields
+    if "texture" in profile_dict and profile_dict["texture"]:
+        texture = profile_dict["texture"]
+        texture["surface"] = sanitize_text(texture.get("surface", ""))
+
+    # Sanitize nested composition fields
     if "composition" in profile_dict and profile_dict["composition"]:
-        structural_notes = profile_dict["composition"].get("structural_notes", "")
-        if structural_notes:
-            # Check if structural notes are subject-specific
-            notes_lower = structural_notes.lower()
-            is_subject_specific = any(keyword in notes_lower for keyword in subject_keywords)
-            if is_subject_specific:
-                # Clear subject-specific structural notes
-                profile_dict["composition"]["structural_notes"] = ""
+        comp = profile_dict["composition"]
+        comp["framing"] = sanitize_text(comp.get("framing", ""))
+        comp["depth"] = sanitize_text(comp.get("depth", ""))
+        comp["negative_space_behavior"] = sanitize_text(comp.get("negative_space_behavior", ""))
+        comp["structural_notes"] = sanitize_text(comp.get("structural_notes", ""))
+
+    # Sanitize motifs.recurring_elements (list)
+    if "motifs" in profile_dict and profile_dict["motifs"]:
+        motifs = profile_dict["motifs"]
+        if "recurring_elements" in motifs:
+            motifs["recurring_elements"] = [
+                elem for elem in motifs.get("recurring_elements", [])
+                if not contains_subject(elem)
+            ]
 
     return StyleProfile(**profile_dict)
 
@@ -336,7 +370,8 @@ def sanitize_style_rules(rules: StyleRules) -> StyleRules:
         "mane", "fur", "tail", "paw", "claw", "wing", "beak", "feather",
         "silhouette", "pose", "posture", "stance",
         "sleeping", "resting", "awake", "alert", "majestic", "regal", "elegant",
-        "lion's", "cat's", "dog's", "fox's", "bird's", "person's"  # possessives
+        "lion's", "cat's", "dog's", "fox's", "bird's", "person's", "bunny",
+        "head", "body", "form"  # possessives and generic anatomy
     ]
 
     def filter_list(items: list[str]) -> list[str]:
