@@ -81,37 +81,23 @@ class PromptWriter:
         # Load system prompt
         system_prompt = self.style_guided_prompt_path.read_text()
 
-        # Build style rules context for the LLM
-        # Use variation to select which keywords/colors to provide
+        # Build comprehensive style rules context for the LLM
+        # NOTE: Creative rewriting needs ALL constraints, not subset
+        # Variation is achieved through phrasing, not by omitting constraints
         palette = style_profile.palette
         lighting = style_profile.lighting
         texture = style_profile.texture
         line_shape = style_profile.line_and_shape
         composition = style_profile.composition
 
-        # Select technique keywords (1-3 depending on variation)
-        technique_count = 1 if variation_level < 30 else (2 if variation_level < 70 else 3)
-        techniques = self._select_items(
-            style_rules.technique_keywords or ["rendered style"],
-            technique_count,
-            variation_level
-        )
+        # Use ALL technique keywords (not subset)
+        techniques = style_rules.technique_keywords or ["rendered style"]
 
-        # Select colors (3-5 depending on variation)
-        color_count = 3 if variation_level < 30 else (4 if variation_level < 70 else 5)
-        colors = self._select_items(
-            palette.color_descriptions or [],
-            color_count,
-            variation_level
-        )
+        # Use ALL colors (complete palette required for accuracy)
+        colors = palette.color_descriptions or []
 
-        # Select mood keywords (1-2)
-        mood_count = 1 if variation_level < 50 else 2
-        moods = self._select_items(
-            style_rules.mood_keywords or [],
-            mood_count,
-            variation_level
-        )
+        # Use ALL mood keywords
+        moods = style_rules.mood_keywords or []
 
         # Filter core invariants to remove subject-specific ones
         style_invariants = []
@@ -126,69 +112,108 @@ class PromptWriter:
             if not any(keyword in invariant.lower() for keyword in subject_keywords):
                 style_invariants.append(invariant)
 
-        # Build style rules as a structured context
-        style_context = {
-            "technique_keywords": ", ".join(techniques),
-            "color_descriptions": ", ".join(colors),
-            "lighting": lighting.lighting_type or "ambient lighting",
-            "shadows": lighting.shadows or "",
-            "highlights": lighting.highlights or "",
-            "texture": texture.surface or "",
-            "noise_grain": texture.noise_level or "",
-            "special_effects": ", ".join(texture.special_effects) if texture.special_effects else "",
-            "line_quality": line_shape.line_quality or "",
-            "shape_language": line_shape.shape_language or "",
-            "composition_framing": composition.framing or "",
-            "camera_angle": composition.camera or "",
-            "mood": ", ".join(moods),
-            "core_invariants": "; ".join(style_invariants[:3]),
-            "emphasize": ", ".join(style_rules.emphasize[:3]) if style_rules.emphasize else "",
-            "always_include": ", ".join(style_rules.always_include[:3]) if style_rules.always_include else "",
-        }
-
-        # Build user message with subject and style rules
+        # Build comprehensive style rules for VLM
         user_message = f"""**Subject:** {subject}
 
-**Style Rules:**
-- Technique: {style_context['technique_keywords']}
-- Colors: {style_context['color_descriptions']}
-- Lighting: {style_context['lighting']}"""
+**Style Rules (ALL must be followed):**
 
-        if style_context['shadows']:
-            user_message += f" with {style_context['shadows']}"
-        if style_context['highlights']:
-            user_message += f" and {style_context['highlights']}"
+**Technique:**
+{', '.join(techniques) if techniques else 'rendered style'}
 
-        user_message += f"""
-- Texture: {style_context['texture']}"""
+**Color Palette (COMPLETE - use ALL these colors):**
+{', '.join(colors) if colors else 'no specific palette'}"""
 
-        if style_context['special_effects']:
-            user_message += f", {style_context['special_effects']}"
-        if style_context['noise_grain']:
-            user_message += f", {style_context['noise_grain']}"
-
-        user_message += f"""
-- Line quality: {style_context['line_quality']}
-- Shape language: {style_context['shape_language']}
-- Composition: {style_context['composition_framing']}"""
-
-        if style_context['camera_angle']:
-            user_message += f", {style_context['camera_angle']}"
-
-        user_message += f"""
-- Mood: {style_context['mood']}"""
-
-        if style_context['core_invariants']:
+        if palette.saturation:
             user_message += f"""
-- Core invariants: {style_context['core_invariants']}"""
+Saturation: {palette.saturation}"""
 
-        if style_context['emphasize']:
+        if palette.value_range:
             user_message += f"""
-- Emphasize: {style_context['emphasize']}"""
+Value range: {palette.value_range}"""
+
+        user_message += f"""
+
+**Lighting:**
+Type: {lighting.lighting_type or 'ambient lighting'}"""
+
+        if lighting.shadows:
+            user_message += f"""
+Shadows: {lighting.shadows}"""
+
+        if lighting.highlights:
+            user_message += f"""
+Highlights: {lighting.highlights}"""
+
+        user_message += f"""
+
+**Texture:**
+Surface: {texture.surface or 'smooth'}"""
+
+        if texture.noise_level:
+            user_message += f"""
+Noise/grain: {texture.noise_level}"""
+
+        if texture.special_effects:
+            user_message += f"""
+Special effects: {', '.join(texture.special_effects)}"""
+
+        user_message += f"""
+
+**Line & Shape:**
+Line quality: {line_shape.line_quality or 'clean'}
+Shape language: {line_shape.shape_language or 'organic'}"""
+
+        if line_shape.geometry_notes:
+            user_message += f"""
+Geometry: {line_shape.geometry_notes}"""
+
+        user_message += f"""
+
+**Composition:**
+Framing: {composition.framing or 'centered'}"""
+
+        if composition.camera:
+            user_message += f"""
+Camera angle: {composition.camera}"""
+
+        if composition.negative_space_behavior:
+            user_message += f"""
+Negative space: {composition.negative_space_behavior}"""
+
+        if moods:
+            user_message += f"""
+
+**Mood/Atmosphere:**
+{', '.join(moods)}"""
+
+        if style_invariants:
+            user_message += f"""
+
+**Core Style Invariants (CRITICAL - always include):**
+{chr(10).join('- ' + inv for inv in style_invariants)}"""
+
+        if style_rules.always_include:
+            user_message += f"""
+
+**Always Include:**
+{chr(10).join('- ' + item for item in style_rules.always_include)}"""
+
+        if style_rules.always_avoid:
+            user_message += f"""
+
+**Always Avoid:**
+{chr(10).join('- ' + item for item in style_rules.always_avoid)}"""
+
+        if style_rules.emphasize:
+            user_message += f"""
+
+**Emphasize (from training feedback):**
+{chr(10).join('- ' + item for item in style_rules.emphasize)}"""
 
         user_message += """
 
-**Your Response:**"""
+**Your Response:**
+Write a single flowing description that embodies ALL the above style rules."""
 
         # Call VLM with system prompt and user message
         logger.info(f"Requesting creative style rewrite from VLM for subject: {subject[:50]}...")
