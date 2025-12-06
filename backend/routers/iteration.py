@@ -24,6 +24,7 @@ from backend.services.comfyui import comfyui_service
 from backend.services.vlm import vlm_service
 from backend.services.critic import style_critic
 from backend.services.auto_improver import auto_improver
+from backend.services.training_debugger import training_debugger
 from backend.websocket import manager
 
 logger = logging.getLogger(__name__)
@@ -828,6 +829,14 @@ async def run_auto_improve(
             iter_debug.append(f"Texture: {style_profile.texture.surface}, noise: {style_profile.texture.noise_level}")
             iter_debug.append(f"Composition: {style_profile.composition.camera}, {style_profile.composition.framing}")
             iter_debug.append(f"Line Quality: {style_profile.line_and_shape.line_quality}")
+            iter_debug.append(f"Motifs - Recurring: {len(style_profile.motifs.recurring_elements)} elements")
+            if style_profile.motifs.recurring_elements:
+                for elem in style_profile.motifs.recurring_elements:
+                    iter_debug.append(f"  • {elem}")
+            iter_debug.append(f"Motifs - Forbidden: {len(style_profile.motifs.forbidden_elements)} elements")
+            if style_profile.motifs.forbidden_elements:
+                for elem in style_profile.motifs.forbidden_elements:
+                    iter_debug.append(f"  ✗ {elem}")
 
             # DEBUG: Log VLM's updated style profile suggestions
             if iteration_result["critique"].updated_style_profile:
@@ -844,6 +853,31 @@ async def run_auto_improve(
                     iter_debug.append(f"Composition change: {updated.composition.camera}")
                 if updated.line_and_shape.line_quality != style_profile.line_and_shape.line_quality:
                     iter_debug.append(f"Line quality change: {updated.line_and_shape.line_quality}")
+
+                # Check for motifs changes
+                old_recurring = set(style_profile.motifs.recurring_elements)
+                new_recurring = set(updated.motifs.recurring_elements)
+                added_recurring = new_recurring - old_recurring
+                removed_recurring = old_recurring - new_recurring
+
+                if added_recurring or removed_recurring:
+                    iter_debug.append(f"Motifs - Recurring elements changed:")
+                    for elem in added_recurring:
+                        iter_debug.append(f"  + DISCOVERED: {elem}")
+                    for elem in removed_recurring:
+                        iter_debug.append(f"  - REMOVED: {elem}")
+
+                old_forbidden = set(style_profile.motifs.forbidden_elements)
+                new_forbidden = set(updated.motifs.forbidden_elements)
+                added_forbidden = new_forbidden - old_forbidden
+                removed_forbidden = old_forbidden - new_forbidden
+
+                if added_forbidden or removed_forbidden:
+                    iter_debug.append(f"Motifs - Forbidden elements changed:")
+                    for elem in added_forbidden:
+                        iter_debug.append(f"  + BANNED: {elem}")
+                    for elem in removed_forbidden:
+                        iter_debug.append(f"  - UNBANNED: {elem}")
 
             # Write this iteration's debug info to file immediately
             await write_debug('\n'.join(iter_debug))
