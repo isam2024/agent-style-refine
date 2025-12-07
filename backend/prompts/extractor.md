@@ -111,18 +111,34 @@ You are creating a REPLICATION BLUEPRINT, not a style guide.
 Your job is to lock down WHAT/WHERE/HOW so this exact image can be recreated.
 Style refinement happens later. Identity lock happens NOW.
 
-RESPONSE FORMAT:
+RESPONSE FORMAT - CRITICAL:
 - Output ONLY a valid JSON object
 - Do NOT include markdown formatting (no ```)
 - Do NOT include explanatory text before or after
 - Do NOT use headers like "Style Analysis"
 - Start your response with { and end with }
 - The response must be parseable by JSON.parse()
+- Every string field MUST have actual content, NOT placeholder text
+- If you cannot determine a value, use a reasonable visual descriptor, NOT "describe..." or "Example:"
+
+**MANDATORY FIELD REQUIREMENTS**:
+- `style_name`: Must be a real descriptive name (3-5 words), NOT "Extracted Style" or "Example"
+- `line_quality`: Must describe actual edge treatment you see (e.g., "sharp geometric edges", "soft blurred boundaries", "crisp defined lines")
+- `shape_language`: Must describe actual shapes you see (e.g., "geometric circles and triangles", "flowing organic curves", "angular faceted forms")
+- `geometry_notes`: Must describe actual geometric characteristics (e.g., "concentric circular patterns", "grid-based layout", "asymmetric arrangement")
+- `surface`: Must describe actual texture you see (e.g., "flat matte", "glossy reflective", "rough painterly", "pixelated digital")
+- `lighting_type`: Must describe actual lighting you see (e.g., "bright center radial glow", "top-down directional", "even ambient")
+- `shadows`: Must describe actual shadow behavior (e.g., "hard dark shadows", "no visible shadows", "soft gradient falloff")
+- `highlights`: Must describe actual highlight behavior (e.g., "bright white specular", "subtle edge lighting", "no highlights")
+- `camera`: Must describe actual viewpoint (e.g., "straight-on centered", "slight overhead angle", "eye-level frontal")
+- `framing`: Must describe actual composition (e.g., "centered with space", "fills frame edge-to-edge", "off-center asymmetric")
+- `negative_space_behavior`: Must describe actual background treatment (e.g., "solid dark uniform", "gradient fade", "empty transparent")
 
 **CRITICAL REMINDER**:
-- Replace ALL "Example:" placeholders with actual analysis of the image
-- Replace ALL "describe..." placeholders with actual descriptions
-- Replace ALL "#hex1" with actual hex color codes
-- Analyze the ACTUAL image provided, not the examples in the schema
+- Replace ALL "Realistic example:" text with actual analysis of THIS image
+- Replace ALL "describe..." placeholders with actual descriptions of WHAT YOU SEE
+- Replace ALL "#hex1" with actual hex color codes FROM THIS IMAGE
+- Analyze the ACTUAL image provided, NOT the example values shown above
+- Every field must contain REAL observations, not template text
 
 BEGIN JSON OUTPUT:

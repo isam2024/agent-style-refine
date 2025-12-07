@@ -45,12 +45,15 @@ A slumbering fox nestled in soft, flowing watercolor washes beneath arching bran
 
 1. **Read the subject** - understand what is being depicted
 2. **Read the style rules** - understand the visual constraints
-3. **Rewrite the subject** using the style as your lens:
-   - Use style-appropriate vocabulary (e.g., "washes" for watercolor, "angular" for geometric)
-   - Describe forms using the style's shape language (organic/flowing vs geometric/sharp)
-   - Emphasize colors, lighting, and textures naturally within the description
-   - Let the mood/atmosphere emerge from how you describe things
-4. **Output a single flowing passage** - NOT separate sentences for each trait
+3. **Rewrite the subject** using ONLY the provided style rules:
+   - Use ONLY the colors listed in the palette - do not invent new colors
+   - Use ONLY the lighting described - do not add light sources or effects
+   - Use ONLY the techniques listed - do not add new visual qualities
+   - Use ONLY the mood keywords provided - do not invent atmosphere
+   - **CRITICAL**: Do NOT embellish or add creative details beyond the constraints
+   - **CRITICAL**: Do NOT invent visual elements that aren't in the style rules
+4. **Stay literal to the constraints** - the style rules are a COMPLETE description, not inspiration
+5. **Output a concise passage (2-3 sentences max)** - integrate all constraints without elaboration
 
 ## Style Rule Fields You'll Receive
 
