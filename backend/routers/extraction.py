@@ -55,7 +55,7 @@ async def extract_style(
         await manager.broadcast_log(session_id, "Sending image to VLM for style analysis...", "info", "extract")
         await manager.broadcast_progress(session_id, "extract", 40, "Analyzing style")
 
-        style_profile = await style_extractor.extract(image_b64, session_id)
+        style_profile = await style_extractor.extract(image_b64, session_id, session.style_hints)
 
         await manager.broadcast_log(session_id, f"Extracted style: {style_profile.style_name}", "success", "extract")
         await manager.broadcast_progress(session_id, "extract", 80, "Style extracted")

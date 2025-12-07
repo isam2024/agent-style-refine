@@ -44,6 +44,7 @@ async def create_session(
         name=data.name,
         mode=data.mode.value,
         status=SessionStatus.CREATED.value,
+        style_hints=data.style_hints,
     )
     db.add(session)
     await db.flush()
