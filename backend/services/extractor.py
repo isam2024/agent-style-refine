@@ -119,8 +119,16 @@ IMPORTANT:
 
         await log("Parsing style profile from VLM response...")
 
-        # Parse JSON from response
-        profile_dict = self._parse_json_response(response)
+        # Parse JSON from response - FAIL if invalid, no fallback
+        try:
+            profile_dict = self._parse_json_response(response)
+        except ValueError as e:
+            await log(f"FATAL: VLM did not return valid JSON: {e}", "error")
+            await log(f"VLM response was: {response[:300]}", "error")
+            raise RuntimeError(
+                f"Style extraction failed: VLM returned invalid JSON. "
+                f"Check that the model supports JSON output. Response preview: {response[:200]}"
+            )
 
         await log(f"Style identified: {profile_dict.get('style_name', 'Unknown')}", "success")
 
@@ -208,7 +216,11 @@ IMPORTANT:
         return StyleProfile(**profile_dict)
 
     def _parse_json_response(self, response: str) -> dict:
-        """Extract JSON from VLM response, with fallback parsing."""
+        """
+        Extract JSON from VLM response. RAISES ValueError if JSON cannot be parsed.
+
+        NO FALLBACK - fails explicitly to surface VLM output issues.
+        """
         import re
 
         # Clean up response
@@ -217,122 +229,33 @@ IMPORTANT:
         # Try direct parsing first
         try:
             return json.loads(response)
-        except json.JSONDecodeError:
-            pass
+        except json.JSONDecodeError as e:
+            logger.debug(f"Direct JSON parse failed: {e}")
 
         # Try to find JSON in markdown code block
         json_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", response, re.DOTALL)
         if json_match:
             try:
                 return json.loads(json_match.group(1))
-            except json.JSONDecodeError:
-                pass
+            except json.JSONDecodeError as e:
+                logger.debug(f"Markdown-wrapped JSON parse failed: {e}")
 
         # Try to find raw JSON object (greedy)
         json_match = re.search(r"\{.*\}", response, re.DOTALL)
         if json_match:
             try:
                 return json.loads(json_match.group(0))
-            except json.JSONDecodeError:
-                pass
+            except json.JSONDecodeError as e:
+                logger.debug(f"Greedy JSON extraction parse failed: {e}")
 
-        # Fallback: Parse markdown-style response
-        logger.warning("JSON parsing failed, attempting markdown fallback parse")
-        logger.warning(f"Failed to parse JSON from response: {response[:200]}")
-        return self._parse_markdown_fallback(response)
-
-    def _parse_markdown_fallback(self, response: str) -> dict:
-        """
-        Parse a markdown-formatted response into our schema.
-        This handles cases where the VLM outputs text instead of JSON.
-        """
-        import re
-
-        # Default structure
-        result = {
-            "style_name": "Extracted Style",
-            "core_invariants": [],
-            "palette": {
-                "dominant_colors": ["#3a3a3a", "#8e8e8e", "#c0c0c0"],
-                "accents": ["#e0e0e0"],
-                "color_descriptions": ["dark gray", "medium gray", "light gray"],
-                "saturation": "low",
-                "value_range": "mid-tones"
-            },
-            "line_and_shape": {
-                "line_quality": "soft edges",
-                "shape_language": "organic",
-                "geometry_notes": "natural forms"
-            },
-            "texture": {
-                "surface": "smooth",
-                "noise_level": "low",
-                "special_effects": []
-            },
-            "lighting": {
-                "lighting_type": "ambient",
-                "shadows": "soft",
-                "highlights": "subtle"
-            },
-            "composition": {
-                "camera": "eye level",
-                "framing": "centered",
-                "negative_space_behavior": "minimal"
-            },
-            "motifs": {
-                "recurring_elements": [],
-                "forbidden_elements": []
-            },
-            "suggested_test_prompt": "A weathered wooden boat resting on a pebble beach at golden hour, with gentle waves lapping at its hull, seabirds circling overhead, and a distant lighthouse silhouetted against the warm evening sky"
-        }
-
-        # Try to extract style name
-        name_match = re.search(r"\*\*Style Name[:\*]*\s*(.+?)(?:\*\*|\n)", response, re.IGNORECASE)
-        if name_match:
-            result["style_name"] = name_match.group(1).strip().strip("*")
-
-        # Try to extract core invariants (bullet points after "Core Invariants")
-        invariants_section = re.search(
-            r"Core Invariants[:\*]*\s*\n((?:\s*[\*\-]\s*.+\n?)+)",
-            response,
-            re.IGNORECASE
+        # NO FALLBACK - fail explicitly
+        logger.error("CRITICAL: VLM did not return parseable JSON")
+        logger.error(f"Response was: {response[:500]}")
+        raise ValueError(
+            f"VLM response is not valid JSON. "
+            f"Enable JSON format in model or check prompt. "
+            f"Response preview: {response[:300]}"
         )
-        if invariants_section:
-            bullets = re.findall(r"[\*\-]\s*\*\*([^*]+)\*\*", invariants_section.group(1))
-            if bullets:
-                result["core_invariants"] = [b.strip().rstrip(":") for b in bullets[:5]]
-
-        # Extract color mentions (hex codes)
-        hex_colors = re.findall(r"#[0-9a-fA-F]{6}", response)
-        if hex_colors:
-            result["palette"]["dominant_colors"] = hex_colors[:3]
-            result["palette"]["accents"] = hex_colors[3:5] if len(hex_colors) > 3 else []
-
-        # Extract lighting info
-        if "high contrast" in response.lower():
-            result["lighting"]["lighting_type"] = "high contrast dramatic"
-        if "soft" in response.lower() and "light" in response.lower():
-            result["lighting"]["lighting_type"] = "soft ambient"
-        if "backlit" in response.lower() or "backlighting" in response.lower():
-            result["lighting"]["lighting_type"] = "backlit"
-
-        # Extract texture info
-        if "urban" in response.lower():
-            result["texture"]["surface"] = "urban textured"
-            result["motifs"]["recurring_elements"].append("urban textures")
-        if "painterly" in response.lower():
-            result["texture"]["surface"] = "painterly brushstrokes"
-        if "rough" in response.lower():
-            result["texture"]["surface"] = "rough textured"
-
-        # Extract saturation
-        if "muted" in response.lower():
-            result["palette"]["saturation"] = "low"
-        if "vibrant" in response.lower() or "saturated" in response.lower():
-            result["palette"]["saturation"] = "high"
-
-        logger.info(f"Fallback parsed style: {result['style_name']}")
-        return result
 
 
 style_extractor = StyleExtractor()
