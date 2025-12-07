@@ -8,6 +8,11 @@ Analyze the provided image and extract its characteristics.
 
 **CRITICAL**: Analyze the ACTUAL image provided. Do NOT use the example values below - they are from a completely different image to show format only.
 
+**DATA TYPE REQUIREMENTS**:
+- Most fields are STRINGS (use "text here", not ["array", "items"])
+- Only these fields are arrays: dominant_colors, accents, color_descriptions, core_invariants, recurring_elements, forbidden_elements, special_effects
+- If a field expects a string but you have multiple items, use comma-separated text: "item one, item two, item three"
+
 ```json
 {
   "style_name": "Realistic example: Watercolor Forest Scene",
