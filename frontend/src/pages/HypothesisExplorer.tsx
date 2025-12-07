@@ -24,7 +24,7 @@ function HypothesisExplorer() {
 
   // WebSocket connection
   useEffect(() => {
-    if (!sessionId) return
+    if (!sessionId || !isExploring) return
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
@@ -51,8 +51,8 @@ function HypothesisExplorer() {
       }
     }
 
-    ws.onerror = () => {
-      console.error('WebSocket error')
+    ws.onerror = (error) => {
+      console.error('WebSocket error:', error)
     }
 
     ws.onclose = () => {
@@ -62,9 +62,11 @@ function HypothesisExplorer() {
     wsRef.current = ws
 
     return () => {
-      ws.close()
+      if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
+        ws.close()
+      }
     }
-  }, [sessionId])
+  }, [sessionId, isExploring])
 
   const exploreMutation = useMutation({
     mutationFn: () => {
