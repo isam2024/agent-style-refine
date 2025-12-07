@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 class SessionMode(str, Enum):
     TRAINING = "training"
     AUTO = "auto"
+    HYPOTHESIS = "hypothesis"  # Multi-hypothesis extraction and testing
 
 
 class SessionStatus(str, Enum):
@@ -15,6 +16,8 @@ class SessionStatus(str, Enum):
     GENERATING = "generating"
     CRITIQUING = "critiquing"
     AUTO_IMPROVING = "auto_improving"
+    HYPOTHESIS_EXPLORING = "hypothesis_exploring"  # Generating/testing hypotheses
+    HYPOTHESIS_READY = "hypothesis_ready"  # Hypotheses ready for selection
     COMPLETED = "completed"
     ERROR = "error"
 

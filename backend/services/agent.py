@@ -216,3 +216,20 @@ Remember:
 
 
 style_agent = StyleAgent()
+
+
+def build_style_agent_prompt(
+    style_profile: StyleProfile,
+    feedback_history: list[dict] | None = None,
+) -> str:
+    """
+    Helper function to build style agent system prompt.
+
+    Args:
+        style_profile: The style profile to use
+        feedback_history: Optional feedback history
+
+    Returns:
+        Complete system prompt string
+    """
+    return style_agent.build_system_prompt(style_profile, feedback_history)

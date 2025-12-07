@@ -32,6 +32,9 @@ class Session(Base):
     iterations: Mapped[list["Iteration"]] = relationship(
         back_populates="session", cascade="all, delete-orphan"
     )
+    hypothesis_sets: Mapped[list["HypothesisSetDB"]] = relationship(
+        back_populates="session", cascade="all, delete-orphan"
+    )
 
     @property
     def current_style_version(self) -> int | None:
@@ -146,6 +149,37 @@ class TrainedStyle(Base):
     @property
     def training_summary(self) -> dict | None:
         return self.training_summary_json
+
+
+class HypothesisSetDB(Base):
+    """Collection of competing style interpretations for hypothesis mode.
+
+    Stores all hypotheses generated for a session, their test results,
+    and which hypothesis was selected.
+    """
+    __tablename__ = "hypothesis_sets"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=generate_uuid
+    )
+    session_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("sessions.id"), nullable=False
+    )
+
+    # Full hypothesis data stored as JSON (HypothesisSet model)
+    hypotheses_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+    # ID of selected hypothesis (if chosen)
+    selected_hypothesis_id: Mapped[str | None] = mapped_column(
+        String(36), nullable=True
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow
+    )
+
+    # Relationships
+    session: Mapped["Session"] = relationship(back_populates="hypothesis_sets")
 
 
 class GenerationHistory(Base):
