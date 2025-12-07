@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { exploreHypotheses, selectHypothesis } from '../api/client'
 import { StyleHypothesis, HypothesisExploreResponse, WSMessage } from '../types'
+import LogWindow from '../components/LogWindow'
 
 interface ProgressState {
   stage: string
@@ -175,9 +176,18 @@ function HypothesisExplorer() {
   const sortedHypotheses = [...exploreResult.hypotheses].sort((a, b) => b.confidence - a.confidence)
 
   return (
-    <div className="max-w-6xl mx-auto space-y-6">
-      {/* Header */}
-      <div className="bg-white rounded-xl shadow-sm p-6">
+    <>
+      <LogWindow
+        sessionId={sessionId!}
+        isActive={exploreMutation.isPending}
+        onComplete={() => {
+          // Refresh can happen here if needed
+        }}
+      />
+
+      <div className="max-w-6xl mx-auto space-y-6">
+        {/* Header */}
+        <div className="bg-white rounded-xl shadow-sm p-6">
         <h2 className="text-2xl font-bold text-slate-800 mb-2">Hypothesis Exploration Complete</h2>
         <p className="text-slate-600">
           {exploreResult.hypotheses.length} interpretations generated and tested with{' '}
@@ -238,7 +248,8 @@ function HypothesisExplorer() {
           </div>
         </div>
       </div>
-    </div>
+      </div>
+    </>
   )
 }
 
