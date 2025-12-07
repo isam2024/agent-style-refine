@@ -131,9 +131,18 @@ function HypothesisExplorer() {
 
   if (exploreMutation.isPending || isExploring) {
     return (
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Debug Controls */}
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+      <>
+        <LogWindow
+          sessionId={sessionId!}
+          isActive={true}
+          onComplete={() => {
+            setIsExploring(false)
+          }}
+        />
+
+        <div className="max-w-4xl mx-auto space-y-6">
+          {/* Debug Controls */}
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <span className="text-sm font-medium text-yellow-800">Debug Controls</span>
@@ -194,13 +203,23 @@ function HypothesisExplorer() {
             </p>
           </div>
         </div>
-      </div>
+        </div>
+      </>
     )
   }
 
   if (exploreMutation.isError) {
     return (
-      <div className="max-w-4xl mx-auto">
+      <>
+        <LogWindow
+          sessionId={sessionId!}
+          isActive={true}
+          onComplete={() => {
+            setIsExploring(false)
+          }}
+        />
+
+        <div className="max-w-4xl mx-auto">
         <div className="bg-red-50 border border-red-200 rounded-xl p-6">
           <h2 className="text-lg font-semibold text-red-900 mb-2">Exploration Failed</h2>
           <p className="text-red-700">{(exploreMutation.error as Error).message}</p>
@@ -211,17 +230,28 @@ function HypothesisExplorer() {
             Retry
           </button>
         </div>
-      </div>
+        </div>
+      </>
     )
   }
 
   if (!exploreResult) {
     return (
-      <div className="max-w-4xl mx-auto">
+      <>
+        <LogWindow
+          sessionId={sessionId!}
+          isActive={true}
+          onComplete={() => {
+            setIsExploring(false)
+          }}
+        />
+
+        <div className="max-w-4xl mx-auto">
         <div className="bg-white rounded-xl shadow-sm p-8 text-center text-slate-500">
           Loading...
         </div>
-      </div>
+        </div>
+      </>
     )
   }
 
