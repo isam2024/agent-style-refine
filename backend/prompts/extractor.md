@@ -1,6 +1,9 @@
-You are an IDENTITY EXTRACTION ENGINE. Your PRIMARY task is to LOCK the structural identity of this image so it can be recreated exactly.
+You are a VISUAL CHARACTERISTICS EXTRACTION ENGINE. Your PRIMARY task is to describe the BROADEST visual qualities of this image, NOT to identify or categorize what it depicts.
 
-Your role is NOT to analyze "style" — your role is to extract WHAT is shown, WHERE it is positioned, and HOW the structure is organized.
+CRITICAL PRINCIPLE: Extract visual characteristics at the HIGHEST LEVEL OF ABSTRACTION.
+- Describe HOW things look (colors, shapes, arrangements)
+- Do NOT describe WHAT things are (subjects, objects, categories)
+- Think "visual properties" not "object identification"
 
 Analyze the provided image and extract its characteristics.
 
@@ -75,11 +78,13 @@ CRITICAL INSTRUCTIONS - IDENTITY LOCK PROTOCOL:
    - IDENTITY (frozen, never changes): WHAT subject, WHERE positioned, HOW structured
    - STYLE (refinable, can evolve): colors, textures, lighting quality, rendering technique
 
-2. **Core Invariants = STRUCTURAL IDENTITY LOCKS:**
-   - These are NOT stylistic preferences - they are HARD CONSTRAINTS
-   - Example GOOD: "Black cat facing left, centered in frame, whiskers extending horizontally"
-   - Example BAD: "Vivid colors with flowing organic shapes" ← This is style, not identity
-   - If you can change it without changing WHAT the image shows, it's NOT an invariant
+2. **Core Invariants = BROAD VISUAL PATTERNS (NOT Subject Identity):**
+   - Describe the BROADEST repeating visual characteristics
+   - Focus on ARRANGEMENT, STRUCTURE, PATTERN - not specific objects or subjects
+   - Example GOOD: "Elements arranged in grid pattern", "Symmetrical layout", "Repeating geometric forms"
+   - Example BAD: "Cat facing left" ← Too specific, locks in subject
+   - Example BAD: "Mandala-like pattern" ← Categorical label
+   - Think: What visual patterns would still apply if the subject changed?
 
 3. **Motifs Start EMPTY:**
    - Set recurring_elements to [] (empty array)
@@ -132,9 +137,12 @@ CRITICAL: Do NOT use categorical labels (e.g., "mandala", "abstract art", "impre
 
 - `style_name`: Descriptive (3-5 words) based on OBSERVABLE features, NOT art movement names (e.g., "Geometric Grid Pattern" NOT "Mandala Art")
 - `line_quality`: Describe edge treatment (e.g., "sharp geometric edges", "soft blurred boundaries", "crisp defined lines")
-- `shape_language`: Describe ACTUAL shapes (e.g., "squares arranged in grid", "circles nested concentrically", "triangles pointing outward")
-  - AVOID: "mandala-like", "abstract", "organic" (unless truly free-form curves)
-  - USE: "grid-based rectangles", "radial spokes", "tessellating hexagons"
+- `shape_language`: Describe shape TYPES and ARRANGEMENTS at the broadest level
+  - Focus on: shape families (rectangles, circles, polygons), not specific instances
+  - Focus on: arrangement patterns (grid, radial, scattered), not what they depict
+  - GOOD: "rectangular forms in grid arrangement", "circular shapes nested", "angular polygons"
+  - AVOID: "mandala-like", "abstract", "kaleidoscope" (categorical labels)
+  - AVOID: "cat silhouette", "tree shapes" (subject identification)
 - `geometry_notes`: Describe SPATIAL arrangement (e.g., "elements repeat in 4x4 grid", "radiates from center point", "alternating row pattern")
 - `surface`: Describe texture (e.g., "flat matte", "glossy reflective", "rough painterly", "pixelated digital")
 - `lighting_type`: Describe lighting (e.g., "bright center radial glow", "even ambient", "directional from top-left")
@@ -144,12 +152,20 @@ CRITICAL: Do NOT use categorical labels (e.g., "mandala", "abstract art", "impre
 - `framing`: Describe composition (e.g., "centered with space", "fills frame edge-to-edge", "offset to left")
 - `negative_space_behavior`: Describe background (e.g., "solid dark uniform", "gradient fade", "empty transparent")
 
-**CRITICAL PRINCIPLE**:
-- If you see a grid of squares → say "grid of squares", NOT "geometric pattern" or "mandala"
-- If you see concentric circles → say "concentric circles", NOT "mandala-like" or "radial design"
-- If you see repeating hexagons → say "tessellating hexagons", NOT "abstract pattern"
+**CRITICAL PRINCIPLE - STAY BROAD AND ABSTRACT**:
+- Describe visual PROPERTIES, not objects or categories
+- If you see a grid → say "elements arranged in grid layout", NOT "checkerboard" or "tile pattern"
+- If you see circles → say "circular forms", NOT "bubbles" or "orbs" or "mandalas"
+- If you see symmetry → say "symmetrical arrangement", NOT what the symmetry depicts
+- Focus on COLOR, SHAPE FAMILY, ARRANGEMENT, LIGHTING - not identification
 
-Be LITERAL and SPECIFIC. Let the training process discover higher-level patterns.
+**Think like this:**
+- "What SHAPES?" → rectangles, circles, polygons (shape families)
+- "What ARRANGEMENT?" → grid, radial, scattered, nested (spatial patterns)
+- "What COLORS?" → blue, orange, gradients (color properties)
+- NOT "What IS it?" → cat, mandala, tree, building (object identification)
+
+The training process will discover specifics. Keep extraction BROAD.
 
 **CRITICAL REMINDER**:
 - Replace ALL "Realistic example:" text with actual analysis of THIS image
