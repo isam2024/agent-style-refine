@@ -19,6 +19,7 @@ function HypothesisExplorer() {
   const [expandedHypothesis, setExpandedHypothesis] = useState<string | null>(null)
   const [messages, setMessages] = useState<WSMessage[]>([])
   const [progress, setProgress] = useState<ProgressState | null>(null)
+  const [isExploring, setIsExploring] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
 
   // WebSocket connection
@@ -66,12 +67,19 @@ function HypothesisExplorer() {
   }, [sessionId])
 
   const exploreMutation = useMutation({
-    mutationFn: () => exploreHypotheses(sessionId!, 3),
+    mutationFn: () => {
+      setIsExploring(true)
+      return exploreHypotheses(sessionId!, 3)
+    },
     onSuccess: (result) => {
       setExploreResult(result)
+      setIsExploring(false)
       if (result.selected_hypothesis) {
         setSelectedHypothesisId(result.selected_hypothesis.id)
       }
+    },
+    onError: () => {
+      setIsExploring(false)
     },
   })
 
@@ -179,9 +187,9 @@ function HypothesisExplorer() {
     <>
       <LogWindow
         sessionId={sessionId!}
-        isActive={exploreMutation.isPending}
+        isActive={isExploring}
         onComplete={() => {
-          // Refresh can happen here if needed
+          setIsExploring(false)
         }}
       />
 
