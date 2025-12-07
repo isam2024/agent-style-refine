@@ -228,10 +228,17 @@ function HypothesisExplorer() {
   const sortedHypotheses = [...exploreResult.hypotheses].sort((a, b) => b.confidence - a.confidence)
 
   return (
-    <>
+    <div className="space-y-6">
+      {/* Debug: Force LogWindow to always show */}
+      <div className="max-w-6xl mx-auto">
+        <div className="mb-4 p-2 bg-purple-50 border border-purple-200 rounded text-xs">
+          LogWindow Debug: isActive={isExploring ? 'true' : 'false'}, sessionId={sessionId}
+        </div>
+      </div>
+
       <LogWindow
         sessionId={sessionId!}
-        isActive={isExploring}
+        isActive={true}
         onComplete={() => {
           setIsExploring(false)
         }}
@@ -332,7 +339,7 @@ function HypothesisExplorer() {
         </div>
       </div>
       </div>
-    </>
+    </div>
   )
 }
 
