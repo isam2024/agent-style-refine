@@ -93,9 +93,10 @@ function HypothesisExplorer() {
     },
   })
 
-  // Auto-start exploration when page loads
+  // Auto-start exploration when page loads (can be disabled for debug)
   useEffect(() => {
-    if (sessionId && !exploreResult && !exploreMutation.isPending) {
+    // Comment out the next 3 lines to disable auto-start for debugging
+    if (sessionId && !exploreResult && !exploreMutation.isPending && !isExploring) {
       exploreMutation.mutate()
     }
   }, [sessionId])
@@ -103,6 +104,19 @@ function HypothesisExplorer() {
   const handleSelect = () => {
     if (selectedHypothesisId) {
       selectMutation.mutate(selectedHypothesisId)
+    }
+  }
+
+  const handleStopExploration = () => {
+    setIsExploring(false)
+    if (wsRef.current) {
+      wsRef.current.close()
+    }
+  }
+
+  const handleStartExploration = () => {
+    if (!isExploring && !exploreMutation.isPending) {
+      exploreMutation.mutate()
     }
   }
 
@@ -115,9 +129,37 @@ function HypothesisExplorer() {
 
   const latestLog = getLatestLog()
 
-  if (exploreMutation.isPending) {
+  if (exploreMutation.isPending || isExploring) {
     return (
       <div className="max-w-4xl mx-auto space-y-6">
+        {/* Debug Controls */}
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-yellow-800">Debug Controls</span>
+              <span className="text-xs text-yellow-600">
+                isExploring: {isExploring ? 'true' : 'false'} | isPending: {exploreMutation.isPending ? 'true' : 'false'}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleStartExploration}
+                disabled={isExploring || exploreMutation.isPending}
+                className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Start
+              </button>
+              <button
+                onClick={handleStopExploration}
+                disabled={!isExploring}
+                className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Stop
+              </button>
+            </div>
+          </div>
+        </div>
+
         <div className="bg-white rounded-xl shadow-sm p-8">
           <div className="text-center space-y-4">
             <div className="inline-block">
@@ -196,6 +238,37 @@ function HypothesisExplorer() {
       />
 
       <div className="max-w-6xl mx-auto space-y-6">
+        {/* Debug Controls */}
+        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-sm font-medium text-yellow-800">Debug Controls</span>
+              <span className="text-xs text-yellow-600">
+                Session: {sessionId?.slice(0, 8)}... | Messages: {messages.length}
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button
+                onClick={handleStartExploration}
+                disabled={isExploring || exploreMutation.isPending}
+                className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Re-run Exploration
+              </button>
+              <button
+                onClick={() => {
+                  setExploreResult(null)
+                  setMessages([])
+                  setProgress(null)
+                }}
+                className="px-3 py-1 text-sm bg-slate-600 text-white rounded hover:bg-slate-700"
+              >
+                Reset View
+              </button>
+            </div>
+          </div>
+        </div>
+
         {/* Header */}
         <div className="bg-white rounded-xl shadow-sm p-6">
         <h2 className="text-2xl font-bold text-slate-800 mb-2">Hypothesis Exploration Complete</h2>
