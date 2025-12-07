@@ -34,6 +34,7 @@ class VLMService:
         request_id: str | None = None,
         timeout: float = 300.0,
         model: str | None = None,
+        force_json: bool = True,
     ) -> str:
         """
         Send a prompt to the VLM with optional images.
@@ -80,6 +81,11 @@ class VLMService:
             "messages": messages,
             "stream": False,
         }
+
+        # Force JSON output for structured tasks (extraction, critique)
+        if force_json:
+            payload["format"] = "json"
+            logger.debug("VLM: Forcing JSON output format")
 
         logger.debug(f"VLM: Using model {use_model}")
         logger.debug(f"VLM: Prompt preview: {prompt[:200]}...")
@@ -192,6 +198,7 @@ class VLMService:
         system: str | None = None,
         request_id: str | None = None,
         use_text_model: bool = True,
+        force_json: bool = False,
     ) -> str:
         """
         Generate text without images (for the style agent prompt generation).
@@ -201,9 +208,10 @@ class VLMService:
             system: Optional system prompt
             request_id: Optional ID to track/cancel this request
             use_text_model: If True, use faster text model instead of VLM (default True)
+            force_json: If True, force JSON output format (default False for creative text)
         """
         model = self.text_model if use_text_model else self.vlm_model
-        return await self.analyze(prompt=prompt, system=system, request_id=request_id, model=model)
+        return await self.analyze(prompt=prompt, system=system, request_id=request_id, model=model, force_json=force_json)
 
     async def describe_image(
         self,

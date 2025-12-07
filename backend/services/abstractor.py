@@ -49,6 +49,7 @@ Return the abstracted JSON with the same structure."""
             response = await vlm_service.generate_text(
                 prompt=user_prompt,
                 system=system_prompt,
+                force_json=True,  # We need valid JSON output
             )
 
             # Clean response
