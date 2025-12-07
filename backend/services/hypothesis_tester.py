@@ -114,7 +114,7 @@ Output ONLY the image generation prompt (one paragraph, 40-80 words).
                 # Generate image
                 generated_b64 = await comfyui_service.generate(
                     prompt=image_prompt.strip(),
-                    workflow_type="flux",
+                    session_id=session_id,
                 )
 
                 # Save test image
