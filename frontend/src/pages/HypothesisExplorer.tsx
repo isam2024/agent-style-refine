@@ -1,9 +1,14 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { exploreHypotheses, selectHypothesis } from '../api/client'
-import { StyleHypothesis, HypothesisExploreResponse } from '../types'
-import { useWebSocket } from '../hooks/useWebSocket'
+import { StyleHypothesis, HypothesisExploreResponse, WSMessage } from '../types'
+
+interface ProgressState {
+  stage: string
+  percent: number
+  message: string
+}
 
 function HypothesisExplorer() {
   const { sessionId } = useParams<{ sessionId: string }>()
@@ -11,8 +16,53 @@ function HypothesisExplorer() {
   const [exploreResult, setExploreResult] = useState<HypothesisExploreResponse | null>(null)
   const [selectedHypothesisId, setSelectedHypothesisId] = useState<string | null>(null)
   const [expandedHypothesis, setExpandedHypothesis] = useState<string | null>(null)
+  const [messages, setMessages] = useState<WSMessage[]>([])
+  const [progress, setProgress] = useState<ProgressState | null>(null)
+  const wsRef = useRef<WebSocket | null>(null)
 
-  const { messages, isConnected } = useWebSocket(sessionId || '')
+  // WebSocket connection
+  useEffect(() => {
+    if (!sessionId) return
+
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = window.location.host
+    const ws = new WebSocket(`${protocol}//${host}/ws/${sessionId}`)
+
+    ws.onopen = () => {
+      console.log('WebSocket connected')
+    }
+
+    ws.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data) as WSMessage
+        setMessages(prev => [...prev, data])
+
+        if (data.event === 'progress' && data.data) {
+          setProgress({
+            stage: (data.data as any).stage || '',
+            percent: (data.data as any).percent || 0,
+            message: (data.data as any).message || '',
+          })
+        }
+      } catch (e) {
+        console.error('Failed to parse WebSocket message:', e)
+      }
+    }
+
+    ws.onerror = () => {
+      console.error('WebSocket error')
+    }
+
+    ws.onclose = () => {
+      console.log('WebSocket disconnected')
+    }
+
+    wsRef.current = ws
+
+    return () => {
+      ws.close()
+    }
+  }, [sessionId])
 
   const exploreMutation = useMutation({
     mutationFn: () => exploreHypotheses(sessionId!, 3),
@@ -52,15 +102,7 @@ function HypothesisExplorer() {
     return latest.data as { message: string; level: string; source: string }
   }
 
-  const getProgress = () => {
-    const progressMessages = messages.filter(m => m.event === 'progress')
-    if (progressMessages.length === 0) return null
-    const latest = progressMessages[progressMessages.length - 1]
-    return latest.data as { stage: string; percent: number; message: string }
-  }
-
   const latestLog = getLatestLog()
-  const progress = getProgress()
 
   if (exploreMutation.isPending) {
     return (
