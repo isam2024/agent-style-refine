@@ -20,6 +20,7 @@ class Session(Base):
     mode: Mapped[str] = mapped_column(String(20), default="training")
     status: Mapped[str] = mapped_column(String(20), default="created")
     original_image_path: Mapped[str] = mapped_column(String(500), nullable=True)
+    style_hints: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow
     )

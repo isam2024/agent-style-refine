@@ -106,6 +106,10 @@ class SessionCreate(BaseModel):
     name: str = Field(description="Name for this session")
     mode: SessionMode = Field(default=SessionMode.TRAINING)
     image_b64: str = Field(description="Base64 encoded original image")
+    style_hints: str | None = Field(
+        default=None,
+        description="Optional user guidance: what the style IS and what it ISN'T (e.g., 'grid-like geometric pattern, NOT mandala')"
+    )
 
 
 class SessionResponse(BaseModel):

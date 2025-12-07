@@ -121,18 +121,30 @@ RESPONSE FORMAT - CRITICAL:
 - Every string field MUST have actual content, NOT placeholder text
 - If you cannot determine a value, use a reasonable visual descriptor, NOT "describe..." or "Example:"
 
-**MANDATORY FIELD REQUIREMENTS**:
-- `style_name`: Must be a real descriptive name (3-5 words), NOT "Extracted Style" or "Example"
-- `line_quality`: Must describe actual edge treatment you see (e.g., "sharp geometric edges", "soft blurred boundaries", "crisp defined lines")
-- `shape_language`: Must describe actual shapes you see (e.g., "geometric circles and triangles", "flowing organic curves", "angular faceted forms")
-- `geometry_notes`: Must describe actual geometric characteristics (e.g., "concentric circular patterns", "grid-based layout", "asymmetric arrangement")
-- `surface`: Must describe actual texture you see (e.g., "flat matte", "glossy reflective", "rough painterly", "pixelated digital")
-- `lighting_type`: Must describe actual lighting you see (e.g., "bright center radial glow", "top-down directional", "even ambient")
-- `shadows`: Must describe actual shadow behavior (e.g., "hard dark shadows", "no visible shadows", "soft gradient falloff")
-- `highlights`: Must describe actual highlight behavior (e.g., "bright white specular", "subtle edge lighting", "no highlights")
-- `camera`: Must describe actual viewpoint (e.g., "straight-on centered", "slight overhead angle", "eye-level frontal")
-- `framing`: Must describe actual composition (e.g., "centered with space", "fills frame edge-to-edge", "off-center asymmetric")
-- `negative_space_behavior`: Must describe actual background treatment (e.g., "solid dark uniform", "gradient fade", "empty transparent")
+**MANDATORY FIELD REQUIREMENTS - BE DESCRIPTIVE, NOT CATEGORICAL**:
+
+CRITICAL: Do NOT use categorical labels (e.g., "mandala", "abstract art", "impressionist"). Instead, describe WHAT YOU LITERALLY SEE.
+
+- `style_name`: Descriptive (3-5 words) based on OBSERVABLE features, NOT art movement names (e.g., "Geometric Grid Pattern" NOT "Mandala Art")
+- `line_quality`: Describe edge treatment (e.g., "sharp geometric edges", "soft blurred boundaries", "crisp defined lines")
+- `shape_language`: Describe ACTUAL shapes (e.g., "squares arranged in grid", "circles nested concentrically", "triangles pointing outward")
+  - AVOID: "mandala-like", "abstract", "organic" (unless truly free-form curves)
+  - USE: "grid-based rectangles", "radial spokes", "tessellating hexagons"
+- `geometry_notes`: Describe SPATIAL arrangement (e.g., "elements repeat in 4x4 grid", "radiates from center point", "alternating row pattern")
+- `surface`: Describe texture (e.g., "flat matte", "glossy reflective", "rough painterly", "pixelated digital")
+- `lighting_type`: Describe lighting (e.g., "bright center radial glow", "even ambient", "directional from top-left")
+- `shadows`: Describe shadows (e.g., "hard dark shadows", "no visible shadows", "soft gradient falloff")
+- `highlights`: Describe highlights (e.g., "bright white specular", "subtle edge lighting", "no highlights")
+- `camera`: Describe viewpoint (e.g., "straight-on centered", "slight overhead", "eye-level frontal")
+- `framing`: Describe composition (e.g., "centered with space", "fills frame edge-to-edge", "offset to left")
+- `negative_space_behavior`: Describe background (e.g., "solid dark uniform", "gradient fade", "empty transparent")
+
+**CRITICAL PRINCIPLE**:
+- If you see a grid of squares → say "grid of squares", NOT "geometric pattern" or "mandala"
+- If you see concentric circles → say "concentric circles", NOT "mandala-like" or "radial design"
+- If you see repeating hexagons → say "tessellating hexagons", NOT "abstract pattern"
+
+Be LITERAL and SPECIFIC. Let the training process discover higher-level patterns.
 
 **CRITICAL REMINDER**:
 - Replace ALL "Realistic example:" text with actual analysis of THIS image

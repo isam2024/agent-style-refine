@@ -73,7 +73,7 @@ IMPORTANT:
 - For original_subject and suggested_test_prompt: describe WHAT you see (concrete content)
 - Output ONLY valid JSON, no markdown or explanation."""
 
-    async def extract(self, image_b64: str, session_id: str | None = None) -> StyleProfile:
+    async def extract(self, image_b64: str, session_id: str | None = None, style_hints: str | None = None) -> StyleProfile:
         """
         Extract style profile from an image.
         Uses PIL for accurate color extraction and VLM for style analysis.
@@ -81,6 +81,7 @@ IMPORTANT:
         Args:
             image_b64: Base64 encoded image
             session_id: Optional session ID for WebSocket logging
+            style_hints: Optional user guidance about what the style IS and ISN'T
 
         Returns:
             StyleProfile object
@@ -105,6 +106,16 @@ IMPORTANT:
         await log("Sending image to VLM for full style analysis...")
         await log("Analyzing: style, lighting, texture, composition, motifs, subject...")
         prompt = self._load_prompt()
+
+        # Add user style hints if provided
+        if style_hints:
+            await log(f"Using style hints: {style_hints}", "info")
+            prompt = f"""{prompt}
+
+**USER GUIDANCE** (CRITICAL - Follow these instructions precisely):
+{style_hints}
+
+The user has provided specific guidance about this style. You MUST incorporate their descriptions and corrections into your analysis. If they say it's NOT something (e.g., "NOT mandala"), do not use that term or similar concepts. Use their positive descriptions (e.g., "grid-like pattern") as the primary characterization."""
 
         response = await vlm_service.analyze(
             prompt=prompt,
