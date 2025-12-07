@@ -574,35 +574,46 @@ Write a single flowing description that embodies ALL the above style rules."""
         additional_context: str | None = None,
         include_negative: bool = True,
         variation_level: int = 0,
+        use_creative_rewrite: bool = False,  # NEW: default to mechanical assembly
     ) -> PromptWriteResponse:
         """
         Write a styled prompt from a subject and trained style.
 
-        Uses LLM-based creative rewriting to integrate style as constraints,
-        producing natural flowing prose instead of mechanical trait assembly.
-
-        Falls back to mechanical assembly if LLM call fails.
+        Uses mechanical assembly by default (precise, predictable).
+        Optionally uses LLM-based creative rewriting (natural but less accurate).
 
         Args:
             variation_level: 0-100, controls prompt variation
                 0 = Always same (deterministic)
                 50 = Moderate variation (shuffled keywords, varied phrasing)
                 100 = Maximum variation (random selection, different structures)
+            use_creative_rewrite: If True, uses VLM to rewrite (may add embellishments)
+                                 If False, uses mechanical assembly (strict to style rules)
         """
-        # Try creative LLM-based rewriting first
-        creative_prompt = await self._creative_rewrite(
-            subject=subject,
-            style_profile=style_profile,
-            style_rules=style_rules,
-            variation_level=variation_level,
-        )
+        # Use mechanical assembly by default (more accurate to style)
+        if use_creative_rewrite:
+            # Try creative LLM-based rewriting (optional)
+            creative_prompt = await self._creative_rewrite(
+                subject=subject,
+                style_profile=style_profile,
+                style_rules=style_rules,
+                variation_level=variation_level,
+            )
 
-        # If creative rewrite succeeded, use it as the style prompt
-        if creative_prompt:
-            style_prompt_only = creative_prompt
+            # If creative rewrite succeeded, use it as the style prompt
+            if creative_prompt:
+                style_prompt_only = creative_prompt
+            else:
+                # Fallback to mechanical assembly
+                logger.warning("Creative rewrite failed, using mechanical assembly")
+                style_prompt_only = self._mechanical_assembly(
+                    style_profile=style_profile,
+                    style_rules=style_rules,
+                    additional_context=additional_context,
+                    variation_level=variation_level,
+                )
         else:
-            # Fallback to mechanical assembly
-            logger.warning("Using mechanical prompt assembly as fallback")
+            # Use mechanical assembly (default - more accurate)
             style_prompt_only = self._mechanical_assembly(
                 style_profile=style_profile,
                 style_rules=style_rules,

@@ -300,6 +300,10 @@ class PromptWriteRequest(BaseModel):
         le=100,
         description="Prompt variation: 0=deterministic, 50=moderate, 100=maximum"
     )
+    use_creative_rewrite: bool = Field(
+        default=False,
+        description="Use VLM creative rewriting (natural but may embellish) vs mechanical assembly (precise to style)"
+    )
 
 
 class PromptWriteResponse(BaseModel):

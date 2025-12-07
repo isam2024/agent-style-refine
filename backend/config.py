@@ -20,7 +20,8 @@ class Settings(BaseSettings):
     #   - llama3.2-vision:11b (slow but accurate)
     #   - moondream (fast, 1.8b)
     #   - llava:7b
-    vlm_model: str = "blaifa/InternVL3:8b-Q4_K_M"
+    # TEMP: Using llama3.2-vision for better JSON compliance
+    vlm_model: str = "llama3.2-vision:11b"
     # Text model for prompt generation (faster, no vision needed)
     text_model: str = "llama3.2:3b"
 
