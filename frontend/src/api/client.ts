@@ -9,6 +9,9 @@ import {
   PromptWriteResponse,
   PromptGenerateResponse,
   GenerationHistoryResponse,
+  HypothesisExploreResponse,
+  HypothesisSelectRequest,
+  SessionMode,
 } from '../types';
 
 const API_BASE = '/api';
@@ -62,11 +65,12 @@ export async function listSessions(): Promise<Session[]> {
 export async function createSession(
   name: string,
   imageB64: string,
-  mode: 'training' | 'auto' = 'training'
+  mode: SessionMode = 'training',
+  styleHints?: string
 ): Promise<Session> {
   return fetchJson<Session>(`${API_BASE}/sessions/`, {
     method: 'POST',
-    body: JSON.stringify({ name, image_b64: imageB64, mode }),
+    body: JSON.stringify({ name, image_b64: imageB64, mode, style_hints: styleHints }),
   });
 }
 
@@ -386,6 +390,49 @@ export async function regenerateThumbnail(styleId: string): Promise<{ status: st
     `${API_BASE}/styles/${styleId}/regenerate-thumbnail`,
     {
       method: 'POST',
+    }
+  );
+}
+
+// ============================================================
+// Hypothesis Mode API
+// ============================================================
+
+export async function exploreHypotheses(
+  sessionId: string,
+  numHypotheses: number = 3,
+  testSubjects: string[] = ['abstract pattern', 'landscape', 'portrait'],
+  autoSelect: boolean = false,
+  autoSelectThreshold: number = 0.7
+): Promise<HypothesisExploreResponse> {
+  return fetchJson<HypothesisExploreResponse>(
+    `${API_BASE}/hypothesis/explore`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        session_id: sessionId,
+        num_hypotheses: numHypotheses,
+        test_subjects: testSubjects,
+        auto_select: autoSelect,
+        auto_select_threshold: autoSelectThreshold,
+      }),
+      timeout: LONG_TIMEOUT, // Hypothesis exploration can take a long time
+    }
+  );
+}
+
+export async function selectHypothesis(
+  sessionId: string,
+  hypothesisId: string
+): Promise<StyleProfile> {
+  return fetchJson<StyleProfile>(
+    `${API_BASE}/hypothesis/select`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        session_id: sessionId,
+        hypothesis_id: hypothesisId,
+      }),
     }
   );
 }

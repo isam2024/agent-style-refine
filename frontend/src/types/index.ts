@@ -57,8 +57,8 @@ export interface CritiqueResult {
   updated_style_profile: StyleProfile;
 }
 
-export type SessionMode = 'training' | 'auto';
-export type SessionStatus = 'created' | 'extracting' | 'ready' | 'generating' | 'critiquing' | 'completed' | 'error';
+export type SessionMode = 'training' | 'auto' | 'hypothesis';
+export type SessionStatus = 'created' | 'extracting' | 'ready' | 'generating' | 'critiquing' | 'auto_improving' | 'hypothesis_exploring' | 'hypothesis_ready' | 'completed' | 'error';
 
 export interface Session {
   id: string;
@@ -205,4 +205,56 @@ export interface GenerationHistoryResponse {
   negative_prompt: string | null;
   image_b64: string | null;
   created_at: string;
+}
+
+// ============================================================
+// Hypothesis Mode Types
+// ============================================================
+
+export interface HypothesisTest {
+  test_subject: string;
+  generated_image_path: string;
+  scores: {
+    visual_consistency: number;
+    subject_independence: number;
+  };
+  timestamp: string;
+}
+
+export interface StyleHypothesis {
+  id: string;
+  interpretation: string;
+  profile: StyleProfile;
+  confidence: number;
+  supporting_evidence: string[];
+  uncertain_aspects: string[];
+  test_results: HypothesisTest[];
+}
+
+export interface HypothesisSet {
+  session_id: string;
+  hypotheses: StyleHypothesis[];
+  selected_hypothesis_id: string | null;
+  created_at: string;
+}
+
+export interface HypothesisExploreRequest {
+  session_id: string;
+  num_hypotheses?: number;
+  test_subjects?: string[];
+  auto_select?: boolean;
+  auto_select_threshold?: number;
+}
+
+export interface HypothesisExploreResponse {
+  session_id: string;
+  hypotheses: StyleHypothesis[];
+  selected_hypothesis: StyleHypothesis | null;
+  auto_selected: boolean;
+  test_images_generated: number;
+}
+
+export interface HypothesisSelectRequest {
+  session_id: string;
+  hypothesis_id: string;
 }

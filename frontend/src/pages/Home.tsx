@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { listSessions, createSession, deleteSession, deleteAllSessions } from '../api/client'
+import { SessionMode } from '../types'
 import ImageUpload from '../components/ImageUpload'
 import SessionList from '../components/SessionList'
 
@@ -11,6 +12,8 @@ function Home() {
   const [showCreate, setShowCreate] = useState(false)
   const [newSessionName, setNewSessionName] = useState('')
   const [uploadedImage, setUploadedImage] = useState<string | null>(null)
+  const [sessionMode, setSessionMode] = useState<SessionMode>('training')
+  const [styleHints, setStyleHints] = useState('')
 
   const { data: sessions, isLoading } = useQuery({
     queryKey: ['sessions'],
@@ -18,11 +21,16 @@ function Home() {
   })
 
   const createMutation = useMutation({
-    mutationFn: ({ name, imageB64 }: { name: string; imageB64: string }) =>
-      createSession(name, imageB64),
+    mutationFn: ({ name, imageB64, mode, hints }: { name: string; imageB64: string; mode: SessionMode; hints?: string }) =>
+      createSession(name, imageB64, mode, hints),
     onSuccess: (session) => {
       queryClient.invalidateQueries({ queryKey: ['sessions'] })
-      navigate(`/session/${session.id}`)
+      // Navigate to hypothesis explorer for hypothesis mode, otherwise session page
+      if (session.mode === 'hypothesis') {
+        navigate(`/hypothesis/${session.id}`)
+      } else {
+        navigate(`/session/${session.id}`)
+      }
     },
   })
 
@@ -48,7 +56,12 @@ function Home() {
 
   const handleCreate = () => {
     if (!newSessionName.trim() || !uploadedImage) return
-    createMutation.mutate({ name: newSessionName.trim(), imageB64: uploadedImage })
+    createMutation.mutate({
+      name: newSessionName.trim(),
+      imageB64: uploadedImage,
+      mode: sessionMode,
+      hints: styleHints || undefined
+    })
   }
 
   return (
@@ -103,6 +116,60 @@ function Home() {
               </div>
 
               <div>
+                <label className="block text-sm font-medium text-slate-700 mb-2">
+                  Mode
+                </label>
+                <div className="space-y-2">
+                  <label className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="mode"
+                      value="training"
+                      checked={sessionMode === 'training'}
+                      onChange={(e) => setSessionMode(e.target.value as SessionMode)}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <div className="font-medium text-slate-900">Training Mode</div>
+                      <div className="text-sm text-slate-500">Extract style once, then iteratively refine through training</div>
+                    </div>
+                  </label>
+                  <label className="flex items-start gap-3 p-3 border border-slate-200 rounded-lg hover:bg-slate-50 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="mode"
+                      value="hypothesis"
+                      checked={sessionMode === 'hypothesis'}
+                      onChange={(e) => setSessionMode(e.target.value as SessionMode)}
+                      className="mt-1"
+                    />
+                    <div className="flex-1">
+                      <div className="font-medium text-slate-900">Hypothesis Mode</div>
+                      <div className="text-sm text-slate-500">Generate multiple style interpretations, test each, and select the best</div>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {sessionMode === 'hypothesis' && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">
+                    Style Hints (Optional)
+                  </label>
+                  <textarea
+                    value={styleHints}
+                    onChange={(e) => setStyleHints(e.target.value)}
+                    placeholder="e.g., Grid-like geometric pattern, NOT mandala. High saturation colors, ONLY rectangles."
+                    rows={3}
+                    className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
+                  />
+                  <p className="text-xs text-slate-500 mt-1">
+                    Guide the extraction by describing what the style IS and what it ISN'T
+                  </p>
+                </div>
+              )}
+
+              <div>
                 <label className="block text-sm font-medium text-slate-700 mb-1">
                   Reference Image
                 </label>
@@ -119,6 +186,8 @@ function Home() {
                   setShowCreate(false)
                   setNewSessionName('')
                   setUploadedImage(null)
+                  setSessionMode('training')
+                  setStyleHints('')
                 }}
                 className="px-4 py-2 text-slate-600 hover:text-slate-800"
               >

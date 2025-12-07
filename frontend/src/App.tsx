@@ -1,6 +1,7 @@
 import { Routes, Route, NavLink } from 'react-router-dom'
 import Home from './pages/Home'
 import Session from './pages/Session'
+import HypothesisExplorer from './pages/HypothesisExplorer'
 import StyleLibrary from './pages/StyleLibrary'
 import PromptWriter from './pages/PromptWriter'
 
@@ -59,6 +60,9 @@ function App() {
           {/* Training Mode */}
           <Route path="/" element={<Home />} />
           <Route path="/session/:sessionId" element={<Session />} />
+
+          {/* Hypothesis Mode */}
+          <Route path="/hypothesis/:sessionId" element={<HypothesisExplorer />} />
 
           {/* Style Library */}
           <Route path="/styles" element={<StyleLibrary />} />
