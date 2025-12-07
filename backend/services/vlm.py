@@ -35,6 +35,7 @@ class VLMService:
         timeout: float = 300.0,
         model: str | None = None,
         force_json: bool = True,
+        max_retries: int = 3,
     ) -> str:
         """
         Send a prompt to the VLM with optional images.
@@ -46,6 +47,7 @@ class VLMService:
             request_id: Optional ID to track/cancel this request
             timeout: Request timeout in seconds (default 5 minutes)
             model: Override model to use (defaults to vlm_model)
+            max_retries: Maximum number of retry attempts (default 3)
 
         Returns:
             The model's response text
@@ -56,6 +58,52 @@ class VLMService:
 
         # Use specified model or default to vlm_model
         use_model = model or self.vlm_model
+
+        # Retry loop with exponential backoff
+        last_error = None
+        for attempt in range(max_retries):
+            try:
+                return await self._do_analyze(
+                    prompt=prompt,
+                    images=images,
+                    system=system,
+                    request_id=request_id,
+                    timeout=timeout,
+                    use_model=use_model,
+                    force_json=force_json,
+                )
+            except asyncio.CancelledError:
+                # Don't retry on cancellation
+                raise
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries - 1:
+                    wait_time = 2 ** attempt  # Exponential backoff: 1s, 2s, 4s
+                    logger.warning(f"VLM: Attempt {attempt + 1}/{max_retries} failed: {e}. Retrying in {wait_time}s...")
+                    await asyncio.sleep(wait_time)
+                else:
+                    logger.error(f"VLM: All {max_retries} attempts failed")
+                    raise last_error
+            finally:
+                # Clean up request tracking only after all retries exhausted
+                if attempt == max_retries - 1:
+                    if request_id and request_id in self._active_requests:
+                        del self._active_requests[request_id]
+
+        # Should never reach here, but just in case
+        raise last_error
+
+    async def _do_analyze(
+        self,
+        prompt: str,
+        images: list[str] | None,
+        system: str | None,
+        request_id: str | None,
+        timeout: float,
+        use_model: str,
+        force_json: bool,
+    ) -> str:
+        """Internal method that does the actual VLM API call (extracted for retry logic)."""
 
         messages = []
 
@@ -90,7 +138,6 @@ class VLMService:
         logger.debug(f"VLM: Using model {use_model}")
         logger.debug(f"VLM: Prompt preview: {prompt[:200]}...")
 
-        # Use streaming internally so we can detect cancellation
         async with httpx.AsyncClient(timeout=timeout) as client:
             try:
                 response = await client.post(
@@ -132,10 +179,6 @@ class VLMService:
             except Exception as e:
                 logger.error(f"VLM: Unexpected error: {type(e).__name__}: {e}")
                 raise
-            finally:
-                # Clean up request tracking
-                if request_id and request_id in self._active_requests:
-                    del self._active_requests[request_id]
 
     async def analyze_stream(
         self,
@@ -248,6 +291,7 @@ Output ONLY the description, no explanation or preamble."""
             prompt=prompt,
             images=[image_b64],
             request_id=request_id,
+            force_json=False,  # Want natural language, not JSON
         )
 
     def get_active_requests(self) -> list[str]:

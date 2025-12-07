@@ -117,31 +117,61 @@ IMPORTANT:
 
 The user has provided specific guidance about this style. You MUST incorporate their descriptions and corrections into your analysis. If they say it's NOT something (e.g., "NOT mandala"), do not use that term or similar concepts. Use their positive descriptions (e.g., "grid-like pattern") as the primary characterization."""
 
-        response = await vlm_service.analyze(
-            prompt=prompt,
-            images=[image_b64],
-        )
+        # Retry loop for VLM + parsing (up to 3 attempts)
+        max_retries = 3
+        last_error = None
+        profile_dict = None
 
-        await log(f"VLM response received ({len(response)} chars)")
+        for attempt in range(max_retries):
+            try:
+                await log(f"Sending image to VLM for extraction (attempt {attempt + 1}/{max_retries})...")
+                response = await vlm_service.analyze(
+                    prompt=prompt,
+                    images=[image_b64],
+                    max_retries=1,  # VLM has its own retry
+                )
 
-        # DEBUG: Log first part of VLM response to see what we're getting
-        response_preview = response[:500] if len(response) > 500 else response
-        await log(f"VLM response preview: {response_preview}", "warning")
+                await log(f"VLM response received ({len(response)} chars)")
 
-        await log("Parsing style profile from VLM response...")
+                # DEBUG: Log first part of VLM response
+                response_preview = response[:500] if len(response) > 500 else response
+                await log(f"VLM response preview: {response_preview}", "warning")
 
-        # Parse JSON from response - FAIL if invalid, no fallback
-        try:
-            profile_dict = self._parse_json_response(response)
-        except ValueError as e:
-            await log(f"FATAL: VLM did not return valid JSON: {e}", "error")
-            await log(f"VLM response was: {response[:300]}", "error")
-            raise RuntimeError(
-                f"Style extraction failed: VLM returned invalid JSON. "
-                f"Check that the model supports JSON output. Response preview: {response[:200]}"
-            )
+                await log("Parsing style profile from VLM response...")
 
-        await log(f"Style identified: {profile_dict.get('style_name', 'Unknown')}", "success")
+                # Parse JSON from response - FAIL if invalid
+                profile_dict = self._parse_json_response(response)
+
+                # Success! Break out of retry loop
+                await log(f"Style identified: {profile_dict.get('style_name', 'Unknown')}", "success")
+                break
+
+            except ValueError as e:
+                # JSON parsing error - retry
+                last_error = e
+                if attempt < max_retries - 1:
+                    await log(f"Parsing failed (attempt {attempt + 1}/{max_retries}): {e}", "warning")
+                    await log(f"VLM response was: {response[:300]}", "warning")
+                    await log("Retrying VLM request...", "info")
+                    import asyncio
+                    await asyncio.sleep(2)  # Brief pause before retry
+                else:
+                    await log(f"All {max_retries} parsing attempts failed", "error")
+                    await log(f"Final response: {response[:500]}", "error")
+                    raise RuntimeError(
+                        f"Style extraction failed after {max_retries} attempts: VLM returned invalid JSON. "
+                        f"Check that the model supports JSON output. Response preview: {response[:200]}"
+                    )
+            except Exception as e:
+                # Other errors (connection, etc) - don't retry
+                await log(f"VLM request failed: {e}", "error")
+                raise
+
+        # If we exited loop without breaking, raise the last error
+        if profile_dict is None:
+            if last_error:
+                raise last_error
+            raise RuntimeError("Style extraction failed: unknown error")
 
         # Log what was extracted
         if profile_dict.get("lighting"):
@@ -170,49 +200,101 @@ The user has provided specific guidance about this style. You MUST incorporate t
             for inv in profile_dict["core_invariants"]:
                 await log(f"  • {inv}")
 
-        # MECHANICAL BASELINE CONSTRUCTION - Override VLM's suggested_test_prompt
-        # VLM-generated prompts contain style contamination (colors, moods, textures)
-        # Build a PURE IDENTITY baseline from extracted structural fields
-        await log("Building mechanical identity baseline (suggested_test_prompt)...")
+        # BASELINE VALIDATION - Use VLM to check if baseline is structural-only
+        # Let the VLM itself determine if there's style contamination (dynamic, not keyword-based)
+        await log("Validating baseline with VLM...")
 
-        original_subject = profile_dict.get("original_subject", "")
-        composition = profile_dict.get("composition", {})
+        vlm_baseline = profile_dict.get("suggested_test_prompt", "")
 
-        # Build baseline from structural components only
-        baseline_parts = []
+        if vlm_baseline:
+            validation_prompt = f"""Analyze this description and determine if it contains ONLY structural/compositional information, or if it also includes style attributes.
 
-        if original_subject:
-            baseline_parts.append(original_subject)
+Description to analyze: "{vlm_baseline}"
 
-        if composition.get("framing"):
-            baseline_parts.append(composition["framing"])
+Structural elements (ALLOWED):
+- What objects/subjects are present
+- Where things are positioned (left, right, center, foreground, background)
+- How things are arranged (grid, scattered, layered, symmetrical)
+- Spatial relationships and composition
+- Object count, size relationships
 
-        if composition.get("structural_notes"):
-            baseline_parts.append(composition["structural_notes"])
+Style elements (NOT ALLOWED):
+- Colors or color descriptions
+- Lighting quality or shadows
+- Textures or surface qualities
+- Moods or atmospheres
+- Rendering techniques or art styles
+- Material properties
 
-        # Assemble mechanical baseline
-        if baseline_parts:
-            mechanical_baseline = ", ".join(baseline_parts)
+Output valid JSON:
+{{
+  "is_structural_only": true/false,
+  "contamination_found": ["list any style elements detected"],
+  "reason": "brief explanation"
+}}"""
 
-            # Store VLM's original attempt (for debugging/comparison)
-            vlm_suggested = profile_dict.get("suggested_test_prompt", "")
-            if vlm_suggested:
-                await log(f"VLM baseline (discarded): {vlm_suggested[:80]}...", "warning")
+            try:
+                await log("Asking VLM to validate baseline...")
+                validation_response = await vlm_service.analyze(
+                    prompt=validation_prompt,
+                    images=None,  # Text-only validation
+                    force_json=True,
+                    max_retries=1,  # Quick validation, don't retry too much
+                )
 
-            # Replace with mechanical baseline
-            profile_dict["suggested_test_prompt"] = mechanical_baseline
-            await log(f"Mechanical baseline: {mechanical_baseline[:100]}...", "success")
+                validation_result = json.loads(validation_response)
+                is_clean = validation_result.get("is_structural_only", False)
+                contamination = validation_result.get("contamination_found", [])
 
-            # OPTION 3 ENHANCEMENT (future): Validation VLM call
-            # Uncomment to add secondary identity-only VLM refinement:
-            #
-            # validation_prompt = f"Describe ONLY the structural identity: {mechanical_baseline}. Add any pose/orientation details. NO style words."
-            # vlm_validation = await vlm_service.analyze(validation_prompt, [image_b64])
-            # if not contains_style_words(vlm_validation):
-            #     profile_dict["suggested_test_prompt"] = vlm_validation
-            #     await log(f"VLM-refined baseline: {vlm_validation[:100]}...", "success")
+                if is_clean:
+                    await log(f"VLM validation: Baseline is structural-only ✓", "success")
+                    await log(f"Using VLM baseline: {vlm_baseline[:100]}...", "success")
+                else:
+                    await log(f"VLM validation: Baseline has style contamination ✗", "warning")
+                    await log(f"Contamination: {', '.join(contamination[:3])}", "warning")
+                    await log(f"VLM baseline: {vlm_baseline[:100]}...", "warning")
+
+                    # Build mechanical baseline from structural fields
+                    original_subject = profile_dict.get("original_subject", "")
+                    composition = profile_dict.get("composition", {})
+
+                    baseline_parts = []
+                    if original_subject:
+                        baseline_parts.append(original_subject)
+                    if composition.get("framing"):
+                        baseline_parts.append(composition["framing"])
+                    if composition.get("structural_notes"):
+                        baseline_parts.append(composition["structural_notes"])
+
+                    if baseline_parts:
+                        mechanical_baseline = ", ".join(baseline_parts)
+                        profile_dict["suggested_test_prompt"] = mechanical_baseline
+                        await log(f"Using mechanical baseline: {mechanical_baseline[:100]}...", "success")
+                    else:
+                        await log("Cannot build mechanical baseline, keeping VLM baseline despite contamination", "warning")
+
+            except Exception as e:
+                # Validation failed - fall back to mechanical baseline to be safe
+                await log(f"Baseline validation failed: {e}", "warning")
+                await log("Falling back to mechanical baseline for safety", "info")
+
+                original_subject = profile_dict.get("original_subject", "")
+                composition = profile_dict.get("composition", {})
+
+                baseline_parts = []
+                if original_subject:
+                    baseline_parts.append(original_subject)
+                if composition.get("framing"):
+                    baseline_parts.append(composition["framing"])
+                if composition.get("structural_notes"):
+                    baseline_parts.append(composition["structural_notes"])
+
+                if baseline_parts:
+                    mechanical_baseline = ", ".join(baseline_parts)
+                    profile_dict["suggested_test_prompt"] = mechanical_baseline
+                    await log(f"Using mechanical baseline: {mechanical_baseline[:100]}...", "success")
         else:
-            await log("Insufficient structural data for mechanical baseline, keeping VLM baseline", "warning")
+            await log("No VLM baseline provided, skipping validation", "warning")
 
         # Extract natural language image description (reverse prompt)
         await log("Extracting natural language image description...")

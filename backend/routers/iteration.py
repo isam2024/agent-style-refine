@@ -1031,12 +1031,18 @@ async def run_auto_improve(
 
             results.append({
                 "iteration_num": iteration_num_db,
+                "iteration_id": iteration.id,  # Include iteration ID for frontend
+                "image_b64": f"data:image/png;base64,{iteration_result['image_b64']}",  # Return generated image
+                "prompt_used": iteration_result["prompt_used"],
                 "overall_score": overall_score,
                 "weak_dimensions": iteration_result["weak_dimensions"],
                 "focused_areas": iteration_result["focused_areas"],
                 "scores": new_scores,
                 "approved": should_approve,
                 "eval_reason": eval_reason,
+                "preserved_traits": iteration_result["critique"].preserved_traits,
+                "lost_traits": iteration_result["critique"].lost_traits,
+                "interesting_mutations": iteration_result["critique"].interesting_mutations,
             })
 
             # Check stopping conditions (only consider approved iterations)
@@ -1085,17 +1091,33 @@ async def run_auto_improve(
             session.status = SessionStatus.ERROR.value
             await db.commit()
 
+            # Count as rejected
+            rejected_count += 1
+
+            # Add error result with all expected fields for consistent frontend handling
             results.append({
                 "iteration_num": iteration_num,
-                "error": error_msg,
+                "iteration_id": None,
+                "image_b64": None,
+                "prompt_used": None,
+                "overall_score": None,
+                "weak_dimensions": [],
+                "focused_areas": [],
+                "scores": {},
+                "approved": False,
+                "eval_reason": f"ERROR: {error_msg}",
+                "preserved_traits": [],
+                "lost_traits": [],
+                "interesting_mutations": [],
+                "error": error_msg,  # Keep error field for backwards compatibility
             })
             break
 
     session.status = SessionStatus.READY.value
     await db.commit()
 
-    # Find best approved iteration
-    approved_results = [r for r in results if r.get("approved")]
+    # Find best approved iteration (filter out None scores from errors)
+    approved_results = [r for r in results if r.get("approved") and r.get("overall_score") is not None]
     best_score = max([r["overall_score"] for r in approved_results]) if approved_results else None
 
     await log(
@@ -1125,6 +1147,9 @@ async def run_auto_improve(
         if result.get("eval_reason"):
             await log(f"  Reason: {result['eval_reason']}", "info", "summary")
             summary.append(f"  Reason: {result['eval_reason']}")
+        if result.get("error"):
+            await log(f"  Error: {result['error'][:200]}", "error", "summary")
+            summary.append(f"  Error: {result['error'][:200]}")
 
     # Write final summary to debug log
     summary.append("\n" + "=" * 80)

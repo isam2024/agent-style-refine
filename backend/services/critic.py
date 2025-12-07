@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 from pathlib import Path
@@ -164,29 +165,51 @@ IMPORTANT:
         await log("Connecting to VLM for style critique...")
         await log(f"Prompt length: {len(prompt)} characters")
 
-        # Send both images for proper comparison
-        try:
-            await log("Sending both images to VLM for comparison...")
-            response = await vlm_service.analyze(
-                prompt=prompt,
-                images=[original_image_b64, generated_image_b64],
-                request_id=session_id,  # Use session_id as request_id for cancellation
-            )
-            await log(f"VLM response received ({len(response)} chars)", "success")
-        except Exception as e:
-            await log(f"VLM request failed: {e}", "error")
-            raise
+        # Retry loop for VLM + parsing (up to 3 attempts)
+        max_retries = 3
+        last_error = None
 
-        # Parse JSON from response
-        await log("Parsing VLM response...")
-        try:
-            result_dict = self._parse_json_response(response, style_profile)
-            scores = result_dict.get("match_scores", {})
-            await log(f"Parsed scores - Overall: {scores.get('overall', 'N/A')}, Palette: {scores.get('palette', 'N/A')}", "success")
-        except Exception as e:
-            await log(f"Response parsing failed: {e}", "error")
-            await log(f"Raw response preview: {response[:300]}...", "warning")
-            raise
+        for attempt in range(max_retries):
+            try:
+                # Send both images for proper comparison
+                await log(f"Sending both images to VLM for comparison (attempt {attempt + 1}/{max_retries})...")
+                response = await vlm_service.analyze(
+                    prompt=prompt,
+                    images=[original_image_b64, generated_image_b64],
+                    request_id=session_id,
+                    max_retries=1,  # VLM has its own retry, but we'll handle parsing retries here
+                )
+                await log(f"VLM response received ({len(response)} chars)", "success")
+
+                # Parse JSON from response
+                await log("Parsing VLM response...")
+                result_dict = self._parse_json_response(response, style_profile)
+                scores = result_dict.get("match_scores", {})
+                await log(f"Parsed scores - Overall: {scores.get('overall', 'N/A')}, Palette: {scores.get('palette', 'N/A')}", "success")
+
+                # Success! Break out of retry loop
+                break
+
+            except ValueError as e:
+                # JSON parsing error - retry
+                last_error = e
+                if attempt < max_retries - 1:
+                    await log(f"Parsing failed (attempt {attempt + 1}/{max_retries}): {e}", "warning")
+                    await log(f"Raw response: {response[:300]}...", "warning")
+                    await log("Retrying VLM request...", "info")
+                    await asyncio.sleep(2)  # Brief pause before retry
+                else:
+                    await log(f"All {max_retries} parsing attempts failed", "error")
+                    await log(f"Final response: {response[:500]}", "error")
+                    raise
+            except Exception as e:
+                # Other errors (connection, etc) - don't retry
+                await log(f"VLM request failed: {e}", "error")
+                raise
+
+        # If we exited loop without breaking, raise the last error
+        if last_error and attempt == max_retries - 1:
+            raise last_error
 
         # Update palette in the result with PIL-extracted colors if available
         if generated_colors:
@@ -297,7 +320,11 @@ IMPORTANT:
         return "\n".join(lines)
 
     def _parse_json_response(self, response: str, style_profile: StyleProfile) -> dict:
-        """Extract JSON from VLM response, with fallback to defaults."""
+        """
+        Extract JSON from VLM response. RAISES ValueError if JSON cannot be parsed.
+
+        NO FALLBACK - fails explicitly to surface VLM output issues.
+        """
         import re
 
         parsed = None
@@ -326,40 +353,42 @@ IMPORTANT:
                 except:
                     pass
 
-        # Build result with defaults, merging any parsed data
+        # NO FALLBACK - fail explicitly if VLM didn't return valid JSON
+        if not parsed:
+            logger.error(f"CRITIC FAILED: Could not parse JSON from VLM response.")
+            logger.error(f"Response preview: {response[:500]}")
+            raise ValueError(
+                f"Critic VLM failed to return valid JSON. This would corrupt training with fake scores. "
+                f"Check VLM model capacity or simplify critique prompt. Response: {response[:500]}"
+            )
+
+        # Validate and merge parsed data
         result = {
-            "match_scores": {
-                "palette": 70,
-                "line_and_shape": 70,
-                "texture": 70,
-                "lighting": 70,
-                "composition": 70,
-                "motifs": 70,
-                "overall": 70,
-            },
+            "match_scores": {},
             "preserved_traits": [],
             "lost_traits": [],
             "interesting_mutations": [],
             "updated_style_profile": style_profile.model_dump(),
         }
 
-        if parsed:
-            # Merge parsed data into result
-            if "match_scores" in parsed and isinstance(parsed["match_scores"], dict):
-                result["match_scores"].update(parsed["match_scores"])
-            if "preserved_traits" in parsed and isinstance(parsed["preserved_traits"], list):
-                result["preserved_traits"] = parsed["preserved_traits"]
-            if "lost_traits" in parsed and isinstance(parsed["lost_traits"], list):
-                result["lost_traits"] = parsed["lost_traits"]
-            if "interesting_mutations" in parsed and isinstance(parsed["interesting_mutations"], list):
-                result["interesting_mutations"] = parsed["interesting_mutations"]
-            if "updated_style_profile" in parsed and isinstance(parsed["updated_style_profile"], dict):
-                # Merge the parsed profile with defaults from current style
-                base_profile = style_profile.model_dump()
-                self._deep_merge(base_profile, parsed["updated_style_profile"])
-                result["updated_style_profile"] = base_profile
-        else:
-            logger.warning(f"Could not parse JSON from VLM response, using defaults. Response: {response[:300]}")
+        # Extract match_scores (required)
+        if "match_scores" not in parsed or not isinstance(parsed["match_scores"], dict):
+            raise ValueError(f"Critic VLM response missing or invalid 'match_scores' field")
+        result["match_scores"] = parsed["match_scores"]
+
+        # Extract optional lists (use empty if missing)
+        if "preserved_traits" in parsed and isinstance(parsed["preserved_traits"], list):
+            result["preserved_traits"] = parsed["preserved_traits"]
+        if "lost_traits" in parsed and isinstance(parsed["lost_traits"], list):
+            result["lost_traits"] = parsed["lost_traits"]
+        if "interesting_mutations" in parsed and isinstance(parsed["interesting_mutations"], list):
+            result["interesting_mutations"] = parsed["interesting_mutations"]
+
+        # Extract updated style profile (merge with current if present)
+        if "updated_style_profile" in parsed and isinstance(parsed["updated_style_profile"], dict):
+            base_profile = style_profile.model_dump()
+            self._deep_merge(base_profile, parsed["updated_style_profile"])
+            result["updated_style_profile"] = base_profile
 
         return result
 
