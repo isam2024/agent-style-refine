@@ -10,7 +10,7 @@ import {
   PromptGenerateResponse,
   GenerationHistoryResponse,
   HypothesisExploreResponse,
-  HypothesisSelectRequest,
+  HypothesisSet,
   SessionMode,
 } from '../types';
 
@@ -398,6 +398,14 @@ export async function regenerateThumbnail(styleId: string): Promise<{ status: st
 // Hypothesis Mode API
 // ============================================================
 
+export async function getHypothesisSet(
+  sessionId: string
+): Promise<HypothesisSet> {
+  return fetchJson<HypothesisSet>(
+    `${API_BASE}/hypothesis/${sessionId}`
+  );
+}
+
 export async function exploreHypotheses(
   sessionId: string,
   numHypotheses: number = 3,
@@ -433,6 +441,29 @@ export async function selectHypothesis(
         session_id: sessionId,
         hypothesis_id: hypothesisId,
       }),
+    }
+  );
+}
+
+export async function stopHypothesisExploration(
+  sessionId: string
+): Promise<{ session_id: string; message: string }> {
+  return fetchJson<{ session_id: string; message: string }>(
+    `${API_BASE}/hypothesis/stop`,
+    {
+      method: 'POST',
+      body: JSON.stringify({
+        session_id: sessionId,
+      }),
+    }
+  );
+}
+
+export async function clearComfyUIQueue(): Promise<{ status: string; message: string }> {
+  return fetchJson<{ status: string; message: string }>(
+    '/health/comfyui/clear-queue',
+    {
+      method: 'POST',
     }
   );
 }

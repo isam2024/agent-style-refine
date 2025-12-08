@@ -1,26 +1,39 @@
-# Multi-Hypothesis Style Extraction
+# Multi-Hypothesis Style Extraction - Stratified Quality
 
-You are a HYPOTHESIS GENERATION ENGINE. Your task is to analyze an image and produce **MULTIPLE DISTINCT INTERPRETATIONS** of its visual style.
+You are a HYPOTHESIS GENERATION ENGINE. Your task is to analyze an image and produce **{num_hypotheses} DISTINCT INTERPRETATIONS** of its visual style, **STRATIFIED BY CONFIDENCE**.
 
 ## Critical Philosophy
 
-**DO NOT commit to a single interpretation.** Instead, generate competing hypotheses that emphasize different aspects of the style.
+Generate hypotheses with DIFFERENT LEVELS OF CONFIDENCE:
 
-Each hypothesis should be:
-- **Internally consistent** (complete StyleProfile)
-- **Meaningfully different** from other hypotheses (not just variations)
-- **Testable** (can be validated by generating samples)
-- **Uncertain** (acknowledge what you're not sure about)
+1. **BEST MATCH** (High Confidence) - Your strongest, most obvious interpretation
+2. **PLAUSIBLE ALTERNATIVE** (Medium Confidence) - A reasonable but less certain interpretation
+3. **EDGE CASE / CONTRARIAN** (Low Confidence) - A deliberately different or challenging interpretation
+
+This creates a SPECTRUM from "clearly correct" to "probably wrong but worth testing."
 
 ## Your Task
 
-Analyze the image and generate **{num_hypotheses}** DISTINCT style interpretations.
+Generate **{num_hypotheses}** hypotheses in ORDER of confidence:
 
-Each interpretation should focus on a different primary aspect:
-1. **Spatial/Geometric Organization** - How elements are arranged, compositional structure
-2. **Color/Light Treatment** - Palette relationships, lighting approach, color theory
-3. **Surface/Texture Qualities** - Mark-making, material surface, rendering technique
-4. (If more hypotheses requested, consider: mood/atmosphere, subject treatment, etc.)
+### Hypothesis 1: BEST MATCH (Target Score: 85-95)
+- Your MOST CONFIDENT interpretation
+- What you think is MOST LIKELY the style identity
+- Emphasize the most OBVIOUS and DOMINANT characteristics
+- This should feel like the "right answer"
+
+### Hypothesis 2: PLAUSIBLE ALTERNATIVE (Target Score: 65-80)
+- A REASONABLE but LESS CERTAIN interpretation
+- Emphasizes different aspects than Hypothesis 1
+- Could be right, but you're less sure
+- Might be missing something or overemphasizing secondary features
+
+### Hypothesis 3: EDGE CASE / CONTRARIAN (Target Score: 45-65)
+- A DELIBERATELY DIFFERENT interpretation
+- Focuses on subtle or unusual aspects
+- Might be "reading too much into it"
+- Could be wrong but worth testing
+- The "devil's advocate" interpretation
 
 ## Output Format
 
@@ -30,159 +43,138 @@ Output ONLY valid JSON matching this schema:
 {
   "hypotheses": [
     {
-      "interpretation": "Grid-based geometric abstraction",
+      "interpretation": "Descriptive label for this interpretation",
+      "confidence_tier": "best_match",
       "supporting_evidence": [
-        "Strict orthogonal alignment of all elements",
-        "Rectangular forms dominate composition",
-        "High saturation color blocks in systematic arrangement"
+        "Strong visual observation 1",
+        "Strong visual observation 2",
+        "Strong visual observation 3"
       ],
       "uncertain_aspects": [
-        "Whether curves are forbidden or just absent in this sample",
-        "If diagonal orientations would break the style"
+        "What you're not 100% sure about",
+        "Questions this interpretation can't fully answer"
       ],
       "profile": {
-        "style_name": "Orthogonal Color Grid",
+        "style_name": "Concise name",
         "core_invariants": [
-          "Strict grid alignment - all elements on orthogonal axes",
-          "ONLY rectangular forms, NO curves or organic shapes",
-          "High saturation color blocks with clear boundaries",
-          "Flat rendering, no gradients or depth illusion"
+          "Hard rule 1 - MUST be present or FORBIDDEN",
+          "Hard rule 2",
+          "Hard rule 3",
+          "Hard rule 4"
         ],
         "palette": {
           "dominant_colors": ["#hex1", "#hex2", "#hex3"],
           "accents": ["#hex1", "#hex2"],
-          "color_descriptions": ["vivid cyan", "electric yellow", "pure magenta"],
-          "saturation": "high",
-          "value_range": "bright, high contrast"
+          "color_descriptions": ["descriptive color 1", "descriptive color 2"],
+          "saturation": "high/medium/low",
+          "value_range": "description of brightness/contrast"
         },
         "line_and_shape": {
-          "line_quality": "hard edges, precise boundaries, no soft transitions",
-          "shape_language": "EXCLUSIVELY rectangles and squares, strict 90-degree angles",
-          "geometry_notes": "Grid-locked positioning, modular arrangement"
+          "line_quality": "description of edges, boundaries, line character",
+          "shape_language": "description of shape vocabulary used",
+          "geometry_notes": "geometric organization, patterns, structure"
         },
         "texture": {
-          "surface": "completely flat, vector-like, no texture variation",
-          "noise_level": "none",
-          "special_effects": []
+          "surface": "description of surface treatment",
+          "noise_level": "none/low/medium/high",
+          "special_effects": ["effect 1", "effect 2"]
         },
         "lighting": {
-          "lighting_type": "even, no directional light source",
-          "shadows": "absent or minimal",
-          "highlights": "none, flat color fills"
+          "lighting_type": "description of lighting approach",
+          "shadows": "description of shadow treatment",
+          "highlights": "description of highlight treatment"
         },
         "composition": {
-          "camera": "direct orthogonal view, no perspective",
-          "framing": "elements distributed across grid",
-          "depth": "completely flat, no spatial depth",
-          "negative_space_behavior": "treated as active color blocks, not empty space",
-          "structural_notes": "Grid subdivisions, systematic layout"
+          "camera": "viewpoint/perspective description",
+          "framing": "how elements are framed",
+          "depth": "depth treatment description",
+          "negative_space_behavior": "how empty space is treated",
+          "structural_notes": "spatial organization, layout patterns"
         },
         "motifs": {
-          "recurring_elements": ["rectangular color blocks", "grid alignment"],
-          "forbidden_elements": ["curves", "diagonals", "gradients", "organic forms", "perspective depth"]
+          "recurring_elements": ["element 1", "element 2"],
+          "forbidden_elements": ["forbidden 1", "forbidden 2"]
         },
-        "original_subject": "Grid of colored rectangular shapes in systematic arrangement",
-        "suggested_test_prompt": "Grid arrangement of rectangular color blocks, orthogonal alignment, flat composition"
+        "original_subject": "Literal description of what's depicted",
+        "suggested_test_prompt": "STRUCTURAL ONLY: spatial layout, object arrangement, composition structure"
       }
     },
     {
-      "interpretation": "High-saturation color field exploration",
-      "supporting_evidence": [
-        "Color relationships are primary focus",
-        "Pure, unmixed hues with maximum saturation",
-        "Color blocks create visual rhythm"
-      ],
-      "uncertain_aspects": [
-        "Whether geometric precision is essential or just incidental",
-        "If other compositions could work with same color approach"
-      ],
-      "profile": {
-        "style_name": "Saturated Color Field",
-        "core_invariants": [
-          "Maximum color saturation across all hues",
-          "Pure color blocks without mixing or gradients",
-          "High contrast color adjacencies",
-          "Color as primary subject, form as secondary"
-        ],
-        "palette": {
-          "dominant_colors": ["#hex1", "#hex2", "#hex3"],
-          "accents": ["#hex1", "#hex2"],
-          "color_descriptions": ["pure primary and secondary hues", "unmixed colors"],
-          "saturation": "maximum",
-          "value_range": "bright, evenly distributed"
-        },
-        "line_and_shape": {
-          "line_quality": "clean boundaries between color areas",
-          "shape_language": "simple geometric forms, subordinate to color",
-          "geometry_notes": "Shapes serve to separate color regions"
-        },
-        "texture": {
-          "surface": "smooth, even color application",
-          "noise_level": "none",
-          "special_effects": []
-        },
-        "lighting": {
-          "lighting_type": "even illumination, no shadows",
-          "shadows": "absent",
-          "highlights": "none"
-        },
-        "composition": {
-          "camera": "flat view optimized for color perception",
-          "framing": "color blocks arranged for visual balance",
-          "depth": "flat, two-dimensional",
-          "negative_space_behavior": "filled with color, no true negative space",
-          "structural_notes": "Arrangement emphasizes color relationships"
-        },
-        "motifs": {
-          "recurring_elements": ["pure color hues", "hard color boundaries"],
-          "forbidden_elements": ["desaturated tones", "color mixing", "gradients", "muted palettes"]
-        },
-        "original_subject": "Arrangement of pure saturated color regions",
-        "suggested_test_prompt": "Pure saturated colors in geometric arrangement, high contrast, flat composition"
-      }
+      "interpretation": "Different interpretation label",
+      "confidence_tier": "plausible_alternative",
+      "supporting_evidence": ["..."],
+      "uncertain_aspects": ["..."],
+      "profile": { "..." }
+    },
+    {
+      "interpretation": "Contrarian interpretation label",
+      "confidence_tier": "edge_case",
+      "supporting_evidence": ["..."],
+      "uncertain_aspects": ["..."],
+      "profile": { "..." }
     }
   ]
 }
 ```
 
+## Stratification Strategy
+
+### Best Match - Focus on DOMINANT characteristics
+- What is the MOST OBVIOUS visual quality?
+- What is MOST DISTINCTIVE about this style?
+- What would you describe FIRST to someone?
+
+Example: If the image has a grid structure with bright colors and flat rendering, your best match should probably focus on "geometric grid abstraction" as the primary identity.
+
+### Plausible Alternative - Focus on SECONDARY characteristics
+- What else is notable but LESS dominant?
+- What if you emphasized a DIFFERENT aspect?
+- What interpretation might someone else reasonably see?
+
+Example: Same image, but focusing on "high saturation color field" instead of geometric structure. Still valid, but less central.
+
+### Edge Case - Focus on SUBTLE or CONTRARIAN aspects
+- What if you're "reading too much into it"?
+- What subtle quality might actually be key?
+- What unconventional interpretation could you test?
+
+Example: Same image, but focusing on "negative space activation" or "chromatic vibration effects" - might be overinterpreting, but worth testing.
+
 ## Critical Requirements
 
-### 1. Distinct Interpretations
-Each hypothesis must emphasize a DIFFERENT primary characteristic:
-- Hypothesis 1: Spatial/compositional interpretation
-- Hypothesis 2: Color/palette interpretation
-- Hypothesis 3: Texture/surface interpretation
-- (etc.)
+### 1. Meaningful Differentiation
+Each hypothesis must emphasize DIFFERENT primary characteristics:
+- **Best Match**: Most obvious/dominant quality
+- **Plausible Alternative**: Different but reasonable quality
+- **Edge Case**: Subtle or unconventional quality
 
-**NOT variations of the same interpretation!**
+**NOT slight variations of the same thing!**
 
-❌ Wrong: "Grid with warm palette" vs "Grid with cool palette"
-✓ Right: "Grid-based geometric" vs "Color field exploration" vs "Textural surface study"
+❌ Wrong: "Warm color grid" vs "Cool color grid" vs "Neutral color grid"
+✓ Right: "Geometric grid system" vs "Color field composition" vs "Optical vibration effect"
 
-### 2. Complete Profiles
+### 2. Expected Score Ranges
+Design hypotheses so testing SHOULD produce:
+- **Best Match**: 85-95 scores (clearly strong)
+- **Plausible Alternative**: 65-80 scores (decent but not perfect)
+- **Edge Case**: 45-65 scores (questionable but not terrible)
+
+Make them ACTUALLY DIFFERENT in quality, not just emphasis.
+
+### 3. Complete Profiles
 Each hypothesis includes a FULL StyleProfile with all fields populated.
 
-### 3. Explicit Invariants
-`core_invariants` should capture HARD RULES:
-- What MUST be present
-- What is FORBIDDEN
-- What defines this interpretation
+### 4. Explicit Invariants
+`core_invariants` should capture HARD RULES based on your confidence level:
+- **Best Match**: Strong, obvious rules
+- **Plausible Alternative**: Reasonable but less certain rules
+- **Edge Case**: Speculative or narrow rules
 
-### 4. Negative Constraints
-`motifs.forbidden_elements` should be explicit:
-- Elements that would break this interpretation
-- Based on what you observe is ABSENT
-
-### 5. Supporting Evidence
-Explain WHY this interpretation fits:
-- Visual observations that support this view
-- Specific characteristics you noticed
-
-### 6. Uncertainty
-Be honest about what you DON'T know:
-- Aspects that are ambiguous
-- Questions that can't be answered from one image
-- Alternative possibilities
+### 5. Honest Uncertainty
+`uncertain_aspects` should reflect your confidence tier:
+- **Best Match**: Minor uncertainties, edge cases
+- **Plausible Alternative**: Moderate uncertainties, alternative interpretations
+- **Edge Case**: Major uncertainties, "might be wrong about this"
 
 ## Special Instructions
 
@@ -203,6 +195,15 @@ Example:
 ### Color Accuracy
 You will NOT be scoring color accuracy - PIL will extract precise hex codes.
 Focus on color RELATIONSHIPS and TREATMENT, not specific hex values.
+
+## Confidence Tier Field
+
+**CRITICAL**: Include `"confidence_tier"` field in each hypothesis:
+- `"best_match"` for Hypothesis 1
+- `"plausible_alternative"` for Hypothesis 2
+- `"edge_case"` for Hypothesis 3
+
+This helps the system understand your intended confidence stratification.
 
 ## Output
 

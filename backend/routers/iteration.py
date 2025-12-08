@@ -1207,15 +1207,18 @@ async def stop_auto_improve(
     # Send interrupt to ComfyUI to stop current generation immediately
     await comfyui_service.interrupt_generation()
 
-    logger.info(f"Stop requested for session {session_id} - cancelled VLM and ComfyUI requests")
+    # Clear the entire ComfyUI queue to stop all pending generations
+    await comfyui_service.clear_queue()
+
+    logger.info(f"Stop requested for session {session_id} - cancelled VLM and ComfyUI requests, cleared queue")
     await manager.broadcast_log(
         session_id,
-        "Stop requested - cancelling ongoing operations...",
+        "Stop requested - cancelled ongoing operations and cleared queue...",
         "warning",
         "stop"
     )
 
     return {
         "session_id": session_id,
-        "message": "Stop requested - cancelling ongoing operations",
+        "message": "Stop requested - cancelled ongoing operations and cleared queue",
     }

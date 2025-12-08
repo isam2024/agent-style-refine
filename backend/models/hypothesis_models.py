@@ -5,12 +5,14 @@ Hypothesis mode generates multiple competing interpretations of a style,
 tests each one, and selects the best based on evidence.
 """
 from datetime import datetime
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from backend.models.schemas import StyleProfile
 
 
 class HypothesisTest(BaseModel):
     """Result from testing a hypothesis with a specific subject."""
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+
     test_subject: str = Field(description="Subject used for testing (e.g., 'abstract pattern')")
     generated_image_path: str = Field(description="Path to generated test image")
     scores: dict[str, float] = Field(
@@ -28,6 +30,10 @@ class StyleHypothesis(BaseModel):
     id: str = Field(description="Unique identifier for this hypothesis")
     interpretation: str = Field(
         description="Human-readable label (e.g., 'Grid-based geometric abstraction')"
+    )
+    confidence_tier: str = Field(
+        default="plausible_alternative",
+        description="Confidence tier: best_match, plausible_alternative, or edge_case"
     )
     profile: StyleProfile = Field(description="Complete style profile for this interpretation")
     confidence: float = Field(
@@ -56,6 +62,8 @@ class HypothesisSet(BaseModel):
 
     Represents the full hypothesis exploration for a session.
     """
+    model_config = ConfigDict(json_encoders={datetime: lambda v: v.isoformat()})
+
     session_id: str = Field(description="Session this hypothesis set belongs to")
     hypotheses: list[StyleHypothesis] = Field(
         description="List of competing interpretations"

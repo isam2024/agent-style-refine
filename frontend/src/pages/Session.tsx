@@ -162,8 +162,10 @@ function Session() {
   })
 
   const autoImproveMutation = useMutation({
-    mutationFn: () =>
-      runAutoImprove(sessionId!, subject, targetScore, maxIterations, creativityLevel),
+    mutationFn: () => {
+      console.log('[Session] 🚀 AUTO-IMPROVE MUTATION CALLED', new Error().stack)
+      return runAutoImprove(sessionId!, subject, targetScore, maxIterations, creativityLevel)
+    },
     onMutate: () => setActiveStep('auto-improving'),
     onSuccess: (result) => {
       queryClient.invalidateQueries({ queryKey: ['session', sessionId] })

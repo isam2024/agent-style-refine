@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
-import { listSessions, createSession, deleteSession, deleteAllSessions } from '../api/client'
+import { listSessions, createSession, deleteSession, deleteAllSessions, clearComfyUIQueue } from '../api/client'
 import { SessionMode } from '../types'
 import ImageUpload from '../components/ImageUpload'
 import SessionList from '../components/SessionList'
@@ -48,10 +48,18 @@ function Home() {
     },
   })
 
+  const clearQueueMutation = useMutation({
+    mutationFn: clearComfyUIQueue,
+  })
+
   const handleDeleteAll = () => {
     if (window.confirm('⚠️ Are you sure? This will permanently delete ALL sessions and their files. This cannot be undone!')) {
       deleteAllMutation.mutate()
     }
+  }
+
+  const handleClearQueue = () => {
+    clearQueueMutation.mutate()
   }
 
   const handleCreate = () => {
@@ -75,6 +83,14 @@ function Home() {
           </p>
         </div>
         <div className="flex gap-2">
+          <button
+            onClick={handleClearQueue}
+            disabled={clearQueueMutation.isPending}
+            className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 disabled:opacity-50 transition-colors"
+            title="Clear ComfyUI queue"
+          >
+            {clearQueueMutation.isPending ? 'Clearing...' : '🧹 Clear Queue'}
+          </button>
           {sessions && sessions.length > 0 && (
             <button
               onClick={handleDeleteAll}

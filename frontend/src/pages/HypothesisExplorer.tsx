@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
-import { useMutation } from '@tanstack/react-query'
-import { exploreHypotheses, selectHypothesis } from '../api/client'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { getSession, getHypothesisSet, exploreHypotheses, selectHypothesis, stopHypothesisExploration } from '../api/client'
 import { StyleHypothesis, HypothesisExploreResponse, WSMessage } from '../types'
 import LogWindow from '../components/LogWindow'
 
@@ -11,9 +11,24 @@ interface ProgressState {
   message: string
 }
 
+// Helper function to extract relative path from absolute path
+function extractRelativePath(absolutePath: string): string {
+  // Path format: /path/to/outputs/{session_id}/hypothesis_tests/{filename}.png
+  // We need: {session_id}/hypothesis_tests/{filename}.png
+  const parts = absolutePath.split('/')
+  const outputsIndex = parts.findIndex(p => p === 'outputs')
+  if (outputsIndex >= 0 && outputsIndex < parts.length - 1) {
+    return parts.slice(outputsIndex + 1).join('/')
+  }
+  // Fallback: return as-is and log
+  console.warn('Could not extract relative path from:', absolutePath)
+  return absolutePath
+}
+
 function HypothesisExplorer() {
   const { sessionId } = useParams<{ sessionId: string }>()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [exploreResult, setExploreResult] = useState<HypothesisExploreResponse | null>(null)
   const [selectedHypothesisId, setSelectedHypothesisId] = useState<string | null>(null)
   const [expandedHypothesis, setExpandedHypothesis] = useState<string | null>(null)
@@ -22,21 +37,34 @@ function HypothesisExplorer() {
   const [isExploring, setIsExploring] = useState(false)
   const wsRef = useRef<WebSocket | null>(null)
 
+  // Progressive results during exploration
+  const [liveHypotheses, setLiveHypotheses] = useState<any[]>([])
+  const [liveTestResults, setLiveTestResults] = useState<{[hypothesisId: string]: any[]}>({})
+  const [currentTestingHypothesis, setCurrentTestingHypothesis] = useState<string | null>(null)
+
   // WebSocket connection
   useEffect(() => {
-    if (!sessionId || !isExploring) return
+    if (!sessionId || !isExploring) {
+      console.log('[HypothesisExplorer] WebSocket NOT connecting:', { sessionId, isExploring })
+      return
+    }
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     const host = window.location.host
-    const ws = new WebSocket(`${protocol}//${host}/ws/${sessionId}`)
+    const wsUrl = `${protocol}//${host}/ws/${sessionId}`
+    console.log('[HypothesisExplorer] Connecting WebSocket to:', wsUrl)
+
+    const ws = new WebSocket(wsUrl)
 
     ws.onopen = () => {
-      console.log('WebSocket connected')
+      console.log('[HypothesisExplorer] ✅ WebSocket connected to:', wsUrl)
     }
 
     ws.onmessage = (event) => {
+      console.log('[HypothesisExplorer] 📨 Received message:', event.data)
       try {
         const data = JSON.parse(event.data) as WSMessage
+        console.log('[HypothesisExplorer] 📦 Parsed message:', data)
         setMessages(prev => [...prev, data])
 
         if (data.event === 'progress' && data.data) {
@@ -46,22 +74,48 @@ function HypothesisExplorer() {
             message: (data.data as any).message || '',
           })
         }
+
+        // Handle progressive hypothesis results
+        if (data.event === 'hypotheses_extracted' && data.data) {
+          console.log('[HypothesisExplorer] 📋 Hypotheses extracted:', data.data)
+          setLiveHypotheses((data.data as any).hypotheses || [])
+        }
+
+        if (data.event === 'hypothesis_testing_start' && data.data) {
+          console.log('[HypothesisExplorer] 🧪 Testing hypothesis:', data.data)
+          setCurrentTestingHypothesis((data.data as any).hypothesis_id)
+        }
+
+        if (data.event === 'hypothesis_test_result' && data.data) {
+          console.log('[HypothesisExplorer] 🖼️ Test result:', data.data)
+          const { hypothesis_id, test_result } = data.data as any
+          setLiveTestResults(prev => ({
+            ...prev,
+            [hypothesis_id]: [...(prev[hypothesis_id] || []), test_result]
+          }))
+        }
+
+        if (data.event === 'hypothesis_testing_complete' && data.data) {
+          console.log('[HypothesisExplorer] ✅ Hypothesis testing complete:', data.data)
+          setCurrentTestingHypothesis(null)
+        }
       } catch (e) {
-        console.error('Failed to parse WebSocket message:', e)
+        console.error('[HypothesisExplorer] ❌ Failed to parse WebSocket message:', e)
       }
     }
 
     ws.onerror = (error) => {
-      console.error('WebSocket error:', error)
+      console.error('[HypothesisExplorer] ❌ WebSocket error:', error)
     }
 
     ws.onclose = () => {
-      console.log('WebSocket disconnected')
+      console.log('[HypothesisExplorer] 🔌 WebSocket disconnected from:', wsUrl)
     }
 
     wsRef.current = ws
 
     return () => {
+      console.log('[HypothesisExplorer] 🧹 Cleanup: closing WebSocket')
       if (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING) {
         ws.close()
       }
@@ -70,10 +124,12 @@ function HypothesisExplorer() {
 
   const exploreMutation = useMutation({
     mutationFn: () => {
+      console.log('[HypothesisExplorer] 🚀 exploreMutation.mutate() called!', new Error().stack)
       setIsExploring(true)
       return exploreHypotheses(sessionId!, 3)
     },
     onSuccess: (result) => {
+      console.log('[HypothesisExplorer] ✅ Exploration completed successfully')
       setExploreResult(result)
       setIsExploring(false)
       if (result.selected_hypothesis) {
@@ -81,25 +137,83 @@ function HypothesisExplorer() {
       }
     },
     onError: () => {
+      console.log('[HypothesisExplorer] ❌ Exploration failed')
       setIsExploring(false)
     },
   })
 
   const selectMutation = useMutation({
-    mutationFn: (hypothesisId: string) => selectHypothesis(sessionId!, hypothesisId),
+    mutationFn: (hypothesisId: string) => {
+      console.log('[HypothesisExplorer] 🎯 Selecting hypothesis:', hypothesisId)
+      return selectHypothesis(sessionId!, hypothesisId)
+    },
     onSuccess: () => {
-      // Navigate to training session after selection
-      navigate(`/session/${sessionId}`)
+      console.log('[HypothesisExplorer] ✅ Selection successful - NOT navigating')
+      // Refresh the hypothesis set to show selection
+      queryClient.invalidateQueries({ queryKey: ['hypothesisSet', sessionId] })
+      queryClient.invalidateQueries({ queryKey: ['session', sessionId] })
+      // Don't auto-navigate - let user review selection and manually go to training
     },
   })
 
-  // Auto-start exploration when page loads (can be disabled for debug)
+  // Query to load existing hypothesis results (for sessions that already explored)
+  const { data: session, isLoading: sessionLoading } = useQuery({
+    queryKey: ['session', sessionId],
+    queryFn: () => getSession(sessionId!),
+    enabled: !!sessionId,
+  })
+
+  // Query to load existing hypothesis set if session has completed exploration
+  // Load if status is 'hypothesis_ready' (exploration done, not selected yet)
+  // OR 'ready' (hypothesis was already selected)
+  const { data: existingHypothesisSet, isLoading: hypothesisSetLoading } = useQuery({
+    queryKey: ['hypothesisSet', sessionId],
+    queryFn: () => getHypothesisSet(sessionId!),
+    enabled: !!sessionId && (session?.status === 'hypothesis_ready' || session?.status === 'ready'),
+  })
+
+  // Load existing results if available
   useEffect(() => {
-    // Comment out the next 3 lines to disable auto-start for debugging
-    if (sessionId && !exploreResult && !exploreMutation.isPending && !isExploring) {
+    console.log('[HypothesisExplorer] 📊 Load check:', {
+      hasExistingSet: !!existingHypothesisSet,
+      hasExploreResult: !!exploreResult,
+      sessionId
+    })
+    if (existingHypothesisSet && !exploreResult) {
+      console.log('[HypothesisExplorer] 📦 Loading existing hypothesis results')
+      setExploreResult({
+        session_id: sessionId!,
+        hypotheses: existingHypothesisSet.hypotheses,
+        selected_hypothesis: existingHypothesisSet.hypotheses.find((h: StyleHypothesis) => h.id === existingHypothesisSet.selected_hypothesis_id) || null,
+        auto_selected: false,
+        test_images_generated: existingHypothesisSet.hypotheses.reduce((sum: number, h: StyleHypothesis) => sum + h.test_results.length, 0),
+      })
+    }
+  }, [existingHypothesisSet, sessionId, exploreResult])
+
+  // Auto-start exploration when page loads (DISABLED - manual start only)
+  // This is disabled because we load existing results automatically
+  // To enable auto-start for new sessions, uncomment the code below
+  /*
+  useEffect(() => {
+    // Only start once per page load, and only if no existing results
+    if (
+      sessionId &&
+      !sessionLoading &&
+      !exploreResult &&
+      !exploreMutation.isPending &&
+      !isExploring &&
+      !explorationStartedRef.current &&
+      session?.status !== 'hypothesis_ready' &&
+      !existingHypothesisSet &&
+      !hypothesisSetLoading
+    ) {
+      console.log('[HypothesisExplorer] 🚀 Starting exploration (first time only)')
+      explorationStartedRef.current = true
       exploreMutation.mutate()
     }
-  }, [sessionId])
+  }, [sessionId, session, sessionLoading, existingHypothesisSet, hypothesisSetLoading])
+  */
 
   const handleSelect = () => {
     if (selectedHypothesisId) {
@@ -107,27 +221,32 @@ function HypothesisExplorer() {
     }
   }
 
-  const handleStopExploration = () => {
-    setIsExploring(false)
-    if (wsRef.current) {
-      wsRef.current.close()
+  const handleStopExploration = async () => {
+    if (!sessionId) return
+
+    try {
+      // Call backend to cancel operations
+      await stopHypothesisExploration(sessionId)
+      console.log('[HypothesisExplorer] 🛑 Stop request sent to backend')
+
+      // Update UI state
+      setIsExploring(false)
+
+      // WebSocket will close automatically in cleanup
+    } catch (error) {
+      console.error('[HypothesisExplorer] Failed to stop exploration:', error)
+      // Still update UI state even if API call fails
+      setIsExploring(false)
     }
   }
 
   const handleStartExploration = () => {
+    console.log('[HypothesisExplorer] 🔄 handleStartExploration called', { isExploring, isPending: exploreMutation.isPending })
     if (!isExploring && !exploreMutation.isPending) {
+      console.log('[HypothesisExplorer] ✅ Starting exploration via handleStartExploration')
       exploreMutation.mutate()
     }
   }
-
-  const getLatestLog = () => {
-    const logMessages = messages.filter(m => m.event === 'log')
-    if (logMessages.length === 0) return null
-    const latest = logMessages[logMessages.length - 1]
-    return latest.data as { message: string; level: string; source: string }
-  }
-
-  const latestLog = getLatestLog()
 
   if (exploreMutation.isPending || isExploring) {
     return (
@@ -140,69 +259,99 @@ function HypothesisExplorer() {
           }}
         />
 
-        <div className="max-w-4xl mx-auto space-y-6">
-          {/* Debug Controls */}
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <span className="text-sm font-medium text-yellow-800">Debug Controls</span>
-              <span className="text-xs text-yellow-600">
-                isExploring: {isExploring ? 'true' : 'false'} | isPending: {exploreMutation.isPending ? 'true' : 'false'}
-              </span>
-            </div>
-            <div className="flex gap-2">
-              <button
-                onClick={handleStartExploration}
-                disabled={isExploring || exploreMutation.isPending}
-                className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Start
-              </button>
-              <button
-                onClick={handleStopExploration}
-                disabled={!isExploring}
-                className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Stop
-              </button>
-            </div>
-          </div>
-        </div>
-
-        <div className="bg-white rounded-xl shadow-sm p-8">
-          <div className="text-center space-y-4">
-            <div className="inline-block">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-            </div>
-            <h2 className="text-xl font-semibold text-slate-800">Exploring Hypotheses...</h2>
-
-            {progress && (
-              <div className="space-y-2">
-                <div className="w-full bg-slate-200 rounded-full h-2">
-                  <div
-                    className="bg-blue-600 h-2 rounded-full transition-all duration-300"
-                    style={{ width: `${progress.percent}%` }}
-                  />
+        <div className="max-w-6xl mx-auto space-y-6">
+          {/* Progress Bar with Stop Button */}
+          {progress && (
+            <div className="bg-white rounded-lg shadow-sm p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-sm font-medium text-slate-700">{progress.message}</span>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm text-slate-500">{progress.percent}%</span>
+                  <button
+                    onClick={handleStopExploration}
+                    className="px-3 py-1 text-sm bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+                  >
+                    Stop
+                  </button>
                 </div>
-                <p className="text-sm text-slate-600">{progress.message}</p>
               </div>
-            )}
-
-            {latestLog && (
-              <div className="text-sm text-slate-500 max-w-md mx-auto">
-                <p className="font-mono text-xs bg-slate-50 p-3 rounded border border-slate-200">
-                  {latestLog.message}
-                </p>
+              <div className="w-full bg-slate-200 rounded-full h-2">
+                <div
+                  className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${progress.percent}%` }}
+                />
               </div>
-            )}
+            </div>
+          )}
 
-            <p className="text-slate-500 text-sm">
-              Generating multiple style interpretations and testing each one.
-              <br />
-              This may take several minutes...
-            </p>
-          </div>
-        </div>
+          {/* Live Hypotheses Display */}
+          {liveHypotheses.length > 0 && (
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold text-slate-800">
+                Testing {liveHypotheses.length} Hypotheses
+              </h3>
+
+              <div className="grid grid-cols-1 gap-4">
+                {liveHypotheses.map((hyp: any, idx: number) => {
+                  const testResults = liveTestResults[hyp.id] || []
+                  const isTesting = currentTestingHypothesis === hyp.id
+
+                  return (
+                    <div
+                      key={hyp.id}
+                      className={`bg-white rounded-lg shadow-sm border-2 transition-all ${
+                        isTesting ? 'border-blue-500 ring-2 ring-blue-200' : 'border-slate-200'
+                      }`}
+                    >
+                      <div className="p-4">
+                        <div className="flex items-start justify-between mb-3">
+                          <div>
+                            <h4 className="font-semibold text-slate-800 flex items-center gap-2">
+                              <span className="text-slate-400">#{idx + 1}</span>
+                              {hyp.interpretation}
+                              {isTesting && (
+                                <span className="animate-pulse text-blue-600 text-sm">Testing...</span>
+                              )}
+                            </h4>
+                          </div>
+                          <span className="text-xs bg-slate-100 px-2 py-1 rounded">
+                            {testResults.length} / 3 tests
+                          </span>
+                        </div>
+
+                        {/* Test Images Grid */}
+                        {testResults.length > 0 && (
+                          <div className="grid grid-cols-3 gap-3 mt-3">
+                            {testResults.map((test: any, testIdx: number) => (
+                              <div key={testIdx} className="relative group">
+                                <div className="aspect-square bg-slate-100 rounded overflow-hidden">
+                                  <img
+                                    src={`/api/files/${extractRelativePath(test.generated_image_path)}`}
+                                    alt={test.test_subject}
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23ddd" width="100" height="100"/%3E%3C/svg%3E'
+                                    }}
+                                  />
+                                  {/* Score Badge */}
+                                  <div className="absolute top-1 right-1 bg-black/70 text-white text-xs font-bold px-2 py-0.5 rounded">
+                                    {Math.round((test.scores.visual_consistency + test.scores.subject_independence) / 2)}%
+                                  </div>
+                                </div>
+                                <div className="text-xs text-slate-600 mt-1 text-center">
+                                  {test.test_subject}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </>
     )
@@ -224,7 +373,10 @@ function HypothesisExplorer() {
           <h2 className="text-lg font-semibold text-red-900 mb-2">Exploration Failed</h2>
           <p className="text-red-700">{(exploreMutation.error as Error).message}</p>
           <button
-            onClick={() => exploreMutation.mutate()}
+            onClick={() => {
+              console.log('[HypothesisExplorer] 🔄 Retry button clicked')
+              exploreMutation.mutate()
+            }}
             className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700"
           >
             Retry
@@ -236,6 +388,42 @@ function HypothesisExplorer() {
   }
 
   if (!exploreResult) {
+    // If session is hypothesis_ready, we should have loaded existingHypothesisSet by now
+    // Only show start button for truly new sessions (not hypothesis_ready)
+    if (session && session.status !== 'hypothesis_ready' && !sessionLoading && !hypothesisSetLoading && !existingHypothesisSet) {
+      console.log('[HypothesisExplorer] 🎬 Showing start button for new session')
+      return (
+        <>
+          <LogWindow
+            sessionId={sessionId!}
+            isActive={true}
+            onComplete={() => {
+              setIsExploring(false)
+            }}
+          />
+
+          <div className="max-w-4xl mx-auto">
+            <div className="bg-white rounded-xl shadow-sm p-8 text-center">
+              <h2 className="text-2xl font-bold text-slate-800 mb-4">Ready to Explore Hypotheses</h2>
+              <p className="text-slate-600 mb-6">
+                Generate multiple style interpretations and test each one to find the best match.
+              </p>
+              <button
+                onClick={() => {
+                  console.log('[HypothesisExplorer] 👆 Start button clicked')
+                  exploreMutation.mutate()
+                }}
+                disabled={exploreMutation.isPending || isExploring}
+                className="px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {exploreMutation.isPending || isExploring ? 'Exploring...' : 'Start Exploration'}
+              </button>
+            </div>
+          </div>
+        </>
+      )
+    }
+
     return (
       <>
         <LogWindow
@@ -247,9 +435,9 @@ function HypothesisExplorer() {
         />
 
         <div className="max-w-4xl mx-auto">
-        <div className="bg-white rounded-xl shadow-sm p-8 text-center text-slate-500">
-          Loading...
-        </div>
+          <div className="bg-white rounded-xl shadow-sm p-8 text-center text-slate-500">
+            Loading existing results...
+          </div>
         </div>
       </>
     )
@@ -259,13 +447,6 @@ function HypothesisExplorer() {
 
   return (
     <div className="space-y-6">
-      {/* Debug: Force LogWindow to always show */}
-      <div className="max-w-6xl mx-auto">
-        <div className="mb-4 p-2 bg-purple-50 border border-purple-200 rounded text-xs">
-          LogWindow Debug: isActive={isExploring ? 'true' : 'false'}, sessionId={sessionId}
-        </div>
-      </div>
-
       <LogWindow
         sessionId={sessionId!}
         isActive={true}
@@ -343,7 +524,11 @@ function HypothesisExplorer() {
       <div className="bg-white rounded-xl shadow-sm p-6 sticky bottom-0">
         <div className="flex items-center justify-between">
           <div className="text-sm text-slate-600">
-            {selectedHypothesisId ? (
+            {existingHypothesisSet?.selected_hypothesis_id ? (
+              <span className="text-green-600 font-medium">
+                ✓ Hypothesis confirmed: {sortedHypotheses.find(h => h.id === existingHypothesisSet.selected_hypothesis_id)?.interpretation}
+              </span>
+            ) : selectedHypothesisId ? (
               <span>Selected: <span className="font-medium">
                 {sortedHypotheses.find(h => h.id === selectedHypothesisId)?.interpretation}
               </span></span>
@@ -356,15 +541,24 @@ function HypothesisExplorer() {
               onClick={() => navigate('/')}
               className="px-4 py-2 text-slate-600 hover:text-slate-800"
             >
-              Cancel
+              {existingHypothesisSet?.selected_hypothesis_id ? 'Back to Home' : 'Cancel'}
             </button>
-            <button
-              onClick={handleSelect}
-              disabled={!selectedHypothesisId || selectMutation.isPending}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {selectMutation.isPending ? 'Confirming...' : 'Confirm Selection'}
-            </button>
+            {existingHypothesisSet?.selected_hypothesis_id ? (
+              <button
+                onClick={() => navigate(`/session/${sessionId}`)}
+                className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              >
+                Continue to Training →
+              </button>
+            ) : (
+              <button
+                onClick={handleSelect}
+                disabled={!selectedHypothesisId || selectMutation.isPending}
+                className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {selectMutation.isPending ? 'Confirming...' : 'Confirm Selection'}
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -413,7 +607,24 @@ function HypothesisCard({ hypothesis, rank, isSelected, isExpanded, onSelect, on
               <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-semibold text-sm">
                 #{rank}
               </div>
-              <h3 className="text-lg font-semibold text-slate-800">{hypothesis.interpretation}</h3>
+              <div className="flex-1 flex items-center gap-2">
+                <h3 className="text-lg font-semibold text-slate-800">{hypothesis.interpretation}</h3>
+                {hypothesis.confidence_tier && (
+                  <span className={`px-2 py-0.5 text-xs rounded-full font-medium ${
+                    hypothesis.confidence_tier === 'best_match'
+                      ? 'bg-green-100 text-green-700'
+                      : hypothesis.confidence_tier === 'plausible_alternative'
+                      ? 'bg-yellow-100 text-yellow-700'
+                      : 'bg-orange-100 text-orange-700'
+                  }`}>
+                    {hypothesis.confidence_tier === 'best_match'
+                      ? 'Best Match'
+                      : hypothesis.confidence_tier === 'plausible_alternative'
+                      ? 'Plausible'
+                      : 'Edge Case'}
+                  </span>
+                )}
+              </div>
             </div>
             <div className="flex items-center gap-4 text-sm">
               <div className="flex items-center gap-2">
@@ -494,19 +705,49 @@ function HypothesisCard({ hypothesis, rank, isSelected, isExpanded, onSelect, on
           {/* Test Results */}
           {hypothesis.test_results.length > 0 && (
             <div>
-              <h4 className="font-medium text-slate-800 mb-2">Test Results</h4>
-              <div className="grid grid-cols-3 gap-3">
+              <h4 className="font-medium text-slate-800 mb-2">Test Results ({hypothesis.test_results.length} images)</h4>
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
                 {hypothesis.test_results.map((test, idx) => (
-                  <div key={idx} className="bg-white rounded-lg p-3 border border-slate-200">
-                    <div className="text-xs font-medium text-slate-700 mb-2">{test.test_subject}</div>
-                    <div className="space-y-1 text-xs">
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Consistency:</span>
-                        <span className="font-medium">{Math.round(test.scores.visual_consistency)}%</span>
+                  <div key={idx} className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+                    {/* Test Image */}
+                    <div className="aspect-square bg-slate-100 relative group">
+                      <img
+                        src={`/api/files/${extractRelativePath(test.generated_image_path)}`}
+                        alt={test.test_subject}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          console.error('Failed to load image:', test.generated_image_path)
+                          // If image fails to load, show placeholder
+                          e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="100" height="100"%3E%3Crect fill="%23ddd" width="100" height="100"/%3E%3Ctext x="50%25" y="50%25" text-anchor="middle" dy=".3em" fill="%23999"%3ENo Image%3C/text%3E%3C/svg%3E'
+                        }}
+                      />
+                      {/* Overall Score Badge */}
+                      <div className="absolute top-2 right-2 bg-black/70 text-white text-xs font-bold px-2 py-1 rounded">
+                        {Math.round((test.scores.visual_consistency + test.scores.subject_independence) / 2)}%
                       </div>
-                      <div className="flex justify-between">
-                        <span className="text-slate-500">Independence:</span>
-                        <span className="font-medium">{Math.round(test.scores.subject_independence)}%</span>
+                    </div>
+                    {/* Test Info */}
+                    <div className="p-3">
+                      <div className="text-xs font-medium text-slate-700 mb-2">{test.test_subject}</div>
+                      <div className="space-y-1 text-xs">
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Consistency:</span>
+                          <span className={`font-medium ${
+                            test.scores.visual_consistency >= 70 ? 'text-green-600' :
+                            test.scores.visual_consistency >= 50 ? 'text-yellow-600' : 'text-red-600'
+                          }`}>
+                            {Math.round(test.scores.visual_consistency)}%
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-slate-500">Independence:</span>
+                          <span className={`font-medium ${
+                            test.scores.subject_independence >= 70 ? 'text-green-600' :
+                            test.scores.subject_independence >= 50 ? 'text-yellow-600' : 'text-red-600'
+                          }`}>
+                            {Math.round(test.scores.subject_independence)}%
+                          </span>
+                        </div>
                       </div>
                     </div>
                   </div>

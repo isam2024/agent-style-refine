@@ -83,6 +83,12 @@ Output JSON:
         total_independence = 0.0
 
         for idx, test_subject in enumerate(test_subjects):
+            # Check if exploration was stopped
+            from backend.routers.hypothesis import _stop_requests
+            if _stop_requests.get(session_id, False):
+                await log(f"Testing stopped by user at test {idx + 1}/{len(test_subjects)}", "warning")
+                break
+
             await log(f"Test {idx + 1}/{len(test_subjects)}: {test_subject}")
 
             try:
@@ -174,6 +180,24 @@ Output ONLY the image generation prompt (one paragraph, 40-80 words).
                     test_results.append(test_result)
                     total_consistency += visual_consistency
                     total_independence += subject_independence
+
+                    # Broadcast test result for progressive display
+                    await manager.send_to_session(
+                        session_id,
+                        "hypothesis_test_result",
+                        {
+                            "hypothesis_id": hypothesis.id,
+                            "test_index": idx,
+                            "test_result": {
+                                "test_subject": test_subject,
+                                "generated_image_path": str(test_path),
+                                "scores": {
+                                    "visual_consistency": float(visual_consistency),
+                                    "subject_independence": float(subject_independence),
+                                },
+                            },
+                        },
+                    )
 
                 except Exception as e:
                     await log(f"  Failed to parse scores: {e}", "error")

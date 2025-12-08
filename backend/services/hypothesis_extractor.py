@@ -199,12 +199,24 @@ The user has provided specific guidance about this style. You MUST incorporate t
                 )
                 continue
 
+            # Get confidence tier and set initial confidence accordingly
+            confidence_tier = hyp_data.get("confidence_tier", "plausible_alternative")
+
+            # Map confidence tier to initial confidence score (will be updated by testing)
+            tier_to_initial_confidence = {
+                "best_match": 0.9,
+                "plausible_alternative": 0.7,
+                "edge_case": 0.5,
+            }
+            initial_confidence = tier_to_initial_confidence.get(confidence_tier, 0.7)
+
             # Create StyleHypothesis
             hypothesis = StyleHypothesis(
                 id=hypothesis_id,
                 interpretation=hyp_data.get("interpretation", f"Interpretation {idx + 1}"),
+                confidence_tier=confidence_tier,
                 profile=profile,
-                confidence=1.0 / len(hypotheses_data["hypotheses"]),  # Equal initial confidence
+                confidence=initial_confidence,
                 supporting_evidence=hyp_data.get("supporting_evidence", []),
                 uncertain_aspects=hyp_data.get("uncertain_aspects", []),
                 test_results=[],  # No tests yet
@@ -213,8 +225,8 @@ The user has provided specific guidance about this style. You MUST incorporate t
             hypotheses.append(hypothesis)
 
             # Log this hypothesis
-            await log(f"Hypothesis {idx + 1}: {hypothesis.interpretation}")
-            await log(f"  Confidence: {hypothesis.confidence:.2f}")
+            await log(f"Hypothesis {idx + 1} ({confidence_tier}): {hypothesis.interpretation}")
+            await log(f"  Initial Confidence: {hypothesis.confidence:.2f}")
             await log(f"  Evidence: {len(hypothesis.supporting_evidence)} points")
             await log(f"  Uncertainties: {len(hypothesis.uncertain_aspects)} aspects")
 

@@ -127,6 +127,25 @@ class ComfyUIService:
             logger.error(f"ComfyUI: Failed to send interrupt: {e}")
             return False
 
+    async def clear_queue(self):
+        """Clear all pending items from ComfyUI queue."""
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                # Delete all pending items from queue
+                response = await client.post(
+                    f"{self.base_url}/queue",
+                    json={"clear": True}
+                )
+                if response.status_code == 200:
+                    logger.info("ComfyUI: Cleared queue")
+                    return True
+                else:
+                    logger.warning(f"ComfyUI: Clear queue failed with status {response.status_code}")
+                    return False
+        except Exception as e:
+            logger.error(f"ComfyUI: Failed to clear queue: {e}")
+            return False
+
     async def generate(
         self,
         prompt: str,

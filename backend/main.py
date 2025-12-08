@@ -3,6 +3,7 @@ import sys
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from backend.database import init_db
 from backend.config import settings
@@ -104,6 +105,14 @@ app.include_router(iteration_router)
 app.include_router(styles_router)
 app.include_router(hypothesis_router)
 
+# Mount static files for serving generated images
+# This serves files from the outputs directory
+app.mount(
+    "/api/files",
+    StaticFiles(directory=str(settings.outputs_dir)),
+    name="outputs"
+)
+
 
 @app.get("/")
 async def root():
@@ -161,6 +170,16 @@ async def vlm_cancel_requests():
     return {
         "status": "cancelled",
         "requests_cancelled": active_before,
+    }
+
+
+@app.post("/health/comfyui/clear-queue")
+async def comfyui_clear_queue():
+    """Clear all pending items from ComfyUI queue."""
+    success = await comfyui_service.clear_queue()
+    return {
+        "status": "cleared" if success else "failed",
+        "message": "ComfyUI queue cleared" if success else "Failed to clear ComfyUI queue",
     }
 
 

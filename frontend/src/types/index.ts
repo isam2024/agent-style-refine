@@ -224,6 +224,7 @@ export interface HypothesisTest {
 export interface StyleHypothesis {
   id: string;
   interpretation: string;
+  confidence_tier: string;
   profile: StyleProfile;
   confidence: number;
   supporting_evidence: string[];
