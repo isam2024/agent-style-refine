@@ -142,7 +142,7 @@ function StyleExplorer() {
     mutationFn: () => {
       setIsExploring(true)
       setShowLog(true)
-      return autoExplore(sessionId!, autoSteps)
+      return autoExplore(sessionId!, autoSteps, 101, selectedSnapshot?.id, selectedStrategy)
     },
     onSuccess: (result) => {
       setIsExploring(false)

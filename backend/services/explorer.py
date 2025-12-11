@@ -8,6 +8,7 @@ mutates and diverges to discover new aesthetic directions.
 import json
 import logging
 import random
+import re
 from pathlib import Path
 
 from backend.models.schemas import (
@@ -25,1595 +26,6 @@ from backend.websocket import manager
 
 logger = logging.getLogger(__name__)
 
-
-# Donor styles for crossover mutation
-DONOR_STYLES = [
-    ("1970s psychedelic poster", "psychedelic swirling colors, vibrant neon, trippy patterns, groovy typography"),
-    ("Japanese woodblock print", "ukiyo-e style, flat colors, bold outlines, traditional Japanese aesthetics"),
-    ("Soviet constructivist propaganda", "bold geometric shapes, red and black, diagonal compositions, revolutionary"),
-    ("Art nouveau organic curves", "flowing organic lines, natural forms, decorative ornament, elegant curves"),
-    ("Brutalist concrete architecture", "raw concrete, massive geometric forms, stark shadows, imposing scale"),
-    ("Vaporwave aesthetic", "pastel pinks and cyans, glitch effects, 90s nostalgia, digital artifacts"),
-    ("Medieval illuminated manuscript", "gold leaf, intricate borders, rich colors, calligraphic elements"),
-    ("Glitch art corruption", "digital distortion, pixel sorting, data moshing, corrupted imagery"),
-    ("Infrared photography", "false colors, red foliage, dark skies, surreal landscape"),
-    ("Blueprint technical drawing", "white lines on blue, technical precision, schematic style, annotations"),
-    ("Noir film aesthetic", "high contrast black and white, dramatic shadows, moody atmosphere"),
-    ("Pop art bold colors", "ben-day dots, bold outlines, primary colors, comic book style"),
-    ("Impressionist painting", "visible brushstrokes, light and color, atmospheric, soft edges"),
-    ("Cyberpunk neon city", "neon lights, rain-slicked streets, holographic displays, dystopian"),
-    ("Watercolor wash", "soft gradients, bleeding colors, wet-on-wet technique, translucent"),
-]
-
-# Characteristic inversions for inversion mutation
-CHARACTERISTIC_INVERSIONS = {
-    "warm colors": ("cold colors", {"palette": {"color_descriptions": ["icy blue", "frost white", "cool gray", "arctic cyan"]}}),
-    "cold colors": ("warm colors", {"palette": {"color_descriptions": ["golden amber", "sunset orange", "warm coral", "honey"]}}),
-    "organic shapes": ("geometric shapes", {"line_and_shape": {"shape_language": "strict geometric forms, mathematical precision, angular shapes"}}),
-    "geometric shapes": ("organic shapes", {"line_and_shape": {"shape_language": "flowing organic curves, natural forms, biomorphic shapes"}}),
-    "soft lighting": ("harsh lighting", {"lighting": {"lighting_type": "harsh dramatic lighting, strong shadows, high contrast"}}),
-    "harsh lighting": ("soft lighting", {"lighting": {"lighting_type": "soft diffused lighting, gentle gradients, ambient glow"}}),
-    "busy composition": ("minimal composition", {"composition": {"framing": "minimal, vast empty space, isolated subject"}}),
-    "minimal": ("maximalist", {"composition": {"framing": "horror vacui, densely packed, rich detail everywhere"}}),
-    "realistic": ("abstract", {"line_and_shape": {"shape_language": "abstract forms, non-representational, pure shape and color"}}),
-    "abstract": ("realistic", {"line_and_shape": {"shape_language": "photorealistic rendering, accurate proportions, lifelike detail"}}),
-    "smooth textures": ("rough textures", {"texture": {"surface": "extremely rough, heavily textured, gritty surface"}}),
-    "rough": ("smooth", {"texture": {"surface": "glass smooth, pristine surface, polished finish"}}),
-    "high saturation": ("desaturated", {"palette": {"saturation": "very low", "color_descriptions": ["muted gray", "pale", "washed out"]}}),
-    "desaturated": ("hypersaturated", {"palette": {"saturation": "extreme", "color_descriptions": ["neon", "electric", "vivid"]}}),
-    "dark mood": ("bright mood", {"lighting": {"lighting_type": "bright, cheerful, high-key lighting", "shadows": "minimal, soft"}}),
-    "bright": ("dark", {"lighting": {"lighting_type": "dark, moody, low-key lighting", "shadows": "deep, dramatic"}}),
-    "flat": ("dimensional", {"lighting": {"lighting_type": "dramatic dimensional lighting", "shadows": "strong directional shadows"}}),
-    "detailed": ("simplified", {"line_and_shape": {"line_quality": "simplified forms, reduced detail, essential shapes only"}}),
-}
-
-# Dimension extremes for random dimension push mutation
-DIMENSION_EXTREMES = {
-    "palette.saturation": [
-        ("completely desaturated, monochrome, grayscale", "desaturated"),
-        ("hypersaturated, neon, electric colors, vivid", "hypersaturated"),
-    ],
-    "palette.temperature": [
-        ("freezing cold palette, icy blues, arctic whites, winter tones", "cold"),
-        ("burning hot palette, volcanic oranges, fire reds, scorching yellows", "hot"),
-    ],
-    "palette.contrast": [
-        ("flat, no contrast, uniform values, hazy", "low_contrast"),
-        ("extreme high contrast, stark black and white, dramatic shadows", "high_contrast"),
-    ],
-    "line_and_shape.edges": [
-        ("razor sharp vector edges, crisp lines, hard boundaries", "sharp_edges"),
-        ("completely dissolved edges, blurry, soft focus, dreamlike", "soft_edges"),
-    ],
-    "line_and_shape.complexity": [
-        ("minimal, single shape, vast emptiness, simple forms", "minimal"),
-        ("infinitely complex, fractal detail, intricate patterns, ornate", "complex"),
-    ],
-    "texture.surface": [
-        ("glass smooth, perfect render, pristine surface, polished", "smooth"),
-        ("extremely rough, distressed, weathered, gritty texture", "rough"),
-    ],
-    "texture.noise": [
-        ("clinical clean, noise-free, pure colors, smooth gradients", "clean"),
-        ("heavy grain, static, film noise, analog texture", "noisy"),
-    ],
-    "lighting.intensity": [
-        ("pitch black shadows, extreme darkness, noir, low-key", "dark"),
-        ("blown out, overexposed, bright white, high-key lighting", "bright"),
-    ],
-    "lighting.direction": [
-        ("flat frontal lighting, even illumination, shadowless", "frontal"),
-        ("extreme side lighting, dramatic shadows, chiaroscuro", "side"),
-    ],
-    "composition.density": [
-        ("single element, vast empty space, isolation, minimalist", "sparse"),
-        ("horror vacui, packed full, dense detail, maximalist", "dense"),
-    ],
-    "composition.symmetry": [
-        ("perfect mathematical symmetry, mirror balance, geometric order", "symmetric"),
-        ("chaotic asymmetry, random placement, organic disorder", "asymmetric"),
-    ],
-}
-
-# Era/decade aesthetics for time_shift mutation
-ERA_AESTHETICS = [
-    ("1920s Art Deco", {
-        "palette": {"color_descriptions": ["gold", "black", "cream", "jade green"], "saturation": "medium-high"},
-        "line_and_shape": {"shape_language": "geometric sunbursts, chevrons, stepped forms, symmetrical patterns", "line_quality": "bold clean lines, sharp angles"},
-        "texture": {"surface": "smooth lacquered finish, metallic accents"},
-        "lighting": {"lighting_type": "glamorous dramatic lighting, theatrical"}
-    }),
-    ("1950s Mid-Century Modern", {
-        "palette": {"color_descriptions": ["avocado green", "burnt orange", "mustard yellow", "teal"], "saturation": "medium"},
-        "line_and_shape": {"shape_language": "organic boomerang shapes, atomic starbursts, tapered legs", "line_quality": "clean minimalist lines"},
-        "texture": {"surface": "smooth plastic, polished wood grain"},
-        "lighting": {"lighting_type": "bright optimistic lighting, soft shadows"}
-    }),
-    ("1960s Psychedelic", {
-        "palette": {"color_descriptions": ["electric purple", "hot pink", "acid green", "orange"], "saturation": "extreme"},
-        "line_and_shape": {"shape_language": "swirling spirals, melting forms, paisley patterns", "line_quality": "flowing wavy lines"},
-        "texture": {"surface": "trippy undulating surfaces, op-art patterns"},
-        "lighting": {"lighting_type": "black light glow, fluorescent"}
-    }),
-    ("1970s Disco/Retro", {
-        "palette": {"color_descriptions": ["gold", "brown", "orange", "cream"], "saturation": "medium"},
-        "line_and_shape": {"shape_language": "curved flowing forms, rounded corners, sunburst patterns", "line_quality": "soft organic lines"},
-        "texture": {"surface": "shag texture, velvet, chrome reflections"},
-        "lighting": {"lighting_type": "warm amber lighting, disco ball reflections"}
-    }),
-    ("1980s Memphis Design", {
-        "palette": {"color_descriptions": ["hot pink", "electric blue", "yellow", "mint green"], "saturation": "high"},
-        "line_and_shape": {"shape_language": "squiggles, confetti shapes, geometric primitives", "line_quality": "bold graphic lines, zigzags"},
-        "texture": {"surface": "terrazzo patterns, bold graphic patterns"},
-        "lighting": {"lighting_type": "flat even lighting, minimal shadows"}
-    }),
-    ("1990s Grunge", {
-        "palette": {"color_descriptions": ["muted olive", "dirty brown", "faded black", "rust"], "saturation": "low"},
-        "line_and_shape": {"shape_language": "distressed torn edges, raw unfinished forms", "line_quality": "rough scratchy lines"},
-        "texture": {"surface": "worn weathered texture, distressed surfaces, paper grain"},
-        "lighting": {"lighting_type": "dim moody lighting, harsh shadows"}
-    }),
-    ("2000s Y2K/Futurism", {
-        "palette": {"color_descriptions": ["silver chrome", "translucent blue", "hot pink", "white"], "saturation": "medium-high"},
-        "line_and_shape": {"shape_language": "bubble shapes, swooshes, organic curves", "line_quality": "sleek glossy lines"},
-        "texture": {"surface": "glossy plastic, chrome reflections, translucent materials"},
-        "lighting": {"lighting_type": "bright studio lighting, soft gradients"}
-    }),
-    ("Victorian Gothic", {
-        "palette": {"color_descriptions": ["deep burgundy", "forest green", "gold", "black"], "saturation": "medium"},
-        "line_and_shape": {"shape_language": "ornate filigree, pointed arches, intricate scrollwork", "line_quality": "elaborate detailed lines"},
-        "texture": {"surface": "rich velvet, aged patina, ornate carvings"},
-        "lighting": {"lighting_type": "candlelit dramatic lighting, deep shadows"}
-    }),
-    ("Renaissance Classical", {
-        "palette": {"color_descriptions": ["ochre", "ultramarine blue", "vermillion red", "earth brown"], "saturation": "medium"},
-        "line_and_shape": {"shape_language": "balanced proportions, classical columns, flowing drapery", "line_quality": "refined graceful lines"},
-        "texture": {"surface": "oil paint texture, canvas grain, sfumato blending"},
-        "lighting": {"lighting_type": "chiaroscuro dramatic lighting, divine rays"}
-    }),
-    ("Futuristic 2100", {
-        "palette": {"color_descriptions": ["holographic iridescent", "void black", "plasma blue", "neon white"], "saturation": "high"},
-        "line_and_shape": {"shape_language": "impossible geometry, floating forms, fractals", "line_quality": "razor precise lines, digital perfection"},
-        "texture": {"surface": "holographic shimmer, energy fields, crystalline"},
-        "lighting": {"lighting_type": "bioluminescent glow, volumetric light rays"}
-    }),
-]
-
-# Artistic mediums for medium_swap mutation
-ARTISTIC_MEDIUMS = [
-    ("Oil painting", {
-        "texture": {"surface": "thick impasto brushstrokes, visible paint texture, canvas grain"},
-        "line_and_shape": {"line_quality": "soft blended edges, painterly strokes"},
-        "lighting": {"lighting_type": "rich glazed lighting, deep luminous shadows"}
-    }),
-    ("Watercolor", {
-        "texture": {"surface": "soft bleeding washes, wet-on-wet blending, paper texture"},
-        "palette": {"saturation": "medium", "color_descriptions": ["soft washes", "translucent layers", "granulating pigments"]},
-        "lighting": {"lighting_type": "soft diffused light, white paper showing through"}
-    }),
-    ("Pencil sketch", {
-        "texture": {"surface": "graphite shading, paper grain, crosshatching"},
-        "palette": {"saturation": "very low", "color_descriptions": ["graphite gray", "charcoal black", "paper white"]},
-        "line_and_shape": {"line_quality": "sketchy gestural lines, varied line weight"}
-    }),
-    ("Ink drawing", {
-        "texture": {"surface": "stark black ink, crisp edges, occasional splatter"},
-        "palette": {"saturation": "very low", "color_descriptions": ["pure black", "stark white"]},
-        "line_and_shape": {"line_quality": "bold confident ink lines, hatching for tone"}
-    }),
-    ("Pastel chalk", {
-        "texture": {"surface": "soft chalky texture, smudged blending, textured paper"},
-        "palette": {"saturation": "medium-low"},
-        "line_and_shape": {"line_quality": "soft fuzzy edges, blended strokes"}
-    }),
-    ("Digital vector", {
-        "texture": {"surface": "perfectly smooth, flat color fills, no texture"},
-        "line_and_shape": {"line_quality": "crisp vector edges, mathematically perfect curves"},
-        "lighting": {"lighting_type": "flat graphic lighting, no gradients"}
-    }),
-    ("Woodcut print", {
-        "texture": {"surface": "wood grain texture, rough carved edges, ink bleed"},
-        "palette": {"color_descriptions": ["black ink", "natural paper", "limited colors"]},
-        "line_and_shape": {"line_quality": "bold carved lines, stark contrast, rough edges"}
-    }),
-    ("Stained glass", {
-        "texture": {"surface": "translucent colored glass, lead lines between sections"},
-        "palette": {"saturation": "high", "color_descriptions": ["jewel tones", "ruby red", "sapphire blue", "emerald green"]},
-        "line_and_shape": {"line_quality": "bold black outlines dividing color sections"},
-        "lighting": {"lighting_type": "backlit glowing, light shining through"}
-    }),
-    ("Mosaic tiles", {
-        "texture": {"surface": "small tile fragments, grout lines, tessellated pattern"},
-        "line_and_shape": {"shape_language": "fragmented tessellations, small geometric pieces"},
-        "lighting": {"lighting_type": "varied reflections from tile angles"}
-    }),
-    ("Spray paint graffiti", {
-        "texture": {"surface": "spray paint drips, overspray haze, wall texture"},
-        "palette": {"saturation": "high"},
-        "line_and_shape": {"line_quality": "bold tags, sharp stencil edges, dripping paint"}
-    }),
-    ("3D render", {
-        "texture": {"surface": "smooth CG surface, subsurface scattering, perfect materials"},
-        "lighting": {"lighting_type": "studio HDRI lighting, global illumination, soft shadows"},
-        "line_and_shape": {"line_quality": "smooth bezier curves, perfect geometry"}
-    }),
-    ("Collage cutouts", {
-        "texture": {"surface": "torn paper edges, layered materials, visible glue"},
-        "line_and_shape": {"shape_language": "cut paper shapes, layered compositions, mixed materials"},
-        "lighting": {"lighting_type": "flat even lighting, some paper shadows"}
-    }),
-]
-
-# Moods/emotions for mood_shift mutation
-MOOD_PALETTE = [
-    ("Serene/Peaceful", {
-        "palette": {"color_descriptions": ["soft blue", "pale green", "cream white", "gentle lavender"], "saturation": "low"},
-        "lighting": {"lighting_type": "soft diffused golden hour light, gentle gradients", "shadows": "barely visible, soft"},
-        "texture": {"surface": "smooth calm surfaces, gentle ripples"},
-        "composition": {"framing": "balanced, open space, room to breathe"}
-    }),
-    ("Anxious/Tense", {
-        "palette": {"color_descriptions": ["sickly yellow-green", "harsh white", "cold gray", "warning red"], "saturation": "medium"},
-        "lighting": {"lighting_type": "harsh fluorescent, uneven lighting, flickering", "shadows": "sharp jagged shadows"},
-        "texture": {"surface": "gritty uneasy texture, static noise"},
-        "composition": {"framing": "tight claustrophobic framing, off-balance"}
-    }),
-    ("Melancholic/Sad", {
-        "palette": {"color_descriptions": ["muted blue", "faded gray", "desaturated purple", "rain-washed"], "saturation": "low"},
-        "lighting": {"lighting_type": "overcast diffused light, no direct sun", "shadows": "soft undefined shadows"},
-        "texture": {"surface": "slightly blurred, rain-streaked, foggy"},
-        "composition": {"framing": "isolated subject, empty space, downward gaze"}
-    }),
-    ("Joyful/Celebratory", {
-        "palette": {"color_descriptions": ["sunshine yellow", "coral pink", "sky blue", "fresh green"], "saturation": "high"},
-        "lighting": {"lighting_type": "bright cheerful sunlight, sparkles, warm", "shadows": "light playful shadows"},
-        "texture": {"surface": "confetti texture, glossy, festive"},
-        "composition": {"framing": "dynamic upward movement, expansive"}
-    }),
-    ("Mysterious/Enigmatic", {
-        "palette": {"color_descriptions": ["deep purple", "midnight blue", "smoky gray", "glowing amber"], "saturation": "medium"},
-        "lighting": {"lighting_type": "dramatic rim lighting, obscured source, foggy", "shadows": "deep obscuring shadows"},
-        "texture": {"surface": "smoky haze, mysterious fog, half-hidden"},
-        "composition": {"framing": "partially obscured, questions unanswered"}
-    }),
-    ("Aggressive/Intense", {
-        "palette": {"color_descriptions": ["blood red", "harsh black", "electric yellow", "bruise purple"], "saturation": "high"},
-        "lighting": {"lighting_type": "harsh stark lighting, extreme contrast", "shadows": "sharp cutting shadows"},
-        "texture": {"surface": "rough aggressive texture, sharp edges"},
-        "composition": {"framing": "confrontational, in-your-face, dynamic angles"}
-    }),
-    ("Nostalgic/Wistful", {
-        "palette": {"color_descriptions": ["sepia brown", "faded gold", "dusty rose", "aged cream"], "saturation": "low"},
-        "lighting": {"lighting_type": "warm afternoon light, lens flare, hazy", "shadows": "soft warm shadows"},
-        "texture": {"surface": "film grain, slight blur, aged patina"},
-        "composition": {"framing": "snapshot composition, memory-like"}
-    }),
-    ("Eerie/Unsettling", {
-        "palette": {"color_descriptions": ["corpse pale", "sickly green", "dried blood", "void black"], "saturation": "low"},
-        "lighting": {"lighting_type": "unnatural lighting angles, wrong color temperature", "shadows": "shadows that don't match"},
-        "texture": {"surface": "uncanny valley smooth, wrongly textured"},
-        "composition": {"framing": "something wrong in the composition, off-center"}
-    }),
-    ("Romantic/Dreamy", {
-        "palette": {"color_descriptions": ["rose pink", "soft peach", "champagne gold", "blush"], "saturation": "medium-low"},
-        "lighting": {"lighting_type": "soft backlighting, lens flare, bokeh", "shadows": "minimal, glowing edges"},
-        "texture": {"surface": "soft focus, dreamy blur, silky"},
-        "composition": {"framing": "intimate close framing, soft vignette"}
-    }),
-    ("Heroic/Epic", {
-        "palette": {"color_descriptions": ["gold", "royal blue", "crimson red", "silver"], "saturation": "high"},
-        "lighting": {"lighting_type": "dramatic god rays, epic backlighting", "shadows": "bold heroic shadows"},
-        "texture": {"surface": "gleaming polished surfaces, flowing capes"},
-        "composition": {"framing": "low angle looking up, monumental scale"}
-    }),
-]
-
-# Scale/perspective shifts for scale_warp mutation
-SCALE_PERSPECTIVES = [
-    ("Macro/Microscopic", {
-        "composition": {"framing": "extreme close-up, macro lens perspective, tiny world made huge", "camera": "macro lens, shallow depth of field"},
-        "texture": {"surface": "intricate surface details visible, usually invisible textures revealed"},
-        "lighting": {"lighting_type": "focused spot lighting, dramatic depth"}
-    }),
-    ("Cosmic/Astronomical", {
-        "composition": {"framing": "vast cosmic scale, planetary perspective, infinite space", "camera": "pulled back to astronomical scale"},
-        "palette": {"color_descriptions": ["nebula purple", "star white", "void black", "cosmic blue"]},
-        "lighting": {"lighting_type": "distant star illumination, rim-lit planets, space lighting"}
-    }),
-    ("Miniature/Tilt-shift", {
-        "composition": {"framing": "bird's eye view, miniature world effect, model-like", "camera": "overhead tilt-shift lens effect"},
-        "texture": {"surface": "toy-like surfaces, model train aesthetic"},
-        "lighting": {"lighting_type": "bright even lighting like photography studio"}
-    }),
-    ("Monumental/Colossal", {
-        "composition": {"framing": "looking up at towering scale, monuments dwarfing viewer", "camera": "extreme low angle"},
-        "texture": {"surface": "massive stone texture, architectural grandeur"},
-        "lighting": {"lighting_type": "dramatic sky lighting, clouds swirling around peaks"}
-    }),
-    ("Intimate/Personal", {
-        "composition": {"framing": "close personal space, intimate portrait distance", "camera": "portrait lens, eye level"},
-        "texture": {"surface": "skin texture visible, personal details"},
-        "lighting": {"lighting_type": "soft intimate lighting, gentle on subject"}
-    }),
-    ("Aerial/Bird's Eye", {
-        "composition": {"framing": "directly overhead view, map-like perspective", "camera": "drone/satellite view"},
-        "texture": {"surface": "landscape patterns, agricultural grids, city blocks"},
-        "lighting": {"lighting_type": "midday sun, minimal shadows, even coverage"}
-    }),
-    ("Underwater/Submerged", {
-        "composition": {"framing": "underwater perspective, looking through water", "camera": "underwater housing distortion"},
-        "palette": {"color_descriptions": ["aqua blue", "filtered sunlight", "deep blue", "bioluminescent"]},
-        "texture": {"surface": "caustic light patterns, bubbles, murky depths"},
-        "lighting": {"lighting_type": "filtered sunbeams, caustic patterns, underwater diffusion"}
-    }),
-    ("Worm's Eye/Ground Level", {
-        "composition": {"framing": "ground level looking up, grass blade perspective", "camera": "ground level ultra wide"},
-        "texture": {"surface": "ground texture prominent, towering elements above"},
-        "lighting": {"lighting_type": "dramatic sky backdrop, silhouettes against light"}
-    }),
-]
-
-# Decay/entropy levels for decay mutation
-DECAY_LEVELS = [
-    ("Pristine to Weathered", {
-        "texture": {"surface": "light wear, slight patina, gentle aging", "noise_level": "medium"},
-        "palette": {"color_descriptions": ["slightly faded colors", "warm aged tones"]},
-        "lighting": {"lighting_type": "warm aged lighting, slight haze"}
-    }),
-    ("Weathered to Rusted", {
-        "texture": {"surface": "rust spots, peeling paint, oxidation, corrosion", "noise_level": "high"},
-        "palette": {"color_descriptions": ["rust orange", "oxidized green", "faded", "stained"]},
-        "lighting": {"lighting_type": "harsh revealing light, showing all imperfections"}
-    }),
-    ("Rusted to Ruined", {
-        "texture": {"surface": "crumbling edges, broken pieces, structural decay, holes"},
-        "palette": {"color_descriptions": ["gray rubble", "exposed materials", "dust", "debris"]},
-        "composition": {"framing": "broken framing, incomplete forms, missing pieces"}
-    }),
-    ("Ruined to Overgrown", {
-        "texture": {"surface": "vines creeping, moss covering, nature reclaiming", "special_effects": ["plant growth", "organic intrusion"]},
-        "palette": {"color_descriptions": ["green moss", "brown decay", "flowering weeds", "lichen"]},
-        "lighting": {"lighting_type": "dappled light through foliage, nature's soft light"}
-    }),
-    ("Overgrown to Ancient", {
-        "texture": {"surface": "completely covered in vegetation, geological timescale"},
-        "palette": {"color_descriptions": ["forest green", "stone gray", "earth brown", "ancient moss"]},
-        "composition": {"framing": "barely recognizable original form, consumed by time"}
-    }),
-    ("Digital Corruption", {
-        "texture": {"surface": "pixel corruption, data decay, glitch artifacts", "special_effects": ["glitch", "datamosh", "compression artifacts"]},
-        "palette": {"color_descriptions": ["shifted RGB", "banding artifacts", "wrong colors"]},
-        "line_and_shape": {"shape_language": "fragmented, displaced blocks, stretched pixels"}
-    }),
-    ("Burned/Charred", {
-        "texture": {"surface": "charred black, ash gray, ember glow at edges"},
-        "palette": {"color_descriptions": ["charcoal black", "ash gray", "ember orange", "smoke"]},
-        "lighting": {"lighting_type": "dim with occasional ember glow, smoke-filled"}
-    }),
-    ("Frozen/Crystallized", {
-        "texture": {"surface": "ice crystals forming, frost patterns, frozen in time"},
-        "palette": {"color_descriptions": ["ice blue", "frost white", "frozen gray", "crystal clear"]},
-        "lighting": {"lighting_type": "cold blue light, crystalline reflections"}
-    }),
-]
-
-# Cultural aesthetics for culture_shift mutation
-CULTURAL_AESTHETICS = [
-    ("Japanese Wabi-Sabi", {
-        "palette": {"color_descriptions": ["natural earth tones", "aged patina", "muted greens", "weathered wood"], "saturation": "low"},
-        "texture": {"surface": "imperfect beauty, natural materials, handcraft marks"},
-        "composition": {"framing": "asymmetrical balance, negative space, simplicity"},
-        "lighting": {"lighting_type": "soft natural light, paper lantern glow"}
-    }),
-    ("Moroccan/Islamic Geometric", {
-        "palette": {"color_descriptions": ["cobalt blue", "turquoise", "terracotta", "gold"], "saturation": "high"},
-        "line_and_shape": {"shape_language": "intricate geometric tessellations, arabesque patterns, eight-pointed stars"},
-        "texture": {"surface": "zellige tiles, carved plaster, brass inlay"},
-        "lighting": {"lighting_type": "warm desert light, filtered through screens"}
-    }),
-    ("Scandinavian Minimalism", {
-        "palette": {"color_descriptions": ["white", "pale wood", "soft gray", "muted blue"], "saturation": "very low"},
-        "texture": {"surface": "smooth wood, clean surfaces, cozy textiles"},
-        "composition": {"framing": "clean lines, functional simplicity, hygge warmth"},
-        "lighting": {"lighting_type": "bright northern light, candlelit warmth"}
-    }),
-    ("Indian/Hindu Vibrant", {
-        "palette": {"color_descriptions": ["saffron orange", "hot pink", "royal purple", "gold"], "saturation": "extreme"},
-        "texture": {"surface": "rich embroidery, intricate patterns, metallic threads"},
-        "line_and_shape": {"shape_language": "mandala patterns, lotus motifs, ornate borders"},
-        "lighting": {"lighting_type": "warm festive lighting, oil lamp glow, diya flames"}
-    }),
-    ("Mexican Dia de los Muertos", {
-        "palette": {"color_descriptions": ["marigold orange", "hot pink", "turquoise", "purple"], "saturation": "high"},
-        "line_and_shape": {"shape_language": "sugar skull patterns, papel picado, floral motifs"},
-        "texture": {"surface": "papel picado texture, painted ceramics, embroidered cloth"},
-        "lighting": {"lighting_type": "warm candlelit, altar lighting, festive"}
-    }),
-    ("African Tribal/Kente", {
-        "palette": {"color_descriptions": ["bold yellow", "forest green", "deep red", "royal blue"], "saturation": "high"},
-        "line_and_shape": {"shape_language": "bold geometric patterns, tribal symbols, kente stripes"},
-        "texture": {"surface": "woven textile, beadwork, carved wood"},
-        "lighting": {"lighting_type": "warm savanna sun, golden hour light"}
-    }),
-    ("Chinese Traditional", {
-        "palette": {"color_descriptions": ["lucky red", "gold", "jade green", "imperial yellow"], "saturation": "medium-high"},
-        "line_and_shape": {"shape_language": "dragon motifs, cloud patterns, calligraphic strokes"},
-        "texture": {"surface": "silk texture, lacquer shine, porcelain smooth"},
-        "lighting": {"lighting_type": "soft lantern light, moon glow, misty atmosphere"}
-    }),
-    ("Persian/Iranian", {
-        "palette": {"color_descriptions": ["lapis blue", "turquoise", "saffron yellow", "pomegranate red"], "saturation": "medium-high"},
-        "line_and_shape": {"shape_language": "floral arabesques, paisley patterns, miniature painting style"},
-        "texture": {"surface": "carpet texture, enamel work, calligraphy"},
-        "lighting": {"lighting_type": "warm golden light, garden pavilion atmosphere"}
-    }),
-    ("Celtic/Irish", {
-        "palette": {"color_descriptions": ["forest green", "gold", "deep blue", "earth brown"], "saturation": "medium"},
-        "line_and_shape": {"shape_language": "interlaced knots, spirals, zoomorphic designs"},
-        "texture": {"surface": "carved stone, illuminated manuscript, metalwork"},
-        "lighting": {"lighting_type": "misty emerald isle light, dramatic stormy skies"}
-    }),
-    ("Aboriginal Australian", {
-        "palette": {"color_descriptions": ["ochre red", "burnt sienna", "white", "yellow"], "saturation": "medium"},
-        "line_and_shape": {"shape_language": "dot painting patterns, dreamtime symbols, concentric circles"},
-        "texture": {"surface": "sandy texture, bark painting, rock surface"},
-        "lighting": {"lighting_type": "harsh outback sun, red desert light"}
-    }),
-]
-
-# Constraint types for constrain mutation
-CONSTRAINT_TYPES = [
-    ("Monochrome Single Hue", lambda profile: {
-        "palette": {
-            "color_descriptions": [f"{random.choice(['blue', 'red', 'green', 'purple', 'orange', 'yellow'])} only - all shades"],
-            "saturation": random.choice(["medium", "high"]),
-            "dominant_colors": [],
-            "accents": []
-        }
-    }),
-    ("Duotone", lambda profile: {
-        "palette": {
-            "color_descriptions": random.choice([
-                ["deep blue", "bright orange"],
-                ["hot pink", "cyan"],
-                ["purple", "yellow"],
-                ["red", "teal"],
-                ["black", "gold"]
-            ]),
-            "saturation": "high"
-        }
-    }),
-    ("Basic Shapes Only", lambda profile: {
-        "line_and_shape": {
-            "shape_language": "only circles, squares, and triangles - basic geometric primitives",
-            "line_quality": "simple clean lines, no complex curves"
-        }
-    }),
-    ("Horizontal Lines Only", lambda profile: {
-        "line_and_shape": {
-            "shape_language": "horizontal lines and bands only, no verticals or diagonals",
-            "line_quality": "strictly horizontal strokes"
-        },
-        "composition": {"framing": "horizontal banding, layered stripes"}
-    }),
-    ("No Curves", lambda profile: {
-        "line_and_shape": {
-            "shape_language": "angular only, no curves allowed, faceted forms",
-            "line_quality": "straight lines only, sharp angles"
-        }
-    }),
-    ("Single Light Source", lambda profile: {
-        "lighting": {
-            "lighting_type": "single harsh spotlight, all light from one point",
-            "shadows": "dramatic single-source shadows, no fill light"
-        }
-    }),
-    ("Flat No Shadows", lambda profile: {
-        "lighting": {
-            "lighting_type": "completely flat lighting, no depth",
-            "shadows": "no shadows whatsoever"
-        },
-        "texture": {"surface": "flat color fills only"}
-    }),
-    ("Three Colors Maximum", lambda profile: {
-        "palette": {
-            "color_descriptions": random.choice([
-                ["red", "white", "black"],
-                ["blue", "yellow", "white"],
-                ["green", "brown", "cream"],
-                ["purple", "gold", "black"]
-            ]),
-            "saturation": "medium"
-        }
-    }),
-]
-
-# ============================================================
-# NEW MUTATION DATA STRUCTURES
-# ============================================================
-
-# Topology/spatial distortions for topology_fold mutation
-TOPOLOGY_FOLDS = [
-    ("Escher Impossible", {
-        "composition": {"framing": "impossible geometry, Escher-like stairs that loop forever, contradictory perspectives"},
-        "line_and_shape": {"shape_language": "paradoxical forms, infinite loops, penrose triangles"},
-        "lighting": {"shadows": "shadows that defy the light source direction"}
-    }),
-    ("Recursive Loops", {
-        "composition": {"framing": "recursive self-containing structures, image within image within image"},
-        "line_and_shape": {"shape_language": "fractal-like self-similarity, nested forms"},
-        "texture": {"special_effects": ["droste effect", "infinite recursion"]}
-    }),
-    ("Inverted Depth", {
-        "composition": {"framing": "depth planes reversed, far appears near, near appears far"},
-        "lighting": {"lighting_type": "atmospheric perspective inverted, distant objects brighter"}
-    }),
-    ("Möbius Surface", {
-        "line_and_shape": {"shape_language": "one-sided surfaces, twisted continuous forms"},
-        "composition": {"framing": "surfaces that twist through themselves"}
-    }),
-    ("Non-Euclidean Space", {
-        "composition": {"framing": "curved space, parallel lines converging, angles that don't sum to 180"},
-        "line_and_shape": {"shape_language": "hyperbolic geometry, spherical distortions"}
-    }),
-    ("Dimensional Leak", {
-        "composition": {"framing": "4D objects projected into 3D, impossible intersections"},
-        "texture": {"special_effects": ["tesseract shadows", "hypercube projections"]}
-    }),
-]
-
-# Silhouette modifications for silhouette_shift mutation
-SILHOUETTE_SHIFTS = [
-    ("Spiked Contours", {
-        "line_and_shape": {"shape_language": "jagged spiky outlines, aggressive pointed forms", "line_quality": "sharp angular edges on all silhouettes"}
-    }),
-    ("Rounded Soft", {
-        "line_and_shape": {"shape_language": "all edges softened and rounded, pillow-like forms", "line_quality": "smooth curved outlines, no sharp corners"}
-    }),
-    ("Hollow Forms", {
-        "line_and_shape": {"shape_language": "hollow silhouettes, outline-only forms, negative space within shapes"},
-        "texture": {"surface": "translucent edges, see-through forms"}
-    }),
-    ("Fragmented Edges", {
-        "line_and_shape": {"shape_language": "broken discontinuous outlines, shattered silhouettes", "line_quality": "interrupted fragmented edges"}
-    }),
-    ("Organic Tendrils", {
-        "line_and_shape": {"shape_language": "flowing organic extensions, tentacle-like protrusions from all forms", "line_quality": "sinuous flowing edges"}
-    }),
-    ("Crystalline Facets", {
-        "line_and_shape": {"shape_language": "geometric crystalline edges, faceted like cut gems", "line_quality": "sharp planar intersections"}
-    }),
-    ("Melting Drips", {
-        "line_and_shape": {"shape_language": "dripping melting silhouettes, forms flowing downward", "line_quality": "liquid edges, gravity-affected outlines"}
-    }),
-    ("Pixelated Blocks", {
-        "line_and_shape": {"shape_language": "blocky pixelated outlines, stair-step edges", "line_quality": "aliased digital edges"}
-    }),
-]
-
-# Perspective distortions for perspective_drift mutation
-PERSPECTIVE_DRIFTS = [
-    ("Tilted Horizon", {
-        "composition": {"framing": "dramatically tilted horizon, Dutch angle", "camera": "canted 15-30 degrees off level"}
-    }),
-    ("Multiple Vanishing Points", {
-        "composition": {"framing": "conflicting vanishing points, each object has its own perspective", "camera": "cubist multiple viewpoints"}
-    }),
-    ("Sliding Vanishing", {
-        "composition": {"framing": "vanishing point that shifts across the image, unstable perspective"}
-    }),
-    ("Fisheye Warp", {
-        "composition": {"framing": "extreme fisheye barrel distortion, curved world", "camera": "ultra-wide fisheye lens"}
-    }),
-    ("Reverse Perspective", {
-        "composition": {"framing": "Byzantine reverse perspective, distant objects larger than near ones"}
-    }),
-    ("Impossible Lens", {
-        "composition": {"framing": "optical impossibilities, simultaneous telephoto and wide-angle characteristics", "camera": "lens that doesn't exist"}
-    }),
-    ("Vertigo Effect", {
-        "composition": {"framing": "dolly zoom effect frozen in time, background and foreground scale mismatch"}
-    }),
-]
-
-# Axis swaps for axis_swap mutation
-AXIS_SWAPS = [
-    ("Vertical to Horizontal", {
-        "composition": {"framing": "what was vertical is now horizontal, rotated hierarchy"},
-        "line_and_shape": {"shape_language": "forms stretched horizontally that should be vertical"}
-    }),
-    ("Center to Edge", {
-        "composition": {"framing": "focal point moved to extreme edge, central emptiness", "negative_space_behavior": "center is void, importance at periphery"}
-    }),
-    ("Foreground Background Swap", {
-        "composition": {"framing": "background becomes dominant, foreground minimized or blurred"}
-    }),
-    ("Light Dark Inversion", {
-        "lighting": {"lighting_type": "inverted luminosity, bright shadows dark highlights"}
-    }),
-    ("Scale Hierarchy Flip", {
-        "composition": {"framing": "small elements dominate, large elements recede"}
-    }),
-]
-
-# Physics alterations for physics_bend mutation
-PHYSICS_BENDS = [
-    ("Upward Gravity", {
-        "composition": {"framing": "everything drifts upward, gravity reversed"},
-        "line_and_shape": {"shape_language": "forms stretching toward the sky, upward flow"}
-    }),
-    ("Liquid Light", {
-        "lighting": {"lighting_type": "light behaves like liquid, pooling and dripping", "highlights": "light that flows and collects in puddles"}
-    }),
-    ("Elastic Solids", {
-        "texture": {"surface": "solid materials stretch like rubber, bouncy deformation"},
-        "line_and_shape": {"shape_language": "stretched elastic forms, cartoon physics"}
-    }),
-    ("Frozen Motion", {
-        "texture": {"special_effects": ["frozen splashes", "suspended particles", "time-stopped physics"]},
-        "composition": {"framing": "moment of impact frozen, physics paused mid-action"}
-    }),
-    ("Magnetic Fields", {
-        "line_and_shape": {"shape_language": "forms aligned to invisible field lines, magnetic attraction visible"},
-        "composition": {"framing": "objects clustering along force lines"}
-    }),
-    ("Zero Gravity Float", {
-        "composition": {"framing": "everything floating freely, no up or down"},
-        "line_and_shape": {"shape_language": "untethered floating forms, space-like drift"}
-    }),
-    ("Viscous Air", {
-        "texture": {"surface": "air visible as thick medium, movement trails through syrupy atmosphere"},
-        "line_and_shape": {"shape_language": "forms dragged through thick air, resistance visible"}
-    }),
-]
-
-# Color clustering for chromatic_gravity mutation
-CHROMATIC_GRAVITIES = [
-    ("Warm Cluster", {
-        "palette": {"color_descriptions": ["warm colors pulled together", "reds oranges yellows clustered", "cool colors pushed to edges"]},
-        "composition": {"framing": "warm color mass in center, cool periphery"}
-    }),
-    ("Cool Cluster", {
-        "palette": {"color_descriptions": ["cool colors pulled together", "blues greens purples clustered", "warm colors pushed to edges"]},
-        "composition": {"framing": "cool color mass in center, warm periphery"}
-    }),
-    ("Chromatic Repulsion", {
-        "palette": {"color_descriptions": ["colors maximally separated", "no adjacent similar hues", "each color isolated"]},
-        "composition": {"framing": "colors distributed to avoid proximity"}
-    }),
-    ("Gradient Bands", {
-        "palette": {"color_descriptions": ["colors organized in gradient bands", "smooth transitions in stripes"]},
-        "composition": {"framing": "banded color organization"}
-    }),
-    ("Complementary Poles", {
-        "palette": {"color_descriptions": ["complementary colors at opposite ends", "color tension across composition"]},
-        "composition": {"framing": "color polarity, warm and cool poles"}
-    }),
-    ("Saturation Gravity", {
-        "palette": {"color_descriptions": ["saturated colors cluster at focal point", "desaturated at edges"], "saturation": "extreme at center, low at edges"}
-    }),
-]
-
-# Material swaps for material_transmute mutation
-MATERIAL_TRANSMUTES = [
-    ("Glass to Fur", {
-        "texture": {"surface": "transparent surfaces now fuzzy and soft, hairy glass"}
-    }),
-    ("Metal to Cloth", {
-        "texture": {"surface": "metallic surfaces now draped fabric, flowing steel"}
-    }),
-    ("Stone to Liquid", {
-        "texture": {"surface": "solid stone now rippling liquid, flowing rock"}
-    }),
-    ("Wood to Crystal", {
-        "texture": {"surface": "organic wood now faceted crystal, transparent trees"}
-    }),
-    ("Flesh to Porcelain", {
-        "texture": {"surface": "skin now smooth ceramic, porcelain figures"}
-    }),
-    ("Water to Smoke", {
-        "texture": {"surface": "liquids now wispy smoke, gaseous water"}
-    }),
-    ("Fabric to Ice", {
-        "texture": {"surface": "soft cloth now frozen rigid ice, crystalline draping"}
-    }),
-    ("Paper to Metal", {
-        "texture": {"surface": "thin paper now heavy metal sheet, metallic pages"}
-    }),
-]
-
-# Temporal effects for temporal_exposure mutation
-TEMPORAL_EXPOSURES = [
-    ("Long Exposure Trails", {
-        "texture": {"special_effects": ["motion blur trails", "light painting streaks", "long exposure movement"]},
-        "lighting": {"highlights": "stretched light trails, time-smeared luminosity"}
-    }),
-    ("Freeze Frame Shatter", {
-        "texture": {"special_effects": ["frozen moment", "time-sliced fragments", "bullet-time freeze"]},
-        "composition": {"framing": "single instant captured with impossible detail"}
-    }),
-    ("Ghost Afterimages", {
-        "texture": {"special_effects": ["translucent afterimages", "motion echoes", "temporal ghosts"]},
-        "composition": {"framing": "multiple overlaid moments, ghostly trails"}
-    }),
-    ("Stroboscopic Multiple", {
-        "texture": {"special_effects": ["stroboscopic effect", "repeated frozen moments", "sequential overlay"]},
-        "composition": {"framing": "same subject repeated across motion arc"}
-    }),
-    ("Time Dilation", {
-        "texture": {"special_effects": ["different time speeds coexisting", "fast and slow in same frame"]},
-        "composition": {"framing": "some elements motion-blurred, others frozen"}
-    }),
-    ("Chronophotography", {
-        "texture": {"special_effects": ["Muybridge-style sequential overlay", "scientific motion study"]},
-        "composition": {"framing": "analytical breakdown of movement"}
-    }),
-]
-
-# Foreign motifs for motif_splice mutation
-MOTIF_SPLICES = [
-    ("Eyes", "watchful eyes hidden in shadows, textures, and patterns"),
-    ("Keys", "keys scattered throughout, in negative spaces and highlights"),
-    ("Spirals", "spiral motifs woven into textures and compositions"),
-    ("Birds", "bird silhouettes emerging from shapes and shadows"),
-    ("Clocks", "timepieces hidden in patterns, clock hands in lines"),
-    ("Hands", "reaching hands subtly formed in backgrounds and edges"),
-    ("Flames", "flame shapes flickering through the composition"),
-    ("Chains", "chain links woven through textures and borders"),
-    ("Moons", "crescent and full moon shapes recurring throughout"),
-    ("Skulls", "memento mori skull forms hidden in shadows"),
-    ("Flowers", "floral motifs blooming from unexpected places"),
-    ("Geometric Symbols", "sacred geometry symbols embedded subtly"),
-]
-
-# Rhythm patterns for rhythm_overlay mutation
-RHYTHM_OVERLAYS = [
-    ("Staccato", {
-        "line_and_shape": {"shape_language": "sharp disconnected elements, punchy visual beats"},
-        "composition": {"framing": "rhythmic spacing with sharp gaps"}
-    }),
-    ("Legato Flow", {
-        "line_and_shape": {"shape_language": "smoothly connected flowing forms, sustained visual lines"},
-        "composition": {"framing": "continuous flowing movement through composition"}
-    }),
-    ("Syncopated", {
-        "composition": {"framing": "off-beat placement, unexpected rhythmic emphasis"},
-        "line_and_shape": {"shape_language": "accents in unexpected positions"}
-    }),
-    ("Crescendo Build", {
-        "composition": {"framing": "elements growing in intensity from edge to center"},
-        "texture": {"surface": "increasing detail density toward focal point"}
-    }),
-    ("Polyrhythmic", {
-        "composition": {"framing": "multiple competing visual rhythms overlaid"},
-        "line_and_shape": {"shape_language": "different pattern frequencies coexisting"}
-    }),
-    ("Rest Spaces", {
-        "composition": {"framing": "deliberate empty beats, visual silence", "negative_space_behavior": "rhythmic pauses in the composition"}
-    }),
-]
-
-# Musical harmony for harmonic_balance mutation
-HARMONIC_BALANCES = [
-    ("Major Key Bright", {
-        "palette": {"color_descriptions": ["bright harmonious colors", "uplifting color chord"], "saturation": "medium-high"},
-        "lighting": {"lighting_type": "bright optimistic lighting"},
-        "mood": "uplifting, resolved, consonant"
-    }),
-    ("Minor Key Melancholy", {
-        "palette": {"color_descriptions": ["muted melancholic tones", "minor key colors"], "saturation": "low"},
-        "lighting": {"lighting_type": "dim atmospheric lighting"},
-        "mood": "wistful, unresolved tension"
-    }),
-    ("Dissonant Tension", {
-        "palette": {"color_descriptions": ["clashing uncomfortable colors", "dissonant color combinations"]},
-        "composition": {"framing": "visual tension, unresolved elements"},
-        "mood": "unsettling, discordant"
-    }),
-    ("Arpeggio Sequence", {
-        "composition": {"framing": "elements arranged in sequential progression, arpeggio-like repetition"},
-        "line_and_shape": {"shape_language": "repeating elements at different scales"}
-    }),
-    ("Chord Stack", {
-        "composition": {"framing": "layered simultaneous elements, chord-like stacking"},
-        "line_and_shape": {"shape_language": "harmonically related shapes stacked"}
-    }),
-    ("Resolution", {
-        "composition": {"framing": "tension releasing toward stable focal point"},
-        "mood": "satisfying conclusion, visual resolution"
-    }),
-]
-
-# Symmetry operations for symmetry_break mutation
-SYMMETRY_OPERATIONS = [
-    ("Break Bilateral", {
-        "composition": {"framing": "bilateral symmetry deliberately broken, one side different"},
-        "line_and_shape": {"shape_language": "asymmetric elements introduced"}
-    }),
-    ("Force Radial", {
-        "composition": {"framing": "forced radial symmetry, everything radiates from center"},
-        "line_and_shape": {"shape_language": "radial arrangement imposed"}
-    }),
-    ("Partial Mirror", {
-        "composition": {"framing": "partial reflection, incomplete mirror"},
-        "line_and_shape": {"shape_language": "some elements mirrored, others not"}
-    }),
-    ("Rotational Impose", {
-        "composition": {"framing": "rotational symmetry imposed, 3-fold or 4-fold"},
-        "line_and_shape": {"shape_language": "rotated repetition"}
-    }),
-    ("Glide Reflection", {
-        "composition": {"framing": "translated mirror, shifted reflection"},
-        "line_and_shape": {"shape_language": "mirrored and offset patterns"}
-    }),
-    ("Chaos from Order", {
-        "composition": {"framing": "orderly structure disrupted, symmetry destroyed"},
-        "line_and_shape": {"shape_language": "chaotic elements breaking geometric order"}
-    }),
-]
-
-# Density variations for density_shift mutation
-DENSITY_SHIFTS = [
-    ("Sparse from Dense", {
-        "texture": {"surface": "previously dense areas now minimal", "noise_level": "low"},
-        "composition": {"framing": "breathing room, expanded spacing"},
-        "line_and_shape": {"shape_language": "simplified, fewer elements"}
-    }),
-    ("Dense from Sparse", {
-        "texture": {"surface": "previously empty areas now intricate", "noise_level": "high"},
-        "composition": {"framing": "horror vacui, filled spaces"},
-        "line_and_shape": {"shape_language": "complex, many elements"}
-    }),
-    ("Density Gradient", {
-        "composition": {"framing": "gradual transition from sparse to dense"},
-        "texture": {"surface": "increasing detail toward focal point"}
-    }),
-    ("Density Islands", {
-        "composition": {"framing": "clusters of detail in sea of emptiness"},
-        "texture": {"surface": "localized intricate patches"}
-    }),
-    ("Uniform Density", {
-        "composition": {"framing": "even distribution throughout"},
-        "texture": {"surface": "consistent detail level everywhere"}
-    }),
-]
-
-# Dimensional appearances for dimensional_shift mutation
-DIMENSIONAL_SHIFTS = [
-    ("Flatten to 2D", {
-        "lighting": {"shadows": "no shadows", "lighting_type": "flat even lighting"},
-        "texture": {"surface": "flat graphic fills"},
-        "composition": {"framing": "no depth cues, paper cutout appearance"}
-    }),
-    ("Paper Cutout 2.5D", {
-        "composition": {"framing": "layered flat planes at different depths, diorama effect"},
-        "lighting": {"shadows": "discrete layered shadows"},
-        "texture": {"surface": "flat within layers, depth between"}
-    }),
-    ("Fake 3D Pop", {
-        "lighting": {"shadows": "exaggerated drop shadows", "highlights": "extreme dimensional shading"},
-        "texture": {"surface": "hyper-rendered dimensional appearance"}
-    }),
-    ("Isometric Lock", {
-        "composition": {"camera": "isometric projection, no vanishing points", "framing": "parallel projection"},
-        "line_and_shape": {"shape_language": "isometric geometry"}
-    }),
-    ("Trompe l'oeil Depth", {
-        "composition": {"framing": "hyper-realistic depth illusion"},
-        "lighting": {"shadows": "perfect perspective shadows", "highlights": "realistic depth shading"}
-    }),
-]
-
-# Scale swaps for micro_macro_swap mutation
-MICRO_MACRO_SWAPS = [
-    ("Micro to Macro", {
-        "texture": {"surface": "tiny textures now dominate as large shapes"},
-        "line_and_shape": {"shape_language": "microscopic patterns scaled to architectural size"},
-        "composition": {"framing": "texture becomes structure"}
-    }),
-    ("Macro to Micro", {
-        "line_and_shape": {"shape_language": "large shapes shrunk to textural patterns"},
-        "texture": {"surface": "structural elements become fine texture"},
-        "composition": {"framing": "structure becomes texture"}
-    }),
-    ("Scale Inversion", {
-        "composition": {"framing": "all scales inverted, big and small swapped"},
-        "line_and_shape": {"shape_language": "complete scale hierarchy reversal"}
-    }),
-    ("Fractal Scale", {
-        "line_and_shape": {"shape_language": "same patterns at every scale, fractal self-similarity"},
-        "texture": {"surface": "scale-independent patterns"}
-    }),
-]
-
-# Narrative elements for narrative_resonance mutation
-NARRATIVE_RESONANCES = [
-    ("Lost Civilization", {
-        "texture": {"special_effects": ["ancient ruins glimpsed", "forgotten symbols"]},
-        "mood": "archaeological mystery, deep time"
-    }),
-    ("Ritual Space", {
-        "composition": {"framing": "ceremonial arrangement, sacred geometry"},
-        "lighting": {"lighting_type": "ritualistic lighting, altar-like focus"},
-        "mood": "spiritual, ceremonial"
-    }),
-    ("Journey Path", {
-        "composition": {"framing": "implied movement through space, pathway visible"},
-        "mood": "pilgrimage, quest, travel"
-    }),
-    ("Aftermath", {
-        "texture": {"special_effects": ["traces of past events", "remnants and echoes"]},
-        "mood": "post-event stillness, consequence"
-    }),
-    ("Threshold", {
-        "composition": {"framing": "doorway, boundary, liminal space"},
-        "mood": "transition, potential, crossing"
-    }),
-    ("Secret Garden", {
-        "composition": {"framing": "hidden discovery, enclosed sanctuary"},
-        "mood": "wonder, privacy, sanctuary"
-    }),
-    ("Prophecy", {
-        "lighting": {"lighting_type": "ominous portentous light"},
-        "mood": "foreshadowing, fate, destiny"
-    }),
-]
-
-# Jungian archetypes for archetype_mask mutation
-ARCHETYPE_MASKS = [
-    ("The Hero", {
-        "lighting": {"lighting_type": "heroic uplighting, triumphant radiance"},
-        "composition": {"framing": "central dominant figure, upward aspiration"},
-        "mood": "courage, triumph, ascension"
-    }),
-    ("The Shadow", {
-        "lighting": {"lighting_type": "obscured, darkness dominant", "shadows": "deep engulfing shadows"},
-        "palette": {"saturation": "low", "color_descriptions": ["dark muted tones"]},
-        "mood": "hidden, repressed, unconscious"
-    }),
-    ("The Trickster", {
-        "composition": {"framing": "off-balance, unexpected arrangements"},
-        "line_and_shape": {"shape_language": "playful, rule-breaking forms"},
-        "mood": "mischief, disruption, clever"
-    }),
-    ("The Oracle", {
-        "lighting": {"lighting_type": "mysterious emanating light"},
-        "texture": {"special_effects": ["ethereal mist", "prophetic glow"]},
-        "mood": "wisdom, mystery, knowing"
-    }),
-    ("The Mother", {
-        "composition": {"framing": "embracing, protective enclosure"},
-        "palette": {"color_descriptions": ["nurturing warm tones"]},
-        "mood": "nurture, protection, fertility"
-    }),
-    ("The Wanderer", {
-        "composition": {"framing": "vast space, small figure, horizon focus"},
-        "mood": "solitude, seeking, journey"
-    }),
-    ("The Ruler", {
-        "composition": {"framing": "formal symmetry, hierarchical arrangement"},
-        "lighting": {"lighting_type": "regal golden light"},
-        "mood": "authority, order, power"
-    }),
-]
-
-# Climate/atmosphere for climate_morph mutation
-CLIMATE_MORPHS = [
-    ("Dust Storm", {
-        "texture": {"special_effects": ["airborne particles", "visibility reduction", "sand/dust haze"]},
-        "palette": {"color_descriptions": ["ochre", "tan", "dusty"], "saturation": "low"},
-        "lighting": {"lighting_type": "diffused by particles, orange cast"}
-    }),
-    ("Tropical Mist", {
-        "texture": {"special_effects": ["humid haze", "moisture droplets", "jungle humidity"]},
-        "palette": {"color_descriptions": ["lush green", "warm humidity"]},
-        "lighting": {"lighting_type": "soft diffused tropical light"}
-    }),
-    ("Cosmic Vacuum", {
-        "palette": {"color_descriptions": ["void black", "stellar white", "nebula colors"]},
-        "lighting": {"lighting_type": "harsh unfiltered starlight, no atmosphere"},
-        "texture": {"special_effects": ["no atmospheric scattering", "stark contrast"]}
-    }),
-    ("Heavy Fog", {
-        "texture": {"special_effects": ["dense fog", "limited visibility", "moisture suspension"]},
-        "palette": {"saturation": "very low"},
-        "lighting": {"lighting_type": "heavily diffused, no direct light"}
-    }),
-    ("Underwater Bloom", {
-        "texture": {"special_effects": ["caustic light patterns", "floating particles", "underwater haze"]},
-        "palette": {"color_descriptions": ["aquatic blue-green", "filtered sunlight"]},
-        "lighting": {"lighting_type": "filtered through water, caustics"}
-    }),
-    ("Arctic Clear", {
-        "palette": {"color_descriptions": ["ice blue", "pristine white", "cold clarity"]},
-        "lighting": {"lighting_type": "crisp cold light, high clarity"},
-        "texture": {"special_effects": ["crystalline air", "ice particles"]}
-    }),
-    ("Volcanic Ash", {
-        "texture": {"special_effects": ["ash fall", "ember glow", "smoke plumes"]},
-        "palette": {"color_descriptions": ["gray ash", "ember orange", "smoke black"]},
-        "lighting": {"lighting_type": "obscured sun, ember glow"}
-    }),
-]
-
-# Biome environments for biome_shift mutation
-BIOME_SHIFTS = [
-    ("Desert Dunes", {
-        "palette": {"color_descriptions": ["sand gold", "sun-bleached tan", "heat shimmer"]},
-        "texture": {"surface": "wind-sculpted sand, rippled dunes"},
-        "lighting": {"lighting_type": "harsh desert sun, long shadows"}
-    }),
-    ("Coral Reef", {
-        "palette": {"color_descriptions": ["coral pink", "tropical fish colors", "aqua blue"], "saturation": "high"},
-        "texture": {"surface": "organic coral textures, underwater life"},
-        "lighting": {"lighting_type": "filtered underwater light, caustics"}
-    }),
-    ("Ice Cave", {
-        "palette": {"color_descriptions": ["glacial blue", "frozen white", "deep ice"]},
-        "texture": {"surface": "crystalline ice, frozen formations"},
-        "lighting": {"lighting_type": "translucent ice glow, refracted light"}
-    }),
-    ("Fungal Forest", {
-        "palette": {"color_descriptions": ["bioluminescent", "decay brown", "mycelium white"]},
-        "texture": {"surface": "organic fungal growth, spore clouds"},
-        "lighting": {"lighting_type": "bioluminescent glow, damp darkness"}
-    }),
-    ("Gas Giant Atmosphere", {
-        "palette": {"color_descriptions": ["jupiter bands", "storm swirls", "atmospheric layers"]},
-        "texture": {"surface": "gas cloud swirls, storm vortices"},
-        "lighting": {"lighting_type": "diffused through dense atmosphere"}
-    }),
-    ("Volcanic Hellscape", {
-        "palette": {"color_descriptions": ["lava orange", "basalt black", "sulfur yellow"]},
-        "texture": {"surface": "cooling lava, volcanic rock"},
-        "lighting": {"lighting_type": "lava glow, volcanic fire"}
-    }),
-    ("Bioluminescent Deep Sea", {
-        "palette": {"color_descriptions": ["abyssal black", "bioluminescent spots"], "saturation": "low except lights"},
-        "texture": {"surface": "deep sea organisms, pressure-adapted forms"},
-        "lighting": {"lighting_type": "only bioluminescent points in darkness"}
-    }),
-]
-
-# Computational artifacts for algorithmic_wrinkle mutation
-ALGORITHMIC_WRINKLES = [
-    ("CRT Scanlines", {
-        "texture": {"special_effects": ["horizontal scanlines", "CRT curvature", "phosphor glow"]},
-        "line_and_shape": {"line_quality": "scanline-interrupted edges"}
-    }),
-    ("JPEG Compression", {
-        "texture": {"special_effects": ["compression blocks", "DCT artifacts", "mosquito noise"]},
-        "line_and_shape": {"shape_language": "block-boundary artifacts"}
-    }),
-    ("Halftone Dots", {
-        "texture": {"surface": "CMYK halftone dot pattern, newsprint texture", "special_effects": ["halftone rosettes", "dot gain"]},
-    }),
-    ("Dithering Pattern", {
-        "texture": {"surface": "ordered dithering pattern, limited palette simulation", "special_effects": ["Bayer matrix dither"]}
-    }),
-    ("VHS Tracking", {
-        "texture": {"special_effects": ["tracking lines", "color bleeding", "tape wobble"]},
-        "palette": {"color_descriptions": ["oversaturated video colors"]}
-    }),
-    ("ASCII Art", {
-        "texture": {"surface": "character-based rendering, ASCII density mapping"},
-        "line_and_shape": {"shape_language": "monospace character grid"}
-    }),
-    ("Interlacing", {
-        "texture": {"special_effects": ["interlaced lines", "motion combing", "field separation"]}
-    }),
-    ("Posterization", {
-        "palette": {"color_descriptions": ["limited color bands", "stepped gradients"]},
-        "texture": {"surface": "banded color regions, no smooth gradients"}
-    }),
-]
-
-# Symbolic reduction for symbolic_reduction mutation
-SYMBOLIC_REDUCTIONS = [
-    ("Geometric Primitives", {
-        "line_and_shape": {"shape_language": "reduced to circles, squares, triangles only", "line_quality": "clean simple outlines"},
-        "texture": {"surface": "flat fills, no texture detail"}
-    }),
-    ("Pictogram", {
-        "line_and_shape": {"shape_language": "international symbol style, universal pictogram forms", "line_quality": "uniform stroke weight"},
-        "palette": {"color_descriptions": ["limited signage colors"]}
-    }),
-    ("Hieroglyphic", {
-        "line_and_shape": {"shape_language": "symbolic representative forms, icon-like reduction"},
-        "composition": {"framing": "arranged like written symbols"}
-    }),
-    ("Circuit Diagram", {
-        "line_and_shape": {"shape_language": "schematic symbols, node and connection logic", "line_quality": "technical drawing lines"},
-        "palette": {"color_descriptions": ["schematic colors"]}
-    }),
-    ("Stick Figure", {
-        "line_and_shape": {"shape_language": "minimalist line-based representation", "line_quality": "single-weight strokes only"}
-    }),
-    ("Emoji Reduction", {
-        "line_and_shape": {"shape_language": "emoji-style simplification, expressive minimalism"},
-        "palette": {"saturation": "high", "color_descriptions": ["bright emoji colors"]}
-    }),
-]
-
-# ============================================================
-# NEW MUTATION DATA STRUCTURES (75 new strategies)
-# ============================================================
-
-# Chromatic mutations
-CHROMA_BAND_SHIFTS = [
-    ("Red Band Shift", {"palette": {"color_descriptions": ["shifted reds to orange", "warm red mutations", "coral undertones"]}}),
-    ("Green Band Shift", {"palette": {"color_descriptions": ["shifted greens to teal", "cool green mutations", "aqua undertones"]}}),
-    ("Blue Band Shift", {"palette": {"color_descriptions": ["shifted blues to purple", "violet undertones", "indigo mutations"]}}),
-    ("Yellow Band Shift", {"palette": {"color_descriptions": ["shifted yellows to gold", "amber mutations", "ochre undertones"]}}),
-    ("Cyan Band Shift", {"palette": {"color_descriptions": ["shifted cyans to turquoise", "sea-foam mutations"]}}),
-    ("Magenta Band Shift", {"palette": {"color_descriptions": ["shifted magentas to fuchsia", "pink undertones"]}}),
-]
-
-CHROMATIC_NOISE_TYPES = [
-    ("Film Grain RGB", {"texture": {"surface": "RGB channel separated grain, film-like color noise", "noise_level": "medium"}}),
-    ("VHS Chroma", {"texture": {"surface": "VHS-style chroma bleeding, analog color shift", "noise_level": "high"}}),
-    ("Digital Color Banding", {"texture": {"surface": "subtle color banding, posterized gradients", "noise_level": "low"}}),
-    ("Halftone Scatter", {"texture": {"surface": "CMYK halftone dot pattern, print-style separation", "noise_level": "medium"}}),
-]
-
-CHROMATIC_TEMPERATURE_SPLITS = [
-    ("Warm Highlights/Cool Shadows", {"lighting": {"highlights": "warm golden amber highlights", "shadows": "cool blue-tinted shadows"}}),
-    ("Cool Highlights/Warm Shadows", {"lighting": {"highlights": "cool silver-white highlights", "shadows": "warm brown-tinted shadows"}}),
-    ("Split Complementary", {"palette": {"color_descriptions": ["orange highlights", "teal shadows", "neutral midtones"]}}),
-]
-
-CHROMATIC_FUSES = [
-    ("Unified Warm", {"palette": {"color_descriptions": ["all hues fused toward golden amber", "unified warm mega-hue"], "saturation": "medium"}}),
-    ("Unified Cool", {"palette": {"color_descriptions": ["all hues fused toward steel blue", "unified cool mega-hue"], "saturation": "medium"}}),
-    ("Unified Earth", {"palette": {"color_descriptions": ["all hues fused toward earth brown", "unified natural mega-hue"], "saturation": "low"}}),
-]
-
-CHROMATIC_SPLITS = [
-    ("Analogous Expansion", {"palette": {"color_descriptions": ["primary hue split into neighboring hues", "analogous complexity"]}}),
-    ("Complementary Split", {"palette": {"color_descriptions": ["primary hue split with complement", "tension palette"]}}),
-    ("Triadic Split", {"palette": {"color_descriptions": ["primary hue split into triadic harmony", "balanced complexity"]}}),
-]
-
-# Lighting/Shadow mutations
-AMBIENT_OCCLUSION_VARIANTS = [
-    ("Soft Wide AO", {"lighting": {"shadows": "soft wide ambient occlusion, gentle crevice darkening"}}),
-    ("Crisp Tight AO", {"lighting": {"shadows": "crisp tight ambient occlusion, sharp corner shadows"}}),
-    ("Minimal AO", {"lighting": {"shadows": "minimal ambient occlusion, flat lighting appearance"}}),
-    ("Exaggerated AO", {"lighting": {"shadows": "exaggerated deep ambient occlusion, dramatic depth"}}),
-]
-
-SPECULAR_FLIPS = [
-    ("Matte to Glossy", {"texture": {"surface": "glossy reflective surfaces, mirror-like sheen", "special_effects": ["specular highlights", "reflections"]}}),
-    ("Glossy to Matte", {"texture": {"surface": "completely matte surfaces, diffuse only, no shine", "special_effects": []}}),
-    ("Selective Flip", {"texture": {"surface": "inverted shininess - originally matte areas now glossy, glossy now matte"}}),
-]
-
-BLOOM_VARIANTS = [
-    ("No Bloom", {"texture": {"special_effects": []}, "lighting": {"highlights": "sharp defined highlights, no glow"}}),
-    ("Subtle Bloom", {"texture": {"special_effects": ["subtle light bloom"]}, "lighting": {"highlights": "gentle glow around bright areas"}}),
-    ("Heavy Bloom", {"texture": {"special_effects": ["intense bloom", "light halos"]}, "lighting": {"highlights": "dramatic glowing highlights, aureole effect"}}),
-    ("Chromatic Bloom", {"texture": {"special_effects": ["rainbow chromatic aberration bloom"]}, "lighting": {"highlights": "prismatic color-separated glow"}}),
-]
-
-DESYNC_LIGHTING_CHANNELS = [
-    ("Intensity Randomized", {"lighting": {"lighting_type": "varied intensity across scene, inconsistent brightness"}}),
-    ("Color Randomized", {"lighting": {"lighting_type": "multi-colored light sources, varied tints"}}),
-    ("Direction Randomized", {"lighting": {"lighting_type": "multiple conflicting light directions", "shadows": "contradictory shadow directions"}}),
-]
-
-HIGHLIGHT_SHIFTS = [
-    ("Soft Bloom Highlights", {"lighting": {"highlights": "soft blooming highlights, gentle glow spread"}}),
-    ("Sharp Specular Highlights", {"lighting": {"highlights": "razor-sharp specular pinpoints, crisp reflections"}}),
-    ("Inverted Highlights", {"lighting": {"highlights": "highlights in unexpected areas, reversed luminance"}}),
-    ("Colored Highlights", {"lighting": {"highlights": "tinted colored highlights, non-white speculars"}}),
-]
-
-SHADOW_RECODES = [
-    ("Colorful Shadows", {"lighting": {"shadows": "vibrant colored shadows, complementary tints"}}),
-    ("Geometric Shadows", {"lighting": {"shadows": "geometric hard-edged shadows, graphic shapes"}}),
-    ("Cinematic Shadows", {"lighting": {"shadows": "ultra-soft cinematic shadows, film noir style"}}),
-    ("Absent Shadows", {"lighting": {"shadows": "minimal to no shadows, flat lighting"}}),
-]
-
-LIGHTING_ANGLE_SHIFTS = [
-    ("Top-Down", {"lighting": {"lighting_type": "overhead top-down lighting", "shadows": "shadows directly below subjects"}}),
-    ("Side-Lit", {"lighting": {"lighting_type": "dramatic side lighting", "shadows": "long horizontal shadows"}}),
-    ("Backlit", {"lighting": {"lighting_type": "strong backlighting, rim light", "shadows": "shadows toward viewer"}}),
-    ("Under-Lit", {"lighting": {"lighting_type": "eerie underlighting", "shadows": "upward-cast shadows"}}),
-]
-
-HIGHLIGHT_BLOOM_COLORIZES = [
-    ("Golden Bloom", {"lighting": {"highlights": "golden amber bloom color"}, "texture": {"special_effects": ["warm golden glow"]}}),
-    ("Cool Bloom", {"lighting": {"highlights": "cool blue-white bloom"}, "texture": {"special_effects": ["cool ethereal glow"]}}),
-    ("Magenta Bloom", {"lighting": {"highlights": "magenta-pink bloom"}, "texture": {"special_effects": ["romantic pink glow"]}}),
-]
-
-MICRO_SHADOWINGS = [
-    ("Crisp Micro-Shadows", {"lighting": {"shadows": "tiny crisp micro-shadows adding dimensional detail"}}),
-    ("Stippled Shadows", {"lighting": {"shadows": "stippled micro-shadow pattern, textural depth"}}),
-]
-
-MACRO_SHADOW_PIVOTS = [
-    ("Shadow Mass Left", {"lighting": {"shadows": "large shadow masses repositioned to left side"}}),
-    ("Shadow Mass Right", {"lighting": {"shadows": "large shadow masses repositioned to right side"}}),
-    ("Central Shadow", {"lighting": {"shadows": "shadow mass centered, dramatic central darkness"}}),
-    ("Peripheral Shadow", {"lighting": {"shadows": "shadows pushed to edges, vignette-like"}}),
-]
-
-# Contour/Edge mutations
-CONTOUR_SIMPLIFIES = [
-    ("Poster Simple", {"line_and_shape": {"line_quality": "reduced contour lines, poster-like simplicity", "shape_language": "graphic simplified shapes"}}),
-    ("Single Outline", {"line_and_shape": {"line_quality": "single clean outline only, no internal lines"}}),
-    ("Block Shapes", {"line_and_shape": {"line_quality": "no contour lines, pure shape blocks", "shape_language": "flat color blocks"}}),
-]
-
-CONTOUR_COMPLEXIFIES = [
-    ("Secondary Contours", {"line_and_shape": {"line_quality": "added secondary contour lines emphasizing form"}}),
-    ("Tertiary Detail", {"line_and_shape": {"line_quality": "multiple layered contour lines, exaggerated depth"}}),
-    ("Cross-Contour", {"line_and_shape": {"line_quality": "cross-contour lines showing volume, topographic"}}),
-]
-
-LINE_WEIGHT_MODULATIONS = [
-    ("Thin Lines", {"line_and_shape": {"line_quality": "uniformly thin delicate lines"}}),
-    ("Thick Lines", {"line_and_shape": {"line_quality": "bold thick uniform lines"}}),
-    ("Tapered Lines", {"line_and_shape": {"line_quality": "tapered lines thick-to-thin, calligraphic"}}),
-    ("Variable Weight", {"line_and_shape": {"line_quality": "highly variable line weights, expressive strokes"}}),
-]
-
-EDGE_BEHAVIOR_SWAPS = [
-    ("Soft Edges", {"line_and_shape": {"line_quality": "soft feathered edges, gentle transitions"}}),
-    ("Hard Edges", {"line_and_shape": {"line_quality": "razor-sharp hard edges, crisp boundaries"}}),
-    ("Broken Edges", {"line_and_shape": {"line_quality": "broken interrupted edges, sketchy boundaries"}}),
-    ("Pixelated Edges", {"line_and_shape": {"line_quality": "pixelated aliased edges, digital artifact"}}),
-]
-
-BOUNDARY_ECHOES = [
-    ("Single Echo", {"line_and_shape": {"line_quality": "thin duplicated outline offset by few pixels"}}),
-    ("Multiple Echoes", {"line_and_shape": {"line_quality": "multiple concentric outline echoes, ripple effect"}}),
-    ("Offset Echo", {"line_and_shape": {"line_quality": "offset shadow outline, dimensional echo"}}),
-]
-
-HALO_GENERATIONS = [
-    ("Soft Halo", {"texture": {"special_effects": ["soft glow halo around shapes"]}, "lighting": {"highlights": "gentle luminous outline"}}),
-    ("Hard Halo", {"texture": {"special_effects": ["crisp defined halo outline"]}, "lighting": {"highlights": "sharp glowing border"}}),
-    ("Colored Halo", {"texture": {"special_effects": ["colored aura halo"]}, "lighting": {"highlights": "chromatic outline glow"}}),
-]
-
-# Texture mutations
-TEXTURE_DIRECTION_SHIFTS = [
-    ("Horizontal Texture", {"texture": {"surface": "horizontally oriented texture direction"}}),
-    ("Vertical Texture", {"texture": {"surface": "vertically oriented texture direction"}}),
-    ("Diagonal Texture", {"texture": {"surface": "diagonal 45-degree texture direction"}}),
-    ("Radial Texture", {"texture": {"surface": "radially emanating texture pattern"}}),
-]
-
-NOISE_INJECTIONS = [
-    ("Fine Grain", {"texture": {"surface": "fine grain noise, subtle texture", "noise_level": "low"}}),
-    ("Heavy Grain", {"texture": {"surface": "heavy film grain, gritty texture", "noise_level": "high"}}),
-    ("Stippling", {"texture": {"surface": "stippled dot pattern noise", "noise_level": "medium"}}),
-    ("Banding Noise", {"texture": {"surface": "horizontal banding artifacts", "noise_level": "low"}}),
-]
-
-MICROFRACTURE_PATTERNS = [
-    ("Fine Crazing", {"texture": {"surface": "fine crackle crazing pattern across surfaces"}}),
-    ("Bold Cracks", {"texture": {"surface": "bold visible crack lines, fractured appearance"}}),
-    ("Shattered", {"texture": {"surface": "shattered glass-like fracture pattern"}}),
-]
-
-CROSSHATCH_DENSITY_SHIFTS = [
-    ("Sparse Crosshatch", {"texture": {"surface": "sparse widely-spaced crosshatching"}}),
-    ("Dense Crosshatch", {"texture": {"surface": "dense tight crosshatching, rich texture"}}),
-    ("Angled Crosshatch", {"texture": {"surface": "crosshatching at unusual angles"}}),
-]
-
-# Material/Surface mutations
-BACKGROUND_MATERIAL_SWAPS = [
-    ("Paper Background", {"texture": {"surface": "paper texture backdrop, fibrous"}}),
-    ("Metal Background", {"texture": {"surface": "brushed metal backdrop, industrial"}}),
-    ("Digital Noise Background", {"texture": {"surface": "digital noise static backdrop"}}),
-    ("Velvet Background", {"texture": {"surface": "velvet soft fabric backdrop"}}),
-    ("Concrete Background", {"texture": {"surface": "raw concrete textured backdrop"}}),
-]
-
-SURFACE_MATERIAL_SHIFTS = [
-    ("Glossy to Matte", {"texture": {"surface": "matte diffuse surface, no reflections"}}),
-    ("Rough to Smooth", {"texture": {"surface": "smooth polished surface, refined"}}),
-    ("Porous to Solid", {"texture": {"surface": "solid impermeable surface, sealed"}}),
-    ("Metallic Sheen", {"texture": {"surface": "metallic reflective surface quality"}}),
-]
-
-TRANSLUCENCY_SHIFTS = [
-    ("Add Translucency", {"texture": {"surface": "translucent semi-transparent materials", "special_effects": ["subsurface glow"]}}),
-    ("Remove Translucency", {"texture": {"surface": "fully opaque solid materials", "special_effects": []}}),
-    ("Glass-Like", {"texture": {"surface": "glass-like transparency, refractive", "special_effects": ["light refraction"]}}),
-]
-
-SUBSURFACE_SCATTER_TWEAKS = [
-    ("Add SSS", {"texture": {"special_effects": ["subsurface scattering", "internal glow"]}, "lighting": {"highlights": "soft internal light transmission"}}),
-    ("Remove SSS", {"texture": {"special_effects": []}, "lighting": {"highlights": "surface-only lighting, no internal glow"}}),
-    ("Strong SSS", {"texture": {"special_effects": ["strong subsurface scattering", "wax-like glow"]}}),
-]
-
-ANISOTROPY_SHIFTS = [
-    ("Brushed Metal", {"texture": {"surface": "anisotropic brushed metal reflections, directional"}}),
-    ("Hair-Like", {"texture": {"surface": "anisotropic hair-like strand reflections"}}),
-    ("Silk Sheen", {"texture": {"surface": "anisotropic silk fabric sheen, flowing"}}),
-]
-
-REFLECTIVITY_SHIFTS = [
-    ("Mirror-Like", {"texture": {"surface": "highly reflective mirror-like surfaces", "special_effects": ["sharp reflections"]}}),
-    ("Muted Reflections", {"texture": {"surface": "muted soft reflections, diffuse", "special_effects": ["blurred reflections"]}}),
-    ("No Reflections", {"texture": {"surface": "non-reflective matte surfaces", "special_effects": []}}),
-]
-
-# Tonal mutations
-MIDTONE_SHIFTS = [
-    ("Lighter Midtones", {"palette": {"value_range": "lifted midtones, lighter overall feel"}}),
-    ("Darker Midtones", {"palette": {"value_range": "pushed down midtones, moodier"}}),
-    ("Warmer Midtones", {"palette": {"value_range": "warm-tinted midtones", "color_descriptions": ["amber midtones"]}}),
-    ("Cooler Midtones", {"palette": {"value_range": "cool-tinted midtones", "color_descriptions": ["blue-gray midtones"]}}),
-]
-
-TONAL_COMPRESSIONS = [
-    ("Flat Graphic", {"palette": {"value_range": "compressed flat tonal range, graphic poster look"}}),
-    ("Hazy Compressed", {"palette": {"value_range": "compressed hazy tonal range, foggy"}}),
-]
-
-TONAL_EXPANSIONS = [
-    ("High Dynamic", {"palette": {"value_range": "expanded HDR tonal range, deep shadows bright highlights"}}),
-    ("Dramatic Contrast", {"palette": {"value_range": "dramatically expanded contrast, theatrical"}}),
-]
-
-MICROCONTRAST_TUNINGS = [
-    ("Crisp Texture", {"texture": {"surface": "high microcontrast, crisp texture detail"}}),
-    ("Soft Texture", {"texture": {"surface": "low microcontrast, smooth texture"}}),
-]
-
-CONTRAST_CHANNEL_SWAPS = [
-    ("Luminance Contrast", {"palette": {"value_range": "luminance-only contrast adjustment"}}),
-    ("Chroma Contrast", {"palette": {"value_range": "chrominance-only contrast, color punch"}}),
-    ("Hue Contrast", {"palette": {"value_range": "hue variation contrast, color diversity"}}),
-]
-
-# Blur/Focus mutations
-DIRECTIONAL_BLURS = [
-    ("Horizontal Motion", {"texture": {"special_effects": ["horizontal motion blur"]}, "composition": {"structural_notes": "horizontal movement implied"}}),
-    ("Vertical Motion", {"texture": {"special_effects": ["vertical motion blur"]}, "composition": {"structural_notes": "vertical movement implied"}}),
-    ("Radial Zoom", {"texture": {"special_effects": ["radial zoom blur"]}, "composition": {"structural_notes": "explosive outward motion"}}),
-    ("Rotational", {"texture": {"special_effects": ["rotational spin blur"]}, "composition": {"structural_notes": "spinning motion"}}),
-]
-
-FOCAL_PLANE_SHIFTS = [
-    ("Foreground Focus", {"composition": {"depth": "sharp foreground, blurred background"}, "texture": {"special_effects": ["shallow depth of field"]}}),
-    ("Background Focus", {"composition": {"depth": "blurred foreground, sharp background"}, "texture": {"special_effects": ["reverse focus"]}}),
-    ("Tilt-Shift", {"composition": {"depth": "selective miniature effect focus"}, "texture": {"special_effects": ["tilt-shift blur"]}}),
-]
-
-MASK_BOUNDARY_MUTATIONS = [
-    ("Soft Masks", {"line_and_shape": {"line_quality": "soft feathered mask boundaries"}}),
-    ("Hard Masks", {"line_and_shape": {"line_quality": "crisp hard mask boundaries"}}),
-    ("Torn Masks", {"line_and_shape": {"line_quality": "torn irregular mask boundaries"}}),
-    ("Stippled Masks", {"line_and_shape": {"line_quality": "stippled dissolving mask boundaries"}}),
-]
-
-# Silhouette mutations (extended)
-SILHOUETTE_MERGES = [
-    ("Overlapping Merge", {"line_and_shape": {"shape_language": "overlapping silhouettes fused into composite"}}),
-    ("Blended Merge", {"line_and_shape": {"shape_language": "smoothly blended merged silhouettes"}}),
-]
-
-SILHOUETTE_SUBTRACTS = [
-    ("Negative Cutout", {"line_and_shape": {"shape_language": "negative space cutouts in silhouette"}}),
-    ("Fragmented", {"line_and_shape": {"shape_language": "fragmented broken silhouette chunks"}}),
-]
-
-SILHOUETTE_DISTORTIONS = [
-    ("Stretched", {"line_and_shape": {"shape_language": "vertically stretched silhouette"}}),
-    ("Compressed", {"line_and_shape": {"shape_language": "horizontally compressed silhouette"}}),
-    ("Bent", {"line_and_shape": {"shape_language": "bent curved silhouette distortion"}}),
-    ("Fractured", {"line_and_shape": {"shape_language": "fractured shattered silhouette"}}),
-]
-
-INTERNAL_GEOMETRY_TWISTS = [
-    ("Internal Spiral", {"line_and_shape": {"geometry_notes": "internal spiraling twist, silhouette preserved"}}),
-    ("Internal Vortex", {"line_and_shape": {"geometry_notes": "internal vortex distortion, outer shape intact"}}),
-]
-
-# Depth mutations
-BACKGROUND_DEPTH_COLLAPSES = [
-    ("Compressed Depth", {"composition": {"depth": "compressed background depth, objects appear closer"}}),
-    ("Flattened Backdrop", {"composition": {"depth": "completely flattened backdrop, stage-like"}}),
-]
-
-DEPTH_FLATTENINGS = [
-    ("2D Poster", {"composition": {"depth": "flattened 2D poster-like depth"}, "line_and_shape": {"shape_language": "flat graphic shapes"}}),
-    ("Isometric Flat", {"composition": {"depth": "isometric pseudo-3D, no perspective convergence"}}),
-]
-
-DEPTH_EXPANSIONS = [
-    ("Exaggerated Perspective", {"composition": {"depth": "dramatically exaggerated perspective depth", "camera": "extreme wide angle"}}),
-    ("Long Gradient Depth", {"composition": {"depth": "extended atmospheric depth gradient"}}),
-]
-
-# Composition mutations (new)
-QUADRANT_MUTATIONS = [
-    ("Top-Left Mutated", {"composition": {"structural_notes": "top-left quadrant stylistically different"}}),
-    ("Top-Right Mutated", {"composition": {"structural_notes": "top-right quadrant stylistically different"}}),
-    ("Bottom-Left Mutated", {"composition": {"structural_notes": "bottom-left quadrant stylistically different"}}),
-    ("Bottom-Right Mutated", {"composition": {"structural_notes": "bottom-right quadrant stylistically different"}}),
-]
-
-OBJECT_ALIGNMENT_SHIFTS = [
-    ("Slight Rotation", {"composition": {"structural_notes": "objects slightly rotated off-axis"}}),
-    ("Offset Misalign", {"composition": {"structural_notes": "objects offset from expected positions"}}),
-    ("Scattered", {"composition": {"structural_notes": "objects scattered in deliberate disarray"}}),
-]
-
-SPATIAL_HIERARCHY_FLIPS = [
-    ("Background Dominant", {"composition": {"framing": "background dominates, subject minimized", "structural_notes": "inverted spatial priority"}}),
-    ("Midground Primary", {"composition": {"framing": "midground becomes primary focus", "structural_notes": "middle-layer emphasis"}}),
-]
-
-BALANCE_SHIFTS = [
-    ("Heavy Left", {"composition": {"structural_notes": "visual weight shifted to left side"}}),
-    ("Heavy Right", {"composition": {"structural_notes": "visual weight shifted to right side"}}),
-    ("Heavy Top", {"composition": {"structural_notes": "visual weight shifted to top"}}),
-    ("Heavy Bottom", {"composition": {"structural_notes": "visual weight shifted to bottom"}}),
-]
-
-INTERPLAY_SWAPS = [
-    ("Subject-Background Swap", {"composition": {"framing": "background and subject visual dominance swapped"}}),
-    ("Positive-Negative Swap", {"composition": {"negative_space_behavior": "positive and negative space roles exchanged"}}),
-]
-
-VIGNETTE_MODIFICATIONS = [
-    ("Dark Vignette", {"lighting": {"shadows": "dark corner vignette"}, "composition": {"framing": "darkened edges focus center"}}),
-    ("Light Vignette", {"lighting": {"highlights": "bright corner vignette"}, "composition": {"framing": "brightened edges"}}),
-    ("Color Vignette", {"palette": {"color_descriptions": ["colored edge tinting"]}, "composition": {"framing": "chromatic vignette"}}),
-    ("Reverse Vignette", {"lighting": {"highlights": "bright edges dark center"}, "composition": {"framing": "inverted vignette"}}),
-]
-
-# Motif mutations (new)
-MOTIF_MIRRORINGS = [
-    ("Horizontal Mirror", {"motifs": {"recurring_elements": ["horizontally mirrored motif"]}, "composition": {"structural_notes": "bilateral horizontal symmetry"}}),
-    ("Vertical Mirror", {"motifs": {"recurring_elements": ["vertically mirrored motif"]}, "composition": {"structural_notes": "bilateral vertical symmetry"}}),
-    ("Diagonal Mirror", {"motifs": {"recurring_elements": ["diagonally mirrored motif"]}, "composition": {"structural_notes": "diagonal reflection symmetry"}}),
-]
-
-MOTIF_SCALINGS = [
-    ("Enlarged Motifs", {"motifs": {"recurring_elements": ["scaled up repeated motifs"]}}),
-    ("Miniaturized Motifs", {"motifs": {"recurring_elements": ["scaled down repeated motifs"]}}),
-    ("Variable Scale", {"motifs": {"recurring_elements": ["motifs at varying scales"]}}),
-]
-
-MOTIF_REPETITIONS = [
-    ("Grid Scatter", {"motifs": {"recurring_elements": ["motif duplicated in grid pattern"]}, "composition": {"structural_notes": "regular grid repetition"}}),
-    ("Random Scatter", {"motifs": {"recurring_elements": ["motif randomly scattered"]}, "composition": {"structural_notes": "organic random repetition"}}),
-    ("Radial Scatter", {"motifs": {"recurring_elements": ["motif repeated radially"]}, "composition": {"structural_notes": "radial pattern repetition"}}),
-]
-
-# Color role mutations
-COLOR_ROLE_REASSIGNMENTS = [
-    ("Accent to Base", {"palette": {"color_descriptions": ["accent color becomes dominant base"]}}),
-    ("Base to Accent", {"palette": {"color_descriptions": ["base color demoted to accent"]}}),
-    ("Background to Subject", {"palette": {"color_descriptions": ["background hue applied to subject"]}}),
-]
-
-SATURATION_SCALPELS = [
-    ("Saturated Edges", {"palette": {"color_descriptions": ["high saturation on edges only"]}}),
-    ("Saturated Interior", {"palette": {"color_descriptions": ["high saturation inside shapes only"]}}),
-    ("Desaturated Edges", {"palette": {"color_descriptions": ["desaturated edges, saturated centers"]}}),
-]
-
-NEGATIVE_COLOR_INJECTIONS = [
-    ("Micro Inverts", {"palette": {"color_descriptions": ["tiny inverted color accent spots"]}}),
-    ("Accent Inverts", {"palette": {"accents": ["inverted complementary micro-accents"]}}),
-]
-
-AMBIENT_COLOR_SUCTIONS = [
-    ("Shadow Pull", {"lighting": {"shadows": "ambient palette colors pulled into shadows"}, "palette": {"color_descriptions": ["colored undertone shadows"]}}),
-    ("Undertone Pull", {"palette": {"color_descriptions": ["ambient colors as undertones throughout"]}}),
-]
-
-LOCAL_COLOR_MUTATIONS = [
-    ("Midtone Color Change", {"palette": {"color_descriptions": ["midtones only color shifted"]}}),
-    ("Shadow Color Change", {"palette": {"color_descriptions": ["shadows only color shifted"]}}),
-    ("Highlight Color Change", {"palette": {"color_descriptions": ["highlights only color shifted"]}}),
-]
-
-# Detail/Form mutations
-DETAIL_DENSITY_SHIFTS = [
-    ("Face Detail Focus", {"composition": {"structural_notes": "high detail on faces, low elsewhere"}}),
-    ("Background Detail Focus", {"composition": {"structural_notes": "high detail in background, simplified foreground"}}),
-    ("Even Detail", {"composition": {"structural_notes": "uniform detail distribution"}}),
-]
-
-FORM_SIMPLIFICATIONS = [
-    ("Rounded Forms", {"line_and_shape": {"shape_language": "simplified rounded forms", "geometry_notes": "soft rounded reduction"}}),
-    ("Blocked Forms", {"line_and_shape": {"shape_language": "simplified blocked angular forms", "geometry_notes": "cubic reduction"}}),
-    ("Silhouette Only", {"line_and_shape": {"shape_language": "reduced to pure silhouette", "geometry_notes": "flat shape reduction"}}),
-]
-
-FORM_COMPLICATIONS = [
-    ("Micro-Folds", {"line_and_shape": {"geometry_notes": "added micro-fold surface detail"}}),
-    ("Greebles", {"line_and_shape": {"geometry_notes": "added greeble fine detail complexity"}}),
-    ("Fractal Subdivision", {"line_and_shape": {"geometry_notes": "fractal subdivided detail complexity"}}),
-]
-
-PROPORTION_SHIFTS = [
-    ("Elongated", {"line_and_shape": {"shape_language": "vertically elongated proportions"}, "composition": {"structural_notes": "stretched forms"}}),
-    ("Squashed", {"line_and_shape": {"shape_language": "vertically squashed proportions"}, "composition": {"structural_notes": "compressed forms"}}),
-    ("Widened", {"line_and_shape": {"shape_language": "horizontally widened proportions"}}),
-]
-
-# Flow/Rhythm mutations
-PATH_FLOW_SHIFTS = [
-    ("Horizontal Flow", {"composition": {"structural_notes": "dominant horizontal directional flow"}}),
-    ("Vertical Flow", {"composition": {"structural_notes": "dominant vertical directional flow"}}),
-    ("Diagonal Flow", {"composition": {"structural_notes": "dominant diagonal directional flow"}}),
-    ("Spiral Flow", {"composition": {"structural_notes": "spiral inward/outward directional flow"}}),
-]
-
-RHYTHM_DISRUPTIONS = [
-    ("Irregular Spacing", {"composition": {"structural_notes": "irregular syncopated spacing rhythm"}}),
-    ("Regular to Irregular", {"composition": {"structural_notes": "broken regular rhythm into irregular"}}),
-]
-
-RHYTHM_REBALANCES = [
-    ("Even Spacing", {"composition": {"structural_notes": "evenly spaced regular rhythm"}}),
-    ("Accelerating Spacing", {"composition": {"structural_notes": "accelerating spacing rhythm"}}),
-]
-
-DIRECTIONAL_ENERGY_SHIFTS = [
-    ("Leftward Energy", {"composition": {"structural_notes": "implied energy flow leftward"}}),
-    ("Rightward Energy", {"composition": {"structural_notes": "implied energy flow rightward"}}),
-    ("Upward Energy", {"composition": {"structural_notes": "implied energy flow upward"}}),
-    ("Downward Energy", {"composition": {"structural_notes": "implied energy flow downward"}}),
-]
-
-# Perspective mutations
-LOCAL_PERSPECTIVE_BENDS = [
-    ("Warped Center", {"composition": {"camera": "locally warped center perspective"}}),
-    ("Bent Edges", {"composition": {"camera": "perspective bent at frame edges"}}),
-]
-
-ATMOSPHERIC_SCATTER_SHIFTS = [
-    ("Heavy Scatter", {"lighting": {"lighting_type": "heavy atmospheric light scatter, hazy"}}),
-    ("Minimal Scatter", {"lighting": {"lighting_type": "minimal atmospheric scatter, clear"}}),
-]
-
-OCCLUSION_PATTERNS = [
-    ("Layered Occlusion", {"composition": {"depth": "objects partially hidden behind imagined layers"}}),
-    ("Foreground Occlusion", {"composition": {"depth": "foreground elements occluding subject"}}),
-]
-
-OPACITY_FOGS = [
-    ("Light Fog", {"lighting": {"lighting_type": "light translucent fog layer"}, "palette": {"color_descriptions": ["fog-muted colors"]}}),
-    ("Heavy Fog", {"lighting": {"lighting_type": "heavy dense fog layer"}, "palette": {"color_descriptions": ["heavily fog-obscured"]}}),
-    ("Colored Fog", {"lighting": {"lighting_type": "tinted colored fog layer"}, "palette": {"color_descriptions": ["color-tinted atmospheric haze"]}}),
-]
-
-# Overlay/Pattern mutations
-PATTERN_OVERLAYS = [
-    ("Grid Overlay", {"texture": {"surface": "subtle grid pattern overlay", "special_effects": ["grid pattern"]}}),
-    ("Dot Overlay", {"texture": {"surface": "halftone dot pattern overlay", "special_effects": ["halftone"]}}),
-    ("Spiral Overlay", {"texture": {"surface": "spiral pattern overlay", "special_effects": ["spiral pattern"]}}),
-    ("Scanline Overlay", {"texture": {"surface": "horizontal scanline overlay", "special_effects": ["scanlines"]}}),
-]
-
-GRADIENT_REMAPS = [
-    ("Multi-Stop", {"palette": {"value_range": "multi-stop complex gradients"}}),
-    ("Sharp Transitions", {"palette": {"value_range": "sharp stepped gradient transitions"}}),
-    ("Circular Gradients", {"palette": {"value_range": "radial circular gradients"}}),
-    ("Axial Gradients", {"palette": {"value_range": "linear axial gradients"}}),
-]
-
-FRAME_REINTERPRETATIONS = [
-    ("Film Frame", {"composition": {"framing": "film strip frame borders", "structural_notes": "cinematic frame aesthetic"}}),
-    ("Comic Panel", {"composition": {"framing": "comic book panel borders", "structural_notes": "sequential art framing"}}),
-    ("Torn Paper", {"composition": {"framing": "torn paper edge frame", "structural_notes": "organic ripped border"}}),
-    ("Circular Frame", {"composition": {"framing": "circular vignette frame", "structural_notes": "round framing"}}),
-]
 
 
 class StyleExplorer:
@@ -1639,90 +51,50 @@ class StyleExplorer:
         """
         return await style_extractor.extract(image_b64, session_id)
 
-    def _mutate_random_dimension(
+    async def _mutate_random_dimension(
         self,
         profile: StyleProfile,
+        session_id: str | None = None,
     ) -> tuple[StyleProfile, str, str]:
         """
-        Apply random dimension push mutation.
+        Apply random dimension push mutation using VLM.
 
-        Picks a random style dimension and pushes it to an extreme.
+        Analyzes the style and picks a dimension to push to an extreme.
 
         Returns:
             (mutated_profile, mutation_description, dimension_key)
         """
-        # Pick a random dimension
-        dimension = random.choice(list(DIMENSION_EXTREMES.keys()))
-        extremes = DIMENSION_EXTREMES[dimension]
+        instructions = """Pick ONE style dimension and push it to an EXTREME. Choose from:
+- palette.saturation (push to completely desaturated/grayscale OR hyper-saturated neon)
+- palette.temperature (push to freezing cold blues OR scorching hot oranges/reds)
+- palette.contrast (push to nearly no contrast OR extreme stark contrast)
+- line_and_shape.edges (push to impossibly soft/blurry edges OR razor sharp/hard edges)
+- line_and_shape.complexity (push to extremely minimal/simple OR infinitely complex/detailed)
+- texture.surface (push to perfectly smooth OR extremely rough/textured)
+- texture.noise (push to completely clean OR heavily noisy/grainy)
+- lighting.intensity (push to nearly black/dark OR blindingly bright/overexposed)
+- lighting.direction (push to extreme top-down OR extreme side-lit OR extreme backlit)
+- composition.density (push to extremely sparse/empty OR extremely cluttered/dense)
+- composition.symmetry (push to perfect rigid symmetry OR chaotic asymmetry)
 
-        # Pick a random extreme (either direction)
-        extreme_desc, extreme_key = random.choice(extremes)
+Choose the dimension that would create the most INTERESTING and DRAMATIC change for this specific style.
+Push it to a creative extreme - go beyond realistic into stylized territory."""
 
-        # Clone the profile
-        profile_dict = profile.model_dump()
+        mutated, description = await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Random Dimension Push",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
-        # Apply mutation based on dimension
-        parts = dimension.split(".")
+        # Extract dimension from description for return value
+        dimension = "unknown"
+        for dim in ["palette", "line_and_shape", "texture", "lighting", "composition"]:
+            if dim in description.lower():
+                dimension = dim
+                break
 
-        if parts[0] == "palette":
-            if parts[1] == "saturation":
-                profile_dict["palette"]["saturation"] = extreme_key
-                # Also update color descriptions to reflect change
-                if "desaturated" in extreme_key:
-                    profile_dict["palette"]["color_descriptions"] = ["grayscale", "monochrome", "neutral gray", "charcoal", "silver"]
-                else:
-                    profile_dict["palette"]["color_descriptions"] = ["neon pink", "electric blue", "vivid green", "hot orange", "bright purple"]
-            elif parts[1] == "temperature":
-                if "cold" in extreme_key:
-                    profile_dict["palette"]["color_descriptions"] = ["icy blue", "arctic white", "frost", "pale cyan", "winter gray"]
-                else:
-                    profile_dict["palette"]["color_descriptions"] = ["volcanic orange", "fire red", "molten gold", "ember", "scorched amber"]
-            elif parts[1] == "contrast":
-                profile_dict["palette"]["value_range"] = extreme_desc
-
-        elif parts[0] == "line_and_shape":
-            if parts[1] == "edges":
-                profile_dict["line_and_shape"]["line_quality"] = extreme_desc
-            elif parts[1] == "complexity":
-                profile_dict["line_and_shape"]["shape_language"] = extreme_desc
-                profile_dict["line_and_shape"]["geometry_notes"] = extreme_desc
-
-        elif parts[0] == "texture":
-            if parts[1] == "surface":
-                profile_dict["texture"]["surface"] = extreme_desc
-            elif parts[1] == "noise":
-                profile_dict["texture"]["noise_level"] = "high" if extreme_key == "noisy" else "none"
-                profile_dict["texture"]["surface"] = extreme_desc
-
-        elif parts[0] == "lighting":
-            if parts[1] == "intensity":
-                profile_dict["lighting"]["lighting_type"] = extreme_desc
-                if "dark" in extreme_key:
-                    profile_dict["lighting"]["shadows"] = "deep pitch black shadows dominating"
-                    profile_dict["lighting"]["highlights"] = "minimal, isolated points of light"
-                else:
-                    profile_dict["lighting"]["shadows"] = "barely visible, washed out"
-                    profile_dict["lighting"]["highlights"] = "overwhelming bright, blown out"
-            elif parts[1] == "direction":
-                profile_dict["lighting"]["lighting_type"] = extreme_desc
-
-        elif parts[0] == "composition":
-            if parts[1] == "density":
-                profile_dict["composition"]["framing"] = extreme_desc
-                profile_dict["composition"]["negative_space_behavior"] = "dominant empty space" if extreme_key == "sparse" else "no empty space"
-            elif parts[1] == "symmetry":
-                profile_dict["composition"]["framing"] = extreme_desc
-
-        # Update style name to reflect mutation
-        original_name = profile_dict.get("style_name", "Style")
-        profile_dict["style_name"] = f"{original_name} ({extreme_key})"
-
-        # Add mutation to core invariants
-        profile_dict["core_invariants"] = [extreme_desc] + profile_dict.get("core_invariants", [])[:4]
-
-        mutation_description = f"Random dimension push: {dimension} → {extreme_key}. {extreme_desc}"
-
-        return StyleProfile(**profile_dict), mutation_description, dimension
+        return mutated, description, dimension
 
     async def _mutate_what_if(
         self,
@@ -1819,101 +191,78 @@ Only include the fields you want to change. Be bold and creative!"""
             return StyleProfile(**profile_dict), mutation_description
 
         except Exception as e:
-            logger.warning(f"What-if mutation failed: {e}, falling back to random dimension")
-            mutated, desc, _ = self._mutate_random_dimension(profile)
-            return mutated, f"[what-if fallback] {desc}"
+            logger.error(f"What-if mutation failed: {e}")
+            raise RuntimeError(f"What-if mutation failed: {e}") from e
 
-    def _mutate_crossover(
+    async def _mutate_crossover(
         self,
         profile: StyleProfile,
+        session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """
-        Apply crossover mutation - blend with a random donor style.
-
-        Picks a random well-known style and merges key characteristics.
+        Apply crossover mutation using VLM - blend with a complementary art style.
 
         Returns:
             (mutated_profile, mutation_description)
         """
-        # Pick a random donor style
-        donor_name, donor_desc = random.choice(DONOR_STYLES)
+        instructions = """Analyze this style and identify a DIFFERENT art movement or style that would create an interesting hybrid.
 
-        # Clone the profile
-        profile_dict = profile.model_dump()
+Consider styles like:
+- Art movements: Art Nouveau, Art Deco, Bauhaus, Constructivism, Impressionism, Expressionism, Surrealism, Pop Art, Minimalism, Baroque, Rococo, etc.
+- Cultural styles: Ukiyo-e, Celtic, Moorish, Byzantine, Indigenous, Folk art, etc.
+- Design movements: Memphis, Swiss Design, Brutalism, Psychedelic, Vaporwave, etc.
+- Illustration styles: Ligne claire, Manga, Comic book, Editorial illustration, etc.
 
-        # Extract keywords from donor description and inject them
-        donor_keywords = [kw.strip() for kw in donor_desc.split(",")]
+Pick a style that would create CONTRAST or TENSION with the current style, then intelligently BLEND the two.
 
-        # Merge donor characteristics into the profile
-        # Add donor keywords to core invariants
-        profile_dict["core_invariants"] = donor_keywords[:2] + profile_dict.get("core_invariants", [])[:3]
+Describe specifically which elements you're borrowing from the donor style and how they merge with the original."""
 
-        # Blend texture with donor style
-        original_texture = profile_dict["texture"]["surface"]
-        profile_dict["texture"]["surface"] = f"{original_texture}, blended with {donor_name} aesthetic"
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Crossover",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
-        # Add donor style to lighting description
-        if "dramatic" in donor_desc.lower() or "shadow" in donor_desc.lower():
-            profile_dict["lighting"]["lighting_type"] = f"dramatic {donor_name}-influenced lighting"
-
-        # Update style name
-        original_name = profile_dict.get("style_name", "Style")
-        profile_dict["style_name"] = f"{original_name} × {donor_name}"
-
-        mutation_description = f"Crossover: Blended with '{donor_name}' ({donor_desc[:50]}...)"
-
-        return StyleProfile(**profile_dict), mutation_description
-
-    def _mutate_inversion(
+    async def _mutate_inversion(
         self,
         profile: StyleProfile,
+        session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """
         Apply inversion mutation - flip a key characteristic to its opposite.
 
-        Searches for matching characteristics in the profile and inverts them.
+        Uses VLM to identify a key characteristic and intelligently invert it.
 
         Returns:
             (mutated_profile, mutation_description)
         """
-        # Convert profile to string for searching
-        profile_dict = profile.model_dump()
-        profile_str = json.dumps(profile_dict).lower()
+        instructions = """Identify ONE key characteristic in this style and INVERT it to its polar opposite.
 
-        # Find a matching characteristic to invert
-        matched_original = None
-        matched_inverted = None
-        matched_changes = None
+Examples of inversions:
+- "warm colors" → "cool colors"
+- "soft edges" → "hard edges"
+- "high contrast" → "low contrast"
+- "detailed textures" → "smooth textures"
+- "bright lighting" → "dark/moody lighting"
+- "organic shapes" → "geometric shapes"
+- "saturated palette" → "desaturated/muted palette"
+- "flat composition" → "deep perspective"
 
-        for original, (inverted, changes) in CHARACTERISTIC_INVERSIONS.items():
-            if original.lower() in profile_str:
-                matched_original = original
-                matched_inverted = inverted
-                matched_changes = changes
-                break
+Pick the MOST DEFINING characteristic of this style and flip it completely.
+Make the inversion dramatic and noticeable - don't be subtle.
 
-        # If no match, pick a random inversion
-        if matched_original is None:
-            matched_original, (matched_inverted, matched_changes) = random.choice(
-                list(CHARACTERISTIC_INVERSIONS.items())
-            )
+In your response:
+- "analysis": describe the key characteristic you identified
+- "mutation_applied": state the inversion (e.g., "warm → cool", "soft → hard")
+- "style_changes": the actual changes to apply the inversion"""
 
-        # Apply the inversion changes
-        for section, changes in matched_changes.items():
-            if section in profile_dict and isinstance(changes, dict):
-                for key, value in changes.items():
-                    profile_dict[section][key] = value
-
-        # Update style name
-        original_name = profile_dict.get("style_name", "Style")
-        profile_dict["style_name"] = f"{original_name} (inverted)"
-
-        # Add inversion to core invariants
-        profile_dict["core_invariants"] = [f"inverted from {matched_original} to {matched_inverted}"] + profile_dict.get("core_invariants", [])[:4]
-
-        mutation_description = f"Inversion: '{matched_original}' → '{matched_inverted}'"
-
-        return StyleProfile(**profile_dict), mutation_description
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Characteristic Inversion",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
     async def _mutate_amplify(
         self,
@@ -1999,9 +348,8 @@ Only include fields that need to change for the amplification."""
             return StyleProfile(**profile_dict), mutation_description
 
         except Exception as e:
-            logger.warning(f"Amplify mutation failed: {e}, falling back to random dimension")
-            mutated, desc, _ = self._mutate_random_dimension(profile)
-            return mutated, f"[amplify fallback] {desc}"
+            logger.error(f"Amplify mutation failed: {e}")
+            raise RuntimeError(f"Amplify mutation failed: {e}") from e
 
     async def _mutate_diverge(
         self,
@@ -2142,395 +490,330 @@ Output ONLY valid JSON:
             return StyleProfile(**profile_dict), mutation_description
 
         except Exception as e:
-            logger.warning(f"Diverge mutation failed: {e}, falling back to inversion")
-            mutated, desc = self._mutate_inversion(profile)
-            return mutated, f"[diverge fallback] {desc}"
+            logger.error(f"Diverge mutation failed: {e}")
+            raise RuntimeError(f"Diverge mutation failed: {e}") from e
 
-    def _mutate_time_shift(
+    async def _mutate_time_shift(
         self,
         profile: StyleProfile,
+        session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """
         Apply time_shift mutation - transport the style to a different era/decade.
 
-        Picks a random era aesthetic and applies its characteristics.
+        Uses VLM to analyze the style and shift it to a contrasting era.
 
         Returns:
             (mutated_profile, mutation_description)
         """
-        # Pick a random era
-        era_name, era_changes = random.choice(ERA_AESTHETICS)
+        instructions = """Analyze this style and TRANSPORT it to a different historical era or decade.
 
-        # Clone the profile
-        profile_dict = profile.model_dump()
+Pick an era that creates INTERESTING CONTRAST with the current style:
+- 1920s Art Deco: geometric patterns, gold/black, luxury, sharp angles
+- 1950s Mid-Century: atomic age, pastels, optimistic, clean lines
+- 1960s Psychedelic: vibrant colors, flowing shapes, trippy patterns
+- 1970s Earthy: browns, oranges, macramé textures, organic
+- 1980s Neon: bright colors, synthwave, chrome, grid patterns
+- 1990s Grunge: muted, gritty, distressed, anti-establishment
+- 2000s Y2K: silver, translucent, bubbly, digital glitch
+- Victorian: ornate, dark, detailed, rich textures
+- Art Nouveau: flowing organic lines, natural motifs, elegant curves
+- Brutalist: raw concrete, stark geometry, imposing forms
+- Futurism: motion blur, dynamic angles, speed, technology
 
-        # Apply era changes
-        for section, changes in era_changes.items():
-            if section in profile_dict and isinstance(changes, dict):
-                for key, value in changes.items():
-                    if key in profile_dict[section]:
-                        profile_dict[section][key] = value
+Choose an era that would CREATE THE MOST INTERESTING TRANSFORMATION.
+Apply that era's visual language comprehensively to the style.
 
-        # Update style name
-        original_name = profile_dict.get("style_name", "Style")
-        profile_dict["style_name"] = f"{original_name} ({era_name})"
+In your response:
+- "analysis": identify the current era/aesthetic influences
+- "mutation_applied": state which era you're shifting to and why
+- "style_changes": apply the era's visual characteristics"""
 
-        # Add era to core invariants
-        profile_dict["core_invariants"] = [f"{era_name} aesthetic"] + profile_dict.get("core_invariants", [])[:4]
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Time Shift",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
-        mutation_description = f"Time Shift: Transported to {era_name} era"
-
-        return StyleProfile(**profile_dict), mutation_description
-
-    def _mutate_medium_swap(
+    async def _mutate_medium_swap(
         self,
         profile: StyleProfile,
+        session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """
         Apply medium_swap mutation - change the apparent artistic medium.
 
-        Picks a random medium and applies its visual characteristics.
+        Uses VLM to analyze current medium hints and transform to a contrasting medium.
 
         Returns:
             (mutated_profile, mutation_description)
         """
-        # Pick a random medium
-        medium_name, medium_changes = random.choice(ARTISTIC_MEDIUMS)
+        instructions = """Analyze this style and TRANSFORM it to a different artistic medium.
 
-        # Clone the profile
-        profile_dict = profile.model_dump()
+Identify what medium the style currently evokes, then pick a CONTRASTING medium:
+- Oil painting: rich colors, visible brushstrokes, layered glazes, soft blending
+- Watercolor: transparency, color bleeding, wet-on-wet effects, paper texture
+- Gouache: matte finish, opaque layers, flat color areas, chalky texture
+- Acrylic: bright colors, sharp edges, plastic sheen, fast-drying effects
+- Digital art: clean vectors, gradients, pixel-perfect, glowing effects
+- Pencil/Graphite: grayscale tones, hatching, soft shading, paper grain
+- Charcoal: deep blacks, smudged edges, dramatic contrast, rough texture
+- Ink wash: flowing gradients, bold blacks, wet effects, Japanese sumi-e
+- Pastel: soft chalky texture, blended colors, powdery, luminous
+- Woodcut/Linocut: bold lines, stark contrast, carved texture, graphic
+- Screen print: flat colors, halftone dots, limited palette, pop art feel
+- Collage: cut paper edges, mixed textures, layered elements
 
-        # Apply medium changes
-        for section, changes in medium_changes.items():
-            if section in profile_dict and isinstance(changes, dict):
-                for key, value in changes.items():
-                    if key in profile_dict[section]:
-                        profile_dict[section][key] = value
+Choose a medium that creates DRAMATIC CONTRAST with the current feel.
+Apply ALL visual characteristics of the new medium comprehensively.
 
-        # Update style name
-        original_name = profile_dict.get("style_name", "Style")
-        profile_dict["style_name"] = f"{original_name} ({medium_name})"
+In your response:
+- "analysis": identify the current apparent medium
+- "mutation_applied": state the new medium and why it creates contrast
+- "style_changes": apply the new medium's complete visual language"""
 
-        # Add medium to core invariants
-        profile_dict["core_invariants"] = [f"{medium_name} medium"] + profile_dict.get("core_invariants", [])[:4]
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Medium Swap",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
-        mutation_description = f"Medium Swap: Rendered as {medium_name}"
-
-        return StyleProfile(**profile_dict), mutation_description
-
-    def _mutate_mood_shift(
+    async def _mutate_mood_shift(
         self,
         profile: StyleProfile,
+        session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """
         Apply mood_shift mutation - transform the emotional tone.
 
-        Picks a random mood and applies its visual characteristics.
+        Uses VLM to identify current emotional tone and shift to a contrasting mood.
 
         Returns:
             (mutated_profile, mutation_description)
         """
-        # Pick a random mood
-        mood_name, mood_changes = random.choice(MOOD_PALETTE)
+        instructions = """Analyze this style's EMOTIONAL TONE and SHIFT it to a different mood.
 
-        # Clone the profile
-        profile_dict = profile.model_dump()
+Identify the current mood, then transform to a CONTRASTING emotion:
+- Serene/Peaceful: soft colors, gentle gradients, calm composition, muted tones
+- Melancholic: desaturated, cool shadows, heavy atmosphere, downward energy
+- Euphoric/Joyful: bright saturated colors, uplifting composition, light-filled
+- Tense/Anxious: high contrast, sharp angles, discordant colors, unstable balance
+- Mysterious: deep shadows, selective lighting, hidden elements, ambiguous forms
+- Romantic: warm soft lighting, rose/gold tones, dreamy edges, intimate framing
+- Aggressive/Fierce: bold reds/blacks, sharp edges, dynamic angles, high energy
+- Nostalgic: muted warm tones, soft focus, vintage feel, gentle fading
+- Ethereal/Dreamy: soft pastels, glowing highlights, floating elements, airy
+- Foreboding/Ominous: dark palette, heavy shadows, looming forms, cold accents
+- Whimsical/Playful: bright colors, rounded shapes, bouncy energy, unexpected elements
+- Solemn/Reverent: muted palette, vertical emphasis, restrained composition
 
-        # Apply mood changes
-        for section, changes in mood_changes.items():
-            if section in profile_dict and isinstance(changes, dict):
-                for key, value in changes.items():
-                    if key in profile_dict[section]:
-                        profile_dict[section][key] = value
+Pick a mood that creates DRAMATIC EMOTIONAL CONTRAST.
+Apply ALL visual elements that evoke the new mood.
 
-        # Update style name
-        original_name = profile_dict.get("style_name", "Style")
-        profile_dict["style_name"] = f"{original_name} ({mood_name})"
+In your response:
+- "analysis": identify the current emotional tone
+- "mutation_applied": state the new mood and the emotional shift
+- "style_changes": apply the visual language of the new mood"""
 
-        # Add mood to core invariants
-        profile_dict["core_invariants"] = [f"{mood_name} mood"] + profile_dict.get("core_invariants", [])[:4]
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Mood Shift",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
-        mutation_description = f"Mood Shift: Transformed to {mood_name}"
-
-        return StyleProfile(**profile_dict), mutation_description
-
-    def _mutate_scale_warp(
+    async def _mutate_scale_warp(
         self,
         profile: StyleProfile,
+        session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
-        """
-        Apply scale_warp mutation - change the apparent scale/perspective.
+        """Warp the apparent scale and perspective relationships."""
+        instructions = """WARP SCALE - alter the apparent size relationships and perspective.
 
-        Picks a random scale perspective and applies its characteristics.
+Scale warp approaches:
+- Macro to micro: As if viewing through a microscope
+- Micro to macro: Intimate details blown up to monumental scale
+- Tilt-shift miniature: Real scenes look like tiny models
+- Giant scale: Everything feels massive, viewer feels small
+- Intimate scale: Close, personal, immediate perspective
+- Cosmic scale: Vast, astronomical sense of space
+- Distorted scale: Inconsistent sizes within the same scene
+- Forced perspective: Manipulated depth cues
 
-        Returns:
-            (mutated_profile, mutation_description)
-        """
-        # Pick a random scale
-        scale_name, scale_changes = random.choice(SCALE_PERSPECTIVES)
+Analyze the current sense of scale and warp it to create a different relationship between viewer and subject."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Scale Warp",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
-        # Clone the profile
-        profile_dict = profile.model_dump()
-
-        # Apply scale changes
-        for section, changes in scale_changes.items():
-            if section in profile_dict and isinstance(changes, dict):
-                for key, value in changes.items():
-                    if key in profile_dict[section]:
-                        profile_dict[section][key] = value
-
-        # Update style name
-        original_name = profile_dict.get("style_name", "Style")
-        profile_dict["style_name"] = f"{original_name} ({scale_name})"
-
-        # Add scale to core invariants
-        profile_dict["core_invariants"] = [f"{scale_name} perspective"] + profile_dict.get("core_invariants", [])[:4]
-
-        mutation_description = f"Scale Warp: Shifted to {scale_name} perspective"
-
-        return StyleProfile(**profile_dict), mutation_description
-
-    def _mutate_decay(
+    async def _mutate_decay(
         self,
         profile: StyleProfile,
+        session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
-        """
-        Apply decay mutation - add entropy/age/weathering.
+        """Add entropy, age, and weathering effects to the style."""
+        instructions = """APPLY DECAY - add entropy, aging, and weathering to the style.
 
-        Picks a random decay level and applies its visual characteristics.
+Decay approaches:
+- Fresh decay: Minor wear, slight fading, early aging signs
+- Weathered: Sun-bleached, rain-worn, exposed to elements
+- Rusted/corroded: Metal degradation, oxidation, patina
+- Organic rot: Mold, moss, biological decomposition
+- Crumbling: Structural breakdown, cracks, erosion
+- Dust accumulation: Layers of settled particles
+- Faded glory: Once-vibrant now muted, ghostly remains
+- Archaeological: Ancient, buried, rediscovered quality
+- Digital decay: Glitch, corruption, data degradation
 
-        Returns:
-            (mutated_profile, mutation_description)
-        """
-        # Pick a random decay level
-        decay_name, decay_changes = random.choice(DECAY_LEVELS)
+Analyze the style and apply appropriate decay that tells a story of time and entropy."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Decay",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
-        # Clone the profile
-        profile_dict = profile.model_dump()
-
-        # Apply decay changes
-        for section, changes in decay_changes.items():
-            if section in profile_dict and isinstance(changes, dict):
-                for key, value in changes.items():
-                    if key in profile_dict[section]:
-                        profile_dict[section][key] = value
-
-        # Update style name
-        original_name = profile_dict.get("style_name", "Style")
-        profile_dict["style_name"] = f"{original_name} (decayed)"
-
-        # Add decay to core invariants
-        profile_dict["core_invariants"] = [f"{decay_name} decay"] + profile_dict.get("core_invariants", [])[:4]
-
-        mutation_description = f"Decay: Applied {decay_name} entropy"
-
-        return StyleProfile(**profile_dict), mutation_description
-
-    def _mutate_remix(
+    async def _mutate_remix(
         self,
         profile: StyleProfile,
+        session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
-        """
-        Apply remix mutation - shuffle elements between style sections.
+        """Shuffle and swap elements between different style sections."""
+        instructions = """REMIX the style by swapping and shuffling elements between sections.
 
-        Randomly swaps characteristics between different parts of the style
-        (e.g., palette descriptions become texture, lighting becomes line quality).
+Remix approaches:
+- Color-to-texture: Apply color descriptions as texture qualities
+- Lighting-to-shape: Use lighting characteristics to define shape language
+- Texture-to-composition: Let texture patterns influence compositional structure
+- Shape-to-color: Derive color relationships from shape dynamics
+- Cross-pollination: Mix multiple sections in unexpected ways
+- Attribute swap: Exchange specific attributes between sections
 
-        Returns:
-            (mutated_profile, mutation_description)
-        """
-        profile_dict = profile.model_dump()
+Analyze the style sections and creatively remix them - take qualities from one area and apply them to another, creating unexpected but coherent combinations."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Remix",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
-        # Collect shuffleable text elements
-        elements = []
-        sources = []
-
-        if profile_dict["palette"].get("color_descriptions"):
-            for desc in profile_dict["palette"]["color_descriptions"][:2]:
-                elements.append(desc)
-                sources.append("palette")
-
-        if profile_dict["texture"].get("surface"):
-            elements.append(profile_dict["texture"]["surface"])
-            sources.append("texture")
-
-        if profile_dict["lighting"].get("lighting_type"):
-            elements.append(profile_dict["lighting"]["lighting_type"])
-            sources.append("lighting")
-
-        if profile_dict["line_and_shape"].get("shape_language"):
-            elements.append(profile_dict["line_and_shape"]["shape_language"])
-            sources.append("shape")
-
-        # Shuffle and reassign
-        if len(elements) >= 2:
-            shuffled = elements.copy()
-            random.shuffle(shuffled)
-
-            # Reassign to different sections
-            swap_desc = []
-            if shuffled[0] != elements[0]:
-                profile_dict["texture"]["surface"] = f"remix: {shuffled[0]}"
-                swap_desc.append(f"{sources[0]}→texture")
-
-            if len(shuffled) > 1 and shuffled[1] != elements[1]:
-                profile_dict["lighting"]["lighting_type"] = f"remix lighting: {shuffled[1]}"
-                swap_desc.append(f"{sources[1]}→lighting")
-
-            if len(shuffled) > 2:
-                profile_dict["line_and_shape"]["shape_language"] = f"remix shapes: {shuffled[2]}"
-
-        # Update style name
-        original_name = profile_dict.get("style_name", "Style")
-        profile_dict["style_name"] = f"{original_name} (remixed)"
-
-        # Add remix to core invariants
-        profile_dict["core_invariants"] = ["remixed style elements"] + profile_dict.get("core_invariants", [])[:4]
-
-        mutation_description = f"Remix: Shuffled style elements ({', '.join(swap_desc[:2]) if swap_desc else 'scrambled'})"
-
-        return StyleProfile(**profile_dict), mutation_description
-
-    def _mutate_constrain(
+    async def _mutate_constrain(
         self,
         profile: StyleProfile,
+        session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
-        """
-        Apply constrain mutation - limit to a strict constraint.
+        """Apply a strict constraint that limits the style in a specific way."""
+        instructions = """Apply a CONSTRAINT that limits or restricts the style in a specific way.
 
-        Picks a random constraint type and applies its limitations.
+Constraint approaches:
+- Monochromatic: Limit to single hue with value variations only
+- Duotone: Restrict to exactly two colors
+- Silhouette only: Remove all internal detail, pure shapes
+- No curves: Only straight lines and angular shapes
+- No straight lines: Only organic, curved forms
+- Single light source: Simplify to one directional light
+- Flat color: No gradients, only solid color areas
+- Limited palette: Maximum 3-4 colors total
+- Geometric only: All forms reduced to basic geometry
 
-        Returns:
-            (mutated_profile, mutation_description)
-        """
-        # Pick a random constraint
-        constraint_name, constraint_fn = random.choice(CONSTRAINT_TYPES)
+Analyze the style and apply a meaningful constraint that creates focus through limitation."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Constrain",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
-        # Clone the profile
-        profile_dict = profile.model_dump()
-
-        # Get constraint changes (call the lambda)
-        constraint_changes = constraint_fn(profile)
-
-        # Apply constraint changes
-        for section, changes in constraint_changes.items():
-            if section in profile_dict and isinstance(changes, dict):
-                for key, value in changes.items():
-                    if key in profile_dict[section]:
-                        profile_dict[section][key] = value
-
-        # Update style name
-        original_name = profile_dict.get("style_name", "Style")
-        profile_dict["style_name"] = f"{original_name} ({constraint_name})"
-
-        # Add constraint to core invariants
-        profile_dict["core_invariants"] = [f"constrained: {constraint_name}"] + profile_dict.get("core_invariants", [])[:4]
-
-        mutation_description = f"Constrain: Applied {constraint_name} constraint"
-
-        return StyleProfile(**profile_dict), mutation_description
-
-    def _mutate_culture_shift(
+    async def _mutate_culture_shift(
         self,
         profile: StyleProfile,
+        session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """
         Apply culture_shift mutation - apply aesthetics from a different culture.
 
-        Picks a random cultural aesthetic and applies its characteristics.
+        Uses VLM to identify cultural influences and shift to a contrasting aesthetic.
 
         Returns:
             (mutated_profile, mutation_description)
         """
-        # Pick a random culture
-        culture_name, culture_changes = random.choice(CULTURAL_AESTHETICS)
+        instructions = """Analyze this style's CULTURAL INFLUENCES and SHIFT it to a different cultural aesthetic.
 
-        # Clone the profile
-        profile_dict = profile.model_dump()
+Identify any current cultural influences, then transform to a CONTRASTING culture:
+- Japanese (Wabi-Sabi): asymmetry, natural imperfection, muted earth tones, negative space
+- Japanese (Ukiyo-e): flat color areas, bold outlines, flowing patterns, ukiyo-e compositions
+- Chinese Classical: red/gold/black palette, intricate patterns, symbolic motifs, balance
+- Art Deco: geometric patterns, metallic accents, symmetry, bold contrasts
+- Nordic/Scandinavian: minimalist, muted pastels, clean lines, natural materials
+- African: bold geometric patterns, earth tones, rhythmic repetition, carved textures
+- Middle Eastern (Islamic): intricate geometric tessellations, arabesques, jewel tones
+- Indian (Mughal): ornate decoration, rich jewel colors, floral motifs, gold details
+- Mexican (Folk Art): vibrant saturated colors, decorative patterns, skull motifs
+- Celtic: interlaced knotwork, spirals, earth tones, organic symmetry
+- Art Nouveau: flowing organic lines, natural motifs, muted elegance, feminine curves
+- Russian Constructivist: bold red/black, diagonal compositions, geometric shapes
+- Aboriginal: dot patterns, earth colors, dreamtime imagery, symbolic landscapes
 
-        # Apply culture changes
-        for section, changes in culture_changes.items():
-            if section in profile_dict and isinstance(changes, dict):
-                for key, value in changes.items():
-                    if key in profile_dict[section]:
-                        profile_dict[section][key] = value
+Choose a culture that creates DRAMATIC CONTRAST with current influences.
+Apply the FULL visual language of the new culture comprehensively.
 
-        # Update style name
-        original_name = profile_dict.get("style_name", "Style")
-        profile_dict["style_name"] = f"{original_name} ({culture_name})"
+In your response:
+- "analysis": identify current cultural aesthetic influences
+- "mutation_applied": state the new cultural aesthetic and why it creates contrast
+- "style_changes": apply the complete visual language of the new culture"""
 
-        # Add culture to core invariants
-        profile_dict["core_invariants"] = [f"{culture_name} aesthetic"] + profile_dict.get("core_invariants", [])[:4]
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Culture Shift",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
-        mutation_description = f"Culture Shift: Applied {culture_name} aesthetic"
-
-        return StyleProfile(**profile_dict), mutation_description
-
-    def _mutate_chaos(
+    async def _mutate_chaos(
         self,
         profile: StyleProfile,
+        session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """
-        Apply chaos mutation - multiple random small mutations at once.
+        Apply chaos mutation - multiple simultaneous mutations across dimensions.
 
-        Applies 3-5 random small changes across different style dimensions.
+        Uses VLM to identify 3-5 dimensions and mutate each in different directions.
 
         Returns:
             (mutated_profile, mutation_description)
         """
-        profile_dict = profile.model_dump()
+        instructions = """Apply CHAOS to this style by mutating 3-5 DIFFERENT dimensions simultaneously.
 
-        # List of possible chaos mutations
-        chaos_mutations = [
-            ("palette.saturation", lambda: random.choice(["very low", "low", "medium", "high", "extreme"])),
-            ("palette.color_shift", lambda: random.choice([
-                ["shifted to warm tones"],
-                ["shifted to cool tones"],
-                ["inverted colors"],
-                ["complementary swap"],
-            ])),
-            ("texture.noise", lambda: random.choice(["none", "subtle grain", "heavy grain", "static noise"])),
-            ("lighting.intensity", lambda: random.choice(["darker", "brighter", "more contrast", "flattened"])),
-            ("line_quality", lambda: random.choice(["softer edges", "sharper edges", "sketchy", "smooth"])),
-            ("composition.shift", lambda: random.choice(["zoomed in", "zoomed out", "off-center", "rotated feel"])),
-        ]
+Each mutation should:
+1. Target a DIFFERENT aspect of the style (don't repeat dimensions)
+2. Push in an UNEXPECTED direction (not the obvious next step)
+3. Be BOLD and noticeable
 
-        # Apply 3-5 random mutations
-        num_mutations = random.randint(3, 5)
-        selected = random.sample(chaos_mutations, min(num_mutations, len(chaos_mutations)))
+Dimensions to consider:
+- Palette: saturation, temperature, contrast, hue shifts
+- Texture: grain, roughness, pattern overlays
+- Lighting: direction, intensity, color, atmosphere
+- Line/Shape: weight, quality, geometry vs organic
+- Composition: framing, depth, focus, balance
 
-        changes = []
-        for mutation_key, mutation_fn in selected:
-            value = mutation_fn()
-            if "palette.saturation" in mutation_key:
-                profile_dict["palette"]["saturation"] = value
-                changes.append(f"saturation→{value}")
-            elif "palette.color_shift" in mutation_key:
-                profile_dict["palette"]["color_descriptions"] = value + profile_dict["palette"].get("color_descriptions", [])[:2]
-                changes.append(f"colors {value[0]}")
-            elif "texture.noise" in mutation_key:
-                profile_dict["texture"]["noise_level"] = value
-                changes.append(f"noise→{value}")
-            elif "lighting.intensity" in mutation_key:
-                profile_dict["lighting"]["lighting_type"] = f"{value} {profile_dict['lighting'].get('lighting_type', 'lighting')}"
-                changes.append(f"lighting {value}")
-            elif "line_quality" in mutation_key:
-                profile_dict["line_and_shape"]["line_quality"] = value
-                changes.append(f"lines→{value}")
-            elif "composition.shift" in mutation_key:
-                profile_dict["composition"]["framing"] = f"{value}, {profile_dict['composition'].get('framing', '')}"
-                changes.append(f"composition {value}")
+The goal is controlled chaos - multiple simultaneous changes that create interesting tension.
+Don't just make random changes - make PURPOSEFUL chaos that still feels cohesive.
 
-        # Update style name
-        original_name = profile_dict.get("style_name", "Style")
-        profile_dict["style_name"] = f"{original_name} (chaos)"
+In your response:
+- "analysis": describe the current style's key characteristics
+- "mutation_applied": list ALL the chaos mutations you're applying (3-5 of them)
+- "style_changes": combine all the changes into the style_changes object"""
 
-        # Add chaos to core invariants
-        profile_dict["core_invariants"] = ["chaotic mutations applied"] + profile_dict.get("core_invariants", [])[:4]
-
-        mutation_description = f"Chaos: Applied {len(changes)} mutations ({', '.join(changes[:3])}...)"
-
-        return StyleProfile(**profile_dict), mutation_description
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Chaos Multi-Mutation",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
     async def _mutate_refine(
         self,
@@ -2617,13 +900,8 @@ Only include fields that need to change for the refinement."""
             return StyleProfile(**profile_dict), mutation_description
 
         except Exception as e:
-            logger.warning(f"Refine mutation failed: {e}, falling back to small random adjustment")
-            # Fallback: just moderate the saturation
-            profile_dict = profile.model_dump()
-            profile_dict["palette"]["saturation"] = "medium"
-            profile_dict["style_name"] = f"{profile_dict.get('style_name', 'Style')} (refined)"
-            profile_dict["core_invariants"] = ["balanced refinement"] + profile_dict.get("core_invariants", [])[:4]
-            return StyleProfile(**profile_dict), "[refine fallback] Moderated saturation to medium"
+            logger.error(f"Refine mutation failed: {e}")
+            raise RuntimeError(f"Refine mutation failed: {e}") from e
 
     def _apply_preset_mutation(
         self,
@@ -2662,103 +940,402 @@ Only include fields that need to change for the refinement."""
 
     # === SPATIAL MUTATIONS ===
 
-    def _mutate_topology_fold(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+    async def _mutate_topology_fold(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Apply non-Euclidean or impossible geometry distortions."""
-        fold_name, fold_changes = random.choice(TOPOLOGY_FOLDS)
-        return self._apply_preset_mutation(profile, fold_name, fold_changes, "Topology Fold", "folded")
+        instructions = """Apply TOPOLOGY FOLD - introduce non-Euclidean or impossible geometry.
 
-    def _mutate_silhouette_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Topology fold approaches:
+- Möbius surfaces: Surfaces that twist and connect impossibly
+- Klein bottle logic: Inside becomes outside, boundaries blur
+- Escher recursion: Impossible stairs, endless loops
+- Hyperbolic space: More space than should fit, curved infinity
+- Folded dimensions: Space that overlaps itself
+- Portal geometry: Discontinuous space, windows to elsewhere
+- Penrose triangles: Locally correct, globally impossible
+- Non-orientable surfaces: Flip between inside/outside
+
+Analyze the spatial logic and fold it in impossible ways that create visual intrigue."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Topology Fold",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_silhouette_shift(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Modify contour/silhouette while keeping internal style traits."""
-        shift_name, shift_changes = random.choice(SILHOUETTE_SHIFTS)
-        return self._apply_preset_mutation(profile, shift_name, shift_changes, "Silhouette Shift", "silhouette")
+        instructions = """SHIFT THE SILHOUETTE - transform the outer contours while preserving internal style.
 
-    def _mutate_perspective_drift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Silhouette shift approaches:
+- Soften edges: Sharp contours become flowing, organic
+- Harden edges: Organic shapes become crisp, geometric
+- Fragment: Break continuous silhouettes into pieces
+- Merge: Combine separate silhouettes into unified forms
+- Echo: Add offset duplicate contours
+- Invert figure/ground: Swap positive and negative space
+- Exaggerate: Push silhouette characteristics further
+- Simplify: Reduce to essential outline
+
+Analyze the current silhouette language and shift it while maintaining the internal style qualities."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Silhouette Shift",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_perspective_drift(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Apply surreal camera angles and perspective distortions."""
-        drift_name, drift_changes = random.choice(PERSPECTIVE_DRIFTS)
-        return self._apply_preset_mutation(profile, drift_name, drift_changes, "Perspective Drift", "drifted")
+        instructions = """Apply PERSPECTIVE DRIFT - shift to surreal or unusual viewpoints.
 
-    def _mutate_axis_swap(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Perspective drift approaches:
+- Bird's eye: Looking down from above
+- Worm's eye: Looking up from below
+- Dutch angle: Tilted, unsettling viewpoint
+- Extreme close-up: Uncomfortably intimate perspective
+- Infinite distance: Far away, detached, small in vast space
+- Multiple simultaneous viewpoints: Cubist fragmentation
+- First person: Viewer is inside the scene
+- Floating/zero gravity: No fixed up or down
+
+Analyze the current viewpoint and drift it to create a different psychological relationship with the viewer."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Perspective Drift",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_axis_swap(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Rotate conceptual axes (vertical↔horizontal, center↔edge)."""
-        swap_name, swap_changes = random.choice(AXIS_SWAPS)
-        return self._apply_preset_mutation(profile, swap_name, swap_changes, "Axis Swap", "axis-swapped")
+        instructions = """Apply AXIS SWAP - rotate or exchange the conceptual axes of the composition.
+
+Axis swap approaches:
+- Vertical to horizontal: What was tall becomes wide
+- Horizontal to vertical: Wide becomes tall
+- Center to edge: Move focal emphasis to periphery
+- Edge to center: Pull peripheral elements to focus
+- Diagonal dominance: Rotate to 45-degree emphasis
+- Radial to linear: Circular becomes directional
+- Linear to radial: Lines become radiating spokes
+- Mirror axis: Flip the orientation entirely
+
+Analyze the current axis orientation and swap it to create a different compositional dynamic."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Axis Swap",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
     # === PHYSICS MUTATIONS ===
 
-    def _mutate_physics_bend(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+    async def _mutate_physics_bend(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Alter physical laws (gravity, light behavior, etc.)."""
-        bend_name, bend_changes = random.choice(PHYSICS_BENDS)
-        return self._apply_preset_mutation(profile, bend_name, bend_changes, "Physics Bend", "physics-bent")
+        instructions = """BEND PHYSICS - alter the apparent physical laws governing the visual world.
 
-    def _mutate_chromatic_gravity(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Physics bend approaches:
+- Zero gravity: Objects float, hair drifts, fabric billows
+- Heavy gravity: Everything compressed, pressed down
+- Selective gravity: Some things fall, others float
+- Light bending: Impossible shadows, curved light paths
+- Time dilation: Motion blur in still objects, frozen motion
+- Fluid dynamics: Air becomes viscous, solid becomes liquid
+- Magnetic fields: Objects attracted or repelled visually
+- Quantum superposition: Things exist in multiple states
+
+Analyze the implied physics and bend them to create surreal or impossible physical behavior."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Physics Bend",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_chromatic_gravity(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Make colors cluster or repel in new ways."""
-        gravity_name, gravity_changes = random.choice(CHROMATIC_GRAVITIES)
-        return self._apply_preset_mutation(profile, gravity_name, gravity_changes, "Chromatic Gravity", "color-gravity")
+        instructions = """Apply CHROMATIC GRAVITY - make colors behave as if they have mass and attract or repel.
 
-    def _mutate_material_transmute(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Chromatic gravity approaches:
+- Color pooling: Colors collect at the bottom like liquid
+- Color floating: Light colors rise, dark colors sink
+- Magnetic colors: Complementary colors attract each other
+- Color repulsion: Similar hues push apart
+- Bleeding: Colors leak into adjacent areas
+- Color wells: Dark areas pull color toward them
+- Chromatic orbits: Colors circle around focal points
+- Static cling: Colors stick to edges
+
+Analyze the color distribution and apply gravitational or force-based behavior to create dynamic color movement."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Chromatic Gravity",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_material_transmute(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Change surface properties (glass→fur, metal→cloth)."""
-        transmute_name, transmute_changes = random.choice(MATERIAL_TRANSMUTES)
-        return self._apply_preset_mutation(profile, transmute_name, transmute_changes, "Material Transmute", "transmuted")
+        instructions = """TRANSMUTE MATERIALS - transform surface properties into completely different materials.
 
-    def _mutate_temporal_exposure(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Material transmute approaches:
+- Hard to soft: Metal becomes cloth, stone becomes flesh
+- Soft to hard: Fabric becomes metal, skin becomes porcelain
+- Opaque to transparent: Solid becomes glass or crystal
+- Transparent to opaque: Glass becomes stone
+- Organic to synthetic: Wood becomes plastic, skin becomes rubber
+- Synthetic to organic: Metal becomes bone, plastic becomes chitin
+- Liquid to solid: Water frozen, mercury hardened
+- Solid to liquid: Metal melting, stone liquefying
+
+Analyze the current materials and transmute them to create surreal material contradictions."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Material Transmute",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_temporal_exposure(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Alter 'shutter speed' - long exposure, freeze frames, ghosts."""
-        exposure_name, exposure_changes = random.choice(TEMPORAL_EXPOSURES)
-        return self._apply_preset_mutation(profile, exposure_name, exposure_changes, "Temporal Exposure", "time-exposed")
+        instructions = """Apply TEMPORAL EXPOSURE - alter the implied shutter speed and time capture.
+
+Temporal exposure approaches:
+- Long exposure: Motion trails, light streaks, ghost images
+- Freeze frame: Hyper-sharp frozen moment, suspended action
+- Multiple exposure: Same subject in different positions overlaid
+- Time lapse: Compressed time, day-to-night in single frame
+- Bullet time: Matrix-style frozen moment with implied motion
+- Motion blur: Selective blur suggesting movement
+- Temporal echo: Fading afterimages trailing motion
+- Stroboscopic: Discrete repeated positions
+
+Analyze the implied motion and time, then alter the temporal exposure to create different time relationships."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Temporal Exposure",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
     # === PATTERN MUTATIONS ===
 
-    def _mutate_motif_splice(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+    async def _mutate_motif_splice(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Inject a foreign recurring motif (eyes, keys, spirals, etc.)."""
-        motif_name, motif_desc = random.choice(MOTIF_SPLICES)
-        profile_dict = profile.model_dump()
+        instructions = """SPLICE A MOTIF - inject a recurring visual element throughout the style.
 
-        # Add motif to special effects and texture
-        current_effects = profile_dict["texture"].get("special_effects", [])
-        profile_dict["texture"]["special_effects"] = [motif_desc] + current_effects[:2]
+Motif splice approaches:
+- Eyes: Watching eyes appearing in unexpected places
+- Keys/locks: Symbols of access and secrets
+- Spirals: Hypnotic recurring spiral forms
+- Hands: Reaching, grasping, pointing hands
+- Geometric symbols: Triangles, circles, sacred geometry
+- Natural elements: Leaves, feathers, shells, bones
+- Mechanical parts: Gears, cogs, pipes, wires
+- Celestial: Stars, moons, suns, cosmic symbols
+- Text/glyphs: Letters, runes, mysterious writing
 
-        # Add motif to motifs section
-        current_recurring = profile_dict["motifs"].get("recurring_elements", [])
-        profile_dict["motifs"]["recurring_elements"] = [f"{motif_name} motif throughout"] + current_recurring[:2]
+Analyze the style and inject an appropriate recurring motif that adds symbolic or visual intrigue."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Motif Splice",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
-        # Update style name
-        original_name = profile_dict.get("style_name", "Style")
-        profile_dict["style_name"] = f"{original_name} (+{motif_name})"
-
-        # Add to core invariants
-        profile_dict["core_invariants"] = [f"recurring {motif_name} motif"] + profile_dict.get("core_invariants", [])[:4]
-
-        return StyleProfile(**profile_dict), f"Motif Splice: {motif_name} woven throughout"
-
-    def _mutate_rhythm_overlay(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+    async def _mutate_rhythm_overlay(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Apply tempo-based visual patterns (staccato, legato, syncopated)."""
-        rhythm_name, rhythm_changes = random.choice(RHYTHM_OVERLAYS)
-        return self._apply_preset_mutation(profile, rhythm_name, rhythm_changes, "Rhythm Overlay", "rhythmic")
+        instructions = """OVERLAY RHYTHM - apply musical tempo and beat patterns visually.
 
-    def _mutate_harmonic_balance(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Rhythm overlay approaches:
+- Staccato: Sharp, disconnected, punchy visual beats
+- Legato: Smooth, connected, flowing transitions
+- Syncopated: Off-beat accents, unexpected emphasis
+- Waltz (3/4): Triple groupings, graceful repetition
+- March (4/4): Strong regular beats, military precision
+- Jazz swing: Loose, improvisational, irregular
+- Crescendo: Building intensity, growing elements
+- Diminuendo: Fading away, shrinking presence
+
+Analyze the visual rhythm and overlay a musical tempo pattern that creates cadence and movement."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Rhythm Overlay",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_harmonic_balance(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Apply musical composition logic (major/minor, dissonance/harmony)."""
-        harmony_name, harmony_changes = random.choice(HARMONIC_BALANCES)
-        return self._apply_preset_mutation(profile, harmony_name, harmony_changes, "Harmonic Balance", "harmonized")
+        instructions = """Apply HARMONIC BALANCE - use musical harmony/dissonance concepts visually.
 
-    def _mutate_symmetry_break(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Harmonic balance approaches:
+- Major key: Bright, uplifting, resolved, harmonious
+- Minor key: Melancholic, tense, emotionally complex
+- Dissonance: Clashing elements, visual tension, unresolved
+- Consonance: Pleasing combinations, visual resolution
+- Chord progressions: Elements that lead to each other
+- Counterpoint: Independent elements in conversation
+- Resolution: Tension releasing to stability
+- Suspension: Held tension, delayed resolution
+
+Analyze the visual relationships and apply musical harmony concepts to create emotional resonance."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Harmonic Balance",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_symmetry_break(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Break symmetry or force symmetry onto chaos."""
-        symmetry_name, symmetry_changes = random.choice(SYMMETRY_OPERATIONS)
-        return self._apply_preset_mutation(profile, symmetry_name, symmetry_changes, "Symmetry Break", "symmetry-altered")
+        instructions = """Apply SYMMETRY BREAK - either break existing symmetry or impose order on chaos.
+
+Symmetry break approaches:
+- Break bilateral: Disrupt left-right mirror symmetry
+- Break radial: Disrupt circular/rotational symmetry
+- Impose bilateral: Force mirror symmetry onto asymmetric elements
+- Impose radial: Create circular symmetry from chaos
+- Partial symmetry: Symmetry in some areas, chaos in others
+- Near-symmetry: Almost but not quite balanced
+- Rotational shift: Symmetry at unusual angles
+- Translational: Repeat with offset, breaking expected patterns
+
+Analyze the current symmetry state and either break it for dynamic tension or impose it for unexpected order."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Symmetry Break",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
     # === DENSITY MUTATIONS ===
 
-    def _mutate_density_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+    async def _mutate_density_shift(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Vary visual information density (sparse↔dense)."""
-        density_name, density_changes = random.choice(DENSITY_SHIFTS)
-        return self._apply_preset_mutation(profile, density_name, density_changes, "Density Shift", "density-shifted")
+        instructions = """Apply DENSITY SHIFT - change the amount of visual information per area.
 
-    def _mutate_dimensional_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Density shift approaches:
+- Sparse to dense: Add detail, complexity, visual noise
+- Dense to sparse: Remove detail, simplify, create emptiness
+- Gradient density: Vary density across the composition
+- Cluster density: Create pockets of high/low density
+- Edge density: Dense edges, sparse centers (or vice versa)
+- Focal density: High density at focus, sparse elsewhere
+- Uniform shift: Increase or decrease density everywhere equally
+- Contrast density: Extreme differences between dense and sparse
+
+Analyze the current visual density and shift it to create different levels of visual complexity."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Density Shift",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_dimensional_shift(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Flatten or deepen dimensionality (2D↔2.5D↔3D)."""
-        dim_name, dim_changes = random.choice(DIMENSIONAL_SHIFTS)
-        return self._apply_preset_mutation(profile, dim_name, dim_changes, "Dimensional Shift", "dimension-shifted")
+        instructions = """Apply DIMENSIONAL SHIFT - change the perceived dimensionality.
 
-    def _mutate_micro_macro_swap(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Dimensional shift approaches:
+- Flatten to 2D: Remove depth cues, everything on one plane
+- Deepen to 3D: Add perspective, depth, volumetric quality
+- 2.5D isometric: Angled flat view with implied depth
+- Paper cutout: Layered flat planes with depth between
+- Relief sculpture: Shallow 3D emerging from flat surface
+- Holographic: Implied depth through interference patterns
+- Stereoscopic: Exaggerated depth separation
+- Dimensional collapse: 3D forms flattening mid-transition
+
+Analyze the current dimensionality and shift it to create different spatial perception."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Dimensional Shift",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_micro_macro_swap(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Switch scales internally (tiny textures→big shapes)."""
-        swap_name, swap_changes = random.choice(MICRO_MACRO_SWAPS)
-        return self._apply_preset_mutation(profile, swap_name, swap_changes, "Micro/Macro Swap", "scale-swapped")
+        instructions = """Apply MICRO/MACRO SWAP - exchange scales within the composition.
+
+Micro/macro swap approaches:
+- Texture to structure: Small texture patterns become large shapes
+- Structure to texture: Large forms become tiny repeated patterns
+- Cell to organism: Microscopic becomes macroscopic
+- Universe to atom: Cosmic becomes subatomic
+- Detail explosion: Tiny details enlarged to dominant features
+- Pattern compression: Large patterns shrunk to texture
+- Fractal inversion: Swap which scale level is detailed
+- Scale contradiction: Mix incompatible scales together
+
+Analyze the current scale relationships and swap micro and macro elements to create new visual hierarchies."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Micro/Macro Swap",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
     async def _mutate_essence_strip(
         self,
@@ -2822,25 +1399,78 @@ Output ONLY valid JSON with stripped-down values:
             return StyleProfile(**profile_dict), f"Essence Strip: {essence_desc}"
 
         except Exception as e:
-            logger.warning(f"Essence strip failed: {e}, using fallback")
-            profile_dict = profile.model_dump()
-            profile_dict["texture"]["noise_level"] = "minimal"
-            profile_dict["texture"]["special_effects"] = []
-            profile_dict["style_name"] = f"{profile_dict.get('style_name', 'Style')} (essence)"
-            profile_dict["core_invariants"] = ["stripped to essence"] + profile_dict.get("core_invariants", [])[:2]
-            return StyleProfile(**profile_dict), "[essence strip fallback] Removed special effects, minimized texture"
+            logger.error(f"Essence strip failed: {e}")
+            raise RuntimeError(f"Essence strip failed: {e}") from e
 
     # === NARRATIVE MUTATIONS ===
 
-    def _mutate_narrative_resonance(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
-        """Add implied story fragments (lost civilization, ritual, journey)."""
-        narrative_name, narrative_changes = random.choice(NARRATIVE_RESONANCES)
-        return self._apply_preset_mutation(profile, narrative_name, narrative_changes, "Narrative Resonance", "narrative")
+    async def _mutate_narrative_resonance(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
+        """Add implied story fragments using VLM analysis."""
+        instructions = """Analyze this style and identify a NARRATIVE that resonates with its visual language.
 
-    def _mutate_archetype_mask(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
-        """Map onto mythological/Jungian archetypes (hero, shadow, oracle)."""
-        archetype_name, archetype_changes = random.choice(ARCHETYPE_MASKS)
-        return self._apply_preset_mutation(profile, archetype_name, archetype_changes, "Archetype Mask", "archetypal")
+Layer in visual elements that imply a STORY without being literal:
+- Lost Civilization: crumbling edges, ancient symbols, patina of time, forgotten grandeur
+- Sacred Ritual: ceremonial patterns, altar-like composition, reverent lighting, symbolic objects
+- Epic Journey: horizon lines, path-like elements, worn textures, sense of distance
+- Transformation/Metamorphosis: transitional forms, emergence, cocoon textures, becoming
+- Apocalypse/Renewal: broken fragments, new growth, contrast of decay and rebirth
+- Dream/Memory: soft focus, fragmented forms, nostalgic colors, floating elements
+- Prophecy/Vision: radiant light, symbolic imagery, otherworldly atmosphere
+- Battle/Conflict: dynamic tension, opposing forces, scarred textures, dramatic contrast
+
+Choose a narrative that FITS the style's existing mood and enhance it.
+Add visual elements that IMPLY the story rather than illustrate it literally.
+
+In your response:
+- "analysis": identify what story the style already hints at
+- "mutation_applied": state the narrative resonance you're adding
+- "style_changes": add visual elements that enhance the narrative"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Narrative Resonance",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_archetype_mask(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
+        """Map onto mythological/Jungian archetypes using VLM analysis."""
+        instructions = """Analyze this style and overlay a JUNGIAN ARCHETYPE onto it.
+
+Map the style onto a universal archetype through visual transformation:
+- The Hero: upward movement, golden light, strength in forms, triumphant energy
+- The Shadow: dark depths, hidden corners, ominous presence, secrets in darkness
+- The Anima/Animus: flowing forms, duality, sensual curves, mysterious beauty
+- The Oracle/Sage: ancient textures, wise restraint, deep seeing, cosmic awareness
+- The Trickster: asymmetry, unexpected elements, playful chaos, hidden jokes
+- The Mother: nurturing curves, warm embrace, protective enclosure, organic forms
+- The Child: innocence in palette, wonder, simplicity, fresh perspective
+- The Ruler: symmetry, grandeur, authority, structured power
+- The Outlaw/Rebel: broken rules, raw edges, defiant energy, disruption
+- The Magician: transformation, mystery, ethereal light, impossible forms
+
+Choose an archetype that creates INTERESTING TENSION with the current style.
+Overlay the archetype's visual language onto the existing aesthetic.
+
+In your response:
+- "analysis": identify any existing archetypal resonances
+- "mutation_applied": state the archetype you're overlaying
+- "style_changes": apply the archetype's visual language"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Archetype Mask",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
     async def _mutate_anomaly_inject(
         self,
@@ -2909,458 +1539,2478 @@ Output ONLY valid JSON:
             return StyleProfile(**profile_dict), f"Anomaly Inject: violates '{rigid_rule}' with {anomaly}"
 
         except Exception as e:
-            logger.warning(f"Anomaly inject failed: {e}, using fallback")
-            profile_dict = profile.model_dump()
-            # Fallback: invert one color
-            profile_dict["texture"]["special_effects"] = ["one deliberately wrong-colored element"] + profile_dict["texture"].get("special_effects", [])[:2]
-            profile_dict["style_name"] = f"{profile_dict.get('style_name', 'Style')} (anomaly)"
-            profile_dict["core_invariants"] = ["single color anomaly"] + profile_dict.get("core_invariants", [])[:4]
-            return StyleProfile(**profile_dict), "[anomaly inject fallback] Added one wrong-colored element"
+            logger.error(f"Anomaly inject failed: {e}")
+            raise RuntimeError(f"Anomaly inject failed: {e}") from e
 
-    def _mutate_spectral_echo(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
-        """Add faint ghost-layers as texture (echoes of earlier generations)."""
-        profile_dict = profile.model_dump()
+    async def _mutate_spectral_echo(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
+        """Add faint ghost-layers as texture using VLM analysis."""
+        instructions = """Analyze this style and add SPECTRAL ECHO effects - ghost-layers of phantom forms.
 
-        # Add ghost layer effects
-        current_effects = profile_dict["texture"].get("special_effects", [])
-        ghost_effects = [
-            "translucent ghost layers",
-            "faint echoes of previous forms",
-            "spectral afterimages bleeding through"
-        ]
-        profile_dict["texture"]["special_effects"] = ghost_effects[:2] + current_effects[:1]
+Layer in translucent echoes that suggest previous states or parallel versions:
+- Ghost duplicates: faint transparent copies offset from main forms
+- Temporal blurring: motion-like trails suggesting movement through time
+- Memory layers: fragments of previous states bleeding through
+- Parallel shadows: multiple overlapping shadow versions
+- Afterimage effects: complementary color ghosts
+- Phasing elements: parts appearing to shift between planes
+- Echo contours: repeated edge lines at varying opacities
 
-        # Modify surface texture
-        current_surface = profile_dict["texture"].get("surface", "")
-        profile_dict["texture"]["surface"] = f"{current_surface}, layered with translucent echoes"
+Consider what SPECIFIC ghost effects fit this style:
+- For geometric styles: clean offset duplicates, precise echoes
+- For organic styles: flowing trails, blurring memories
+- For dramatic styles: bold afterimages, high-contrast ghosts
+- For subtle styles: barely visible whispers, faint layering
 
-        # Update style name
-        original_name = profile_dict.get("style_name", "Style")
-        profile_dict["style_name"] = f"{original_name} (spectral)"
+Add effects that feel NATURAL to the style while creating ethereal depth.
 
-        # Add to core invariants
-        profile_dict["core_invariants"] = ["spectral ghost echoes throughout"] + profile_dict.get("core_invariants", [])[:4]
+In your response:
+- "analysis": describe what kinds of spectral effects would suit this style
+- "mutation_applied": describe the ghost-layering you're adding
+- "style_changes": apply the spectral echo effects"""
 
-        return StyleProfile(**profile_dict), "Spectral Echo: ghost-layers of past forms visible"
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Spectral Echo",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
     # === ENVIRONMENT MUTATIONS ===
 
-    def _mutate_climate_morph(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+    async def _mutate_climate_morph(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Apply environmental system changes (dust storm, fog, cosmic vacuum)."""
-        climate_name, climate_changes = random.choice(CLIMATE_MORPHS)
-        return self._apply_preset_mutation(profile, climate_name, climate_changes, "Climate Morph", "climate")
+        instructions = """Apply CLIMATE MORPH - transform the environmental atmosphere.
 
-    def _mutate_biome_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Climate morph approaches:
+- Dust storm: Particles in air, reduced visibility, warm tones
+- Dense fog: Soft edges, limited depth, mysterious
+- Cosmic vacuum: No atmosphere, stark contrasts, alien
+- Underwater: Light filtering, caustics, blue-green tints
+- Volcanic ash: Dark particles, orange glow, apocalyptic
+- Arctic freeze: Ice crystals, blue shadows, pristine
+- Tropical humidity: Haze, lush saturation, diffused light
+- Desert heat: Shimmering air, harsh light, washed colors
+
+Analyze the current atmosphere and apply a climate transformation that changes the environmental feel."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Climate Morph",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_biome_shift(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Reframe as a new ecosystem (desert, coral reef, fungal forest)."""
-        biome_name, biome_changes = random.choice(BIOME_SHIFTS)
-        return self._apply_preset_mutation(profile, biome_name, biome_changes, "Biome Shift", "biome")
+        instructions = """Apply BIOME SHIFT - transform the environmental ecosystem context.
+
+Biome shift approaches:
+- Desert: Arid, sand colors, sparse life, harsh sun
+- Coral reef: Underwater, vibrant colors, organic complexity
+- Fungal forest: Bioluminescence, spores, alien growth
+- Arctic tundra: White expanses, minimal color, survival
+- Rainforest: Dense, layered, green saturation, humidity
+- Deep ocean: Pressure, darkness, bioluminescent accents
+- Volcanic: Molten, destruction and creation, extreme contrast
+- Alien world: Non-Earth biome, impossible life, strange physics
+
+Analyze the style and shift it to exist within a different ecosystem context."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Biome Shift",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
     # === TECHNICAL MUTATIONS ===
 
-    def _mutate_algorithmic_wrinkle(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+    async def _mutate_algorithmic_wrinkle(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Introduce deterministic computational artifacts (CRT, JPEG, halftone)."""
-        artifact_name, artifact_changes = random.choice(ALGORITHMIC_WRINKLES)
-        return self._apply_preset_mutation(profile, artifact_name, artifact_changes, "Algorithmic Wrinkle", "processed")
+        instructions = """Apply ALGORITHMIC WRINKLE - add computational/technical artifacts.
 
-    def _mutate_symbolic_reduction(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Algorithmic wrinkle approaches:
+- CRT scanlines: Horizontal lines, phosphor glow, curvature
+- JPEG compression: Block artifacts, color banding
+- Halftone dots: Print-style dot patterns, CMYK separation
+- VHS tracking: Horizontal distortion, color bleeding
+- Glitch: Data corruption, pixel displacement, color channel separation
+- Dithering: Stippled patterns from limited color palette
+- Moiré patterns: Interference patterns from overlapping grids
+- Digital noise: Random pixel artifacts, sensor noise
+
+Analyze the style and add appropriate computational artifacts that suggest a specific technical process."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Algorithmic Wrinkle",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_symbolic_reduction(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Turn features into metaphoric/symbolic shapes."""
-        symbol_name, symbol_changes = random.choice(SYMBOLIC_REDUCTIONS)
-        return self._apply_preset_mutation(profile, symbol_name, symbol_changes, "Symbolic Reduction", "symbolic")
+        instructions = """Apply SYMBOLIC REDUCTION - reduce elements to symbolic/metaphoric representations.
+
+Symbolic reduction approaches:
+- Iconography: Elements become icons, logos, simplified symbols
+- Hieroglyphic: Picture-writing, symbolic pictograms
+- Alchemical: Mystical symbols, transformation signs
+- Mathematical: Geometric proofs, equations as visuals
+- Musical notation: Visual rhythm, score-like elements
+- Road signs: Universal symbolic language
+- Emoji/emoticon: Extreme simplification to emotional symbols
+- Heraldic: Shields, crests, formal symbolic design
+
+Analyze the style and reduce visual elements to their symbolic essence, creating meaning through simplified representation."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Symbolic Reduction",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
     # ============================================================
     # NEW MUTATION METHODS (75 new strategies)
     # ============================================================
 
     # === CHROMATIC MUTATIONS ===
-    def _mutate_chroma_band_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+    async def _mutate_chroma_band_shift(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Shift colors only within specific hue band."""
-        preset_name, preset_changes = random.choice(CHROMA_BAND_SHIFTS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Chroma Band Shift", "hue-shifted")
+        instructions = """Identify the DOMINANT HUE BAND in this style and shift it in a specific direction.
 
-    def _mutate_chromatic_noise(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Hue bands to consider:
+- Reds/Oranges: warm end of spectrum, passionate, energetic
+- Yellows/Golds: warm brightness, optimism, warmth
+- Greens: natural, growth, tranquility
+- Blues/Cyans: cool, calm, depth, melancholy
+- Purples/Magentas: mysterious, royal, creative
+
+Shift directions:
+- Rotate hue clockwise (red→orange→yellow→green...)
+- Rotate hue counter-clockwise (red→magenta→purple→blue...)
+- Push toward warmth (add yellow/orange undertones)
+- Push toward coolness (add blue/cyan undertones)
+
+Pick ONE dominant hue band and shift it noticeably in ONE direction.
+Keep other hues relatively stable to maintain contrast.
+
+In your response:
+- "analysis": identify the dominant hue band
+- "mutation_applied": describe the hue shift direction
+- "style_changes": apply the hue shift to palette"""
+        return await self._vlm_mutate(profile, "Chroma Band Shift", instructions, session_id)
+
+    async def _mutate_chromatic_noise(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Add color-channel-separated noise like film grain."""
-        preset_name, preset_changes = random.choice(CHROMATIC_NOISE_TYPES)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Chromatic Noise", "noisy")
+        instructions = """Add CHROMATIC NOISE to this style - color-separated grain effects.
 
-    def _mutate_chromatic_temperature_split(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Types of chromatic noise:
+- Film grain: organic, random, varies by luminosity, warm in shadows
+- Digital noise: blocky, RGB-separated, harsh in darks
+- Color fringing: chromatic aberration on edges, RGB separation
+- Dithering: patterned noise for smooth gradients
+- Scanner artifacts: banding, streaks, channel shifts
+- VHS distortion: bleeding colors, horizontal artifacts
+
+Consider what noise type FITS the style:
+- Clean digital art → subtle grain adds analog warmth
+- Painterly style → organic film grain enhances texture
+- Retro style → VHS/scanner artifacts fit the era
+- High-contrast → digital noise adds grit
+
+Add noise that ENHANCES rather than overwhelms.
+
+In your response:
+- "analysis": describe the current texture quality
+- "mutation_applied": describe the noise type you're adding
+- "style_changes": apply chromatic noise to texture"""
+        return await self._vlm_mutate(profile, "Chromatic Noise", instructions, session_id)
+
+    async def _mutate_chromatic_temperature_split(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Split warm highlights and cool shadows (or vice versa)."""
-        preset_name, preset_changes = random.choice(CHROMATIC_TEMPERATURE_SPLITS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Chromatic Temperature Split", "temperature-split")
+        instructions = """Create a CHROMATIC TEMPERATURE SPLIT - different color temperatures for lights and shadows.
 
-    def _mutate_chromatic_fuse(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Classic splits:
+- Warm highlights / Cool shadows: golden lights, blue shadows (sunset feel)
+- Cool highlights / Warm shadows: blue-white lights, warm amber shadows
+- Complementary split: orange highlights / cyan shadows (cinematic)
+- Analogous warm: yellow highlights / orange-red shadows
+- Analogous cool: cyan highlights / blue-purple shadows
+
+This creates DEPTH through color temperature contrast.
+The effect should be cohesive, not jarring.
+
+Analyze current temperature balance and CREATE A SPLIT.
+Push highlights and shadows to different ends of the temperature spectrum.
+
+In your response:
+- "analysis": describe current temperature balance
+- "mutation_applied": describe the temperature split you're creating
+- "style_changes": apply temperature split to lighting/palette"""
+        return await self._vlm_mutate(profile, "Chromatic Temperature Split", instructions, session_id)
+
+    async def _mutate_chromatic_fuse(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Merge several hues into one unified mega-hue."""
-        preset_name, preset_changes = random.choice(CHROMATIC_FUSES)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Chromatic Fuse", "unified")
+        instructions = """FUSE multiple hues in this style into ONE unified mega-hue.
 
-    def _mutate_chromatic_split(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Analyze the palette and identify 2-4 hues, then MERGE them:
+- If style has reds and oranges → fuse into a unified coral/salmon
+- If style has blues and greens → fuse into unified teal/aqua
+- If style has purples and pinks → fuse into unified magenta
+- If style has yellows and greens → fuse into unified chartreuse
+
+The goal is PALETTE SIMPLIFICATION through hue unification.
+The resulting color should feel like a natural blend, not a compromise.
+
+Keep the overall palette balance but reduce color complexity.
+This creates a more COHESIVE, UNIFIED color identity.
+
+In your response:
+- "analysis": identify the distinct hues present
+- "mutation_applied": describe which hues you're fusing and into what
+- "style_changes": apply the unified palette"""
+        return await self._vlm_mutate(profile, "Chromatic Fuse", instructions, session_id)
+
+    async def _mutate_chromatic_split(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Separate one hue into sub-hues for palette complexity."""
-        preset_name, preset_changes = random.choice(CHROMATIC_SPLITS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Chromatic Split", "split")
+        instructions = """SPLIT a dominant hue into multiple sub-hues for palette complexity.
+
+Find the most dominant single hue and SPLIT it:
+- Blue → separate into cyan, azure, navy, ultramarine
+- Red → separate into crimson, scarlet, coral, burgundy
+- Green → separate into emerald, lime, forest, sage
+- Yellow → separate into gold, lemon, amber, cream
+- Purple → separate into violet, lavender, plum, magenta
+
+This creates PALETTE RICHNESS from simplicity.
+The sub-hues should all clearly relate to the parent hue.
+
+Use the split to add NUANCE:
+- Different sub-hues for shadows vs highlights
+- Different sub-hues for foreground vs background
+- Gradients between sub-hues
+
+In your response:
+- "analysis": identify the dominant hue to split
+- "mutation_applied": describe the sub-hues you're creating
+- "style_changes": apply the split palette"""
+        return await self._vlm_mutate(profile, "Chromatic Split", instructions, session_id)
 
     # === LIGHTING/SHADOW MUTATIONS ===
-    def _mutate_ambient_occlusion_variance(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+    async def _mutate_ambient_occlusion_variance(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Alter ambient occlusion softness/darkness."""
-        preset_name, preset_changes = random.choice(AMBIENT_OCCLUSION_VARIANTS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Ambient Occlusion Variance", "AO-modified")
+        instructions = """Modify the AMBIENT OCCLUSION in this style - how shadows gather in crevices and corners.
 
-    def _mutate_specular_flip(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+AO variations:
+- Soft/diffuse: gentle shadow gradients, smooth transitions
+- Hard/crisp: sharp shadow edges in corners, high contrast
+- Deep/dark: intensified corner shadows, dramatic depth
+- Subtle/faint: barely visible ambient shadows, flat feel
+- Colored AO: shadows tinted (blue, purple, warm brown)
+- Inverted AO: light gathering in corners instead of shadow
+
+Consider the current lighting and ADD or MODIFY ambient occlusion appropriately.
+This affects the sense of depth and form.
+
+In your response:
+- "analysis": describe current shadow behavior
+- "mutation_applied": describe the AO change
+- "style_changes": apply to lighting"""
+        return await self._vlm_mutate(profile, "Ambient Occlusion Variance", instructions, session_id)
+
+    async def _mutate_specular_flip(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Swap matte/glossy behavior."""
-        preset_name, preset_changes = random.choice(SPECULAR_FLIPS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Specular Flip", "specularity-flipped")
+        instructions = """FLIP the specular/reflectivity behavior in this style.
 
-    def _mutate_bloom_variance(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+If surfaces are currently MATTE → make them GLOSSY:
+- Add sharp highlights, reflective sheen, wet look
+- Increase specularity, add reflections
+
+If surfaces are currently GLOSSY → make them MATTE:
+- Remove shine, add powder/chalk texture
+- Diffuse reflections, soft absorption
+
+Variations:
+- Full flip: complete reversal of all surfaces
+- Partial flip: flip only key elements
+- Selective flip: make matte elements shiny OR vice versa
+
+Make the change DRAMATIC and noticeable.
+
+In your response:
+- "analysis": describe current surface reflectivity
+- "mutation_applied": describe the specular flip
+- "style_changes": apply to texture"""
+        return await self._vlm_mutate(profile, "Specular Flip", instructions, session_id)
+
+    async def _mutate_bloom_variance(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Adjust bloom amount/radius/aura."""
-        preset_name, preset_changes = random.choice(BLOOM_VARIANTS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Bloom Variance", "bloom-adjusted")
+        instructions = """Modify the BLOOM effect in this style - the glow around bright areas.
 
-    def _mutate_desync_lighting_channels(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Bloom adjustments:
+- Increase bloom: stronger glow, larger radius, dreamier feel
+- Decrease bloom: sharper highlights, more defined edges
+- Add colored bloom: tinted glow (warm gold, cool blue, pink)
+- Expand radius: wide soft auras around lights
+- Intensify core: bright centers with falloff
+- Add anamorphic: horizontal streak bloom (cinematic)
+
+Consider what bloom level FITS the style:
+- Romantic/dreamy → heavy soft bloom
+- Dramatic/intense → selective bright bloom
+- Clean/modern → minimal or no bloom
+- Retro/nostalgic → warm diffused bloom
+
+In your response:
+- "analysis": describe current bloom/glow behavior
+- "mutation_applied": describe the bloom change
+- "style_changes": apply to lighting"""
+        return await self._vlm_mutate(profile, "Bloom Variance", instructions, session_id)
+
+    async def _mutate_desync_lighting_channels(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Independently randomize lighting intensity/color/direction."""
-        preset_name, preset_changes = random.choice(DESYNC_LIGHTING_CHANNELS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Desync Lighting", "desynced")
+        instructions = """DESYNC the lighting channels - make different light properties behave independently.
 
-    def _mutate_highlight_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Desync options:
+- Color/intensity split: warm light but cool shadows
+- Direction mismatch: shadows don't match light direction
+- Multiple sources: conflicting light directions
+- Channel separation: RGB light sources from different angles
+- Temporal offset: light and shadow seem from different moments
+- Logical break: physically impossible but aesthetically interesting
+
+This creates SURREAL or STYLIZED lighting that breaks physics.
+The effect should feel INTENTIONAL, not broken.
+
+In your response:
+- "analysis": describe current lighting coherence
+- "mutation_applied": describe the desync effect
+- "style_changes": apply to lighting"""
+        return await self._vlm_mutate(profile, "Desync Lighting", instructions, session_id)
+
+    async def _mutate_highlight_shift(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Modify highlight behavior."""
-        preset_name, preset_changes = random.choice(HIGHLIGHT_SHIFTS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Highlight Shift", "highlight-shifted")
+        instructions = """SHIFT how highlights behave in this style.
 
-    def _mutate_shadow_recode(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Highlight modifications:
+- Harden: sharp specular points, crisp reflections
+- Soften: diffuse glows, gentle bright areas
+- Expand: larger highlight areas, more coverage
+- Concentrate: tight, focused highlight spots
+- Color shift: tint highlights (warm, cool, colored)
+- Add secondary: create rim lights, edge highlights
+- Invert: dark highlights, light shadows (stylized)
+
+Consider what highlight style ENHANCES the aesthetic.
+
+In your response:
+- "analysis": describe current highlight behavior
+- "mutation_applied": describe the highlight shift
+- "style_changes": apply to lighting"""
+        return await self._vlm_mutate(profile, "Highlight Shift", instructions, session_id)
+
+    async def _mutate_shadow_recode(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Rewrite shadow behavior/color."""
-        preset_name, preset_changes = random.choice(SHADOW_RECODES)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Shadow Recode", "shadow-recoded")
+        instructions = """RECODE how shadows behave in this style.
 
-    def _mutate_lighting_angle_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Shadow modifications:
+- Color shadows: purple, blue, warm brown, complementary
+- Harden edges: crisp shadow boundaries
+- Soften edges: diffuse, gradient shadows
+- Deepen: more intense, darker shadows
+- Lighten: lifted shadows, more visible detail
+- Add bounce light: warm reflected light in shadows
+- Stylize: flat shadow shapes, graphic treatment
+
+Shadows dramatically affect mood - make intentional choices.
+
+In your response:
+- "analysis": describe current shadow behavior
+- "mutation_applied": describe the shadow recode
+- "style_changes": apply to lighting"""
+        return await self._vlm_mutate(profile, "Shadow Recode", instructions, session_id)
+
+    async def _mutate_lighting_angle_shift(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Move light source direction."""
-        preset_name, preset_changes = random.choice(LIGHTING_ANGLE_SHIFTS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Lighting Angle Shift", "relit")
+        instructions = """SHIFT the apparent lighting angle/direction in this style.
 
-    def _mutate_highlight_bloom_colorize(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Direction changes:
+- Top-down: overhead light, short shadows below
+- Side-lit: dramatic raking light, long shadows
+- Under-lit: eerie uplighting, inverted shadows
+- Back-lit: rim lighting, silhouettes, halo effects
+- Front-lit: flat, even, minimal shadows
+- Diagonal: dynamic 45-degree lighting
+- Multiple: conflicting light directions
+
+The lighting angle dramatically affects DRAMA and MOOD.
+
+In your response:
+- "analysis": describe current light direction
+- "mutation_applied": describe the angle shift
+- "style_changes": apply to lighting"""
+        return await self._vlm_mutate(profile, "Lighting Angle Shift", instructions, session_id)
+
+    async def _mutate_highlight_bloom_colorize(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Change highlight bloom color."""
-        preset_name, preset_changes = random.choice(HIGHLIGHT_BLOOM_COLORIZES)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Highlight Bloom Colorize", "bloom-colored")
+        instructions = """COLORIZE the highlight bloom/glow in this style.
 
-    def _mutate_micro_shadowing(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Color options:
+- Warm gold/amber: sunset, nostalgic, comforting
+- Cool blue/cyan: moonlight, digital, futuristic
+- Pink/magenta: romantic, neon, synthwave
+- Green: toxic, supernatural, matrix
+- Orange: fire, warmth, energy
+- White/neutral: pure, clean, bright
+- Complementary: bloom opposite to shadow color
+
+The bloom color affects emotional tone significantly.
+
+In your response:
+- "analysis": describe current bloom/highlight color
+- "mutation_applied": describe the color change
+- "style_changes": apply to lighting/palette"""
+        return await self._vlm_mutate(profile, "Highlight Bloom Colorize", instructions, session_id)
+
+    async def _mutate_micro_shadowing(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Create small crisp micro-shadows."""
-        preset_name, preset_changes = random.choice(MICRO_SHADOWINGS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Micro-Shadowing", "micro-shadowed")
+        instructions = """Add MICRO-SHADOWING to this style - small, detailed shadows that add depth.
 
-    def _mutate_macro_shadow_pivot(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Micro-shadow types:
+- Contact shadows: tiny dark lines where objects meet
+- Pore/texture shadows: shadows in surface details
+- Edge shadows: thin dark lines along edges
+- Wrinkle shadows: shadows in folds/creases
+- Ambient micro-occlusion: tiny crevice darkening
+- Hatching shadows: fine lines suggesting shadow
+
+This adds DETAIL and TACTILE quality without changing overall lighting.
+
+In your response:
+- "analysis": describe current detail level
+- "mutation_applied": describe the micro-shadows added
+- "style_changes": apply to texture/lighting"""
+        return await self._vlm_mutate(profile, "Micro-Shadowing", instructions, session_id)
+
+    async def _mutate_macro_shadow_pivot(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Reposition large shadow masses."""
-        preset_name, preset_changes = random.choice(MACRO_SHADOW_PIVOTS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Macro Shadow Pivot", "shadow-pivoted")
+        instructions = """PIVOT the large shadow masses in this style - reposition major areas of darkness.
+
+Shadow repositioning:
+- Shift left/right: move shadow emphasis
+- Push to edges: center bright, dark perimeter
+- Pull to center: vignette with central shadow
+- Top-heavy: shadows concentrated above
+- Bottom-heavy: shadows pooling below
+- Diagonal: dramatic diagonal shadow division
+- Fragmented: break up shadow masses
+
+This affects COMPOSITION and VISUAL WEIGHT dramatically.
+
+In your response:
+- "analysis": describe current shadow mass distribution
+- "mutation_applied": describe the shadow pivot
+- "style_changes": apply to lighting/composition"""
+        return await self._vlm_mutate(profile, "Macro Shadow Pivot", instructions, session_id)
 
     # === CONTOUR/EDGE MUTATIONS ===
-    def _mutate_contour_simplify(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+    async def _mutate_contour_simplify(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Reduce contour lines for poster-like shapes."""
-        preset_name, preset_changes = random.choice(CONTOUR_SIMPLIFIES)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Contour Simplify", "simplified")
+        instructions = """SIMPLIFY contours in this style - reduce to cleaner, bolder shapes.
 
-    def _mutate_contour_complexify(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Simplification approaches:
+- Reduce line count: fewer contour lines
+- Smooth curves: remove jagged details
+- Bold outlines: thick, confident lines
+- Flat shapes: poster-like silhouettes
+- Remove internal lines: only outer contours
+- Geometric reduction: angular simplification
+
+The goal is CLARITY and GRAPHIC IMPACT.
+
+In your response:
+- "analysis": describe current contour complexity
+- "mutation_applied": describe the simplification
+- "style_changes": apply to line_and_shape"""
+        return await self._vlm_mutate(profile, "Contour Simplify", instructions, session_id)
+
+    async def _mutate_contour_complexify(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Add secondary/tertiary contour lines."""
-        preset_name, preset_changes = random.choice(CONTOUR_COMPLEXIFIES)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Contour Complexify", "complexified")
+        instructions = """COMPLEXIFY contours in this style - add more detail and line work.
 
-    def _mutate_line_weight_modulation(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Complexity additions:
+- Secondary contours: inner detail lines
+- Hatching: parallel lines for shading
+- Cross-hatching: intersecting line patterns
+- Texture lines: surface detail indication
+- Multiple outlines: layered edge lines
+- Decorative flourishes: ornamental additions
+
+The goal is RICHNESS and DETAIL.
+
+In your response:
+- "analysis": describe current contour simplicity
+- "mutation_applied": describe the added complexity
+- "style_changes": apply to line_and_shape"""
+        return await self._vlm_mutate(profile, "Contour Complexify", instructions, session_id)
+
+    async def _mutate_line_weight_modulation(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Change outline weight/tapering."""
-        preset_name, preset_changes = random.choice(LINE_WEIGHT_MODULATIONS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Line Weight Modulation", "reweighted")
+        instructions = """MODULATE line weights in this style - vary thickness for expression.
 
-    def _mutate_edge_behavior_swap(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Weight variations:
+- Uniform thick: bold, graphic, strong
+- Uniform thin: delicate, precise, refined
+- Thick-to-thin: calligraphic, dynamic
+- Pressure variation: organic, hand-drawn feel
+- Hierarchy: thick for main, thin for detail
+- Tapered ends: elegant pointed terminations
+- Variable: expressive, energetic variation
+
+Line weight dramatically affects CHARACTER and ENERGY.
+
+In your response:
+- "analysis": describe current line weight behavior
+- "mutation_applied": describe the weight modulation
+- "style_changes": apply to line_and_shape"""
+        return await self._vlm_mutate(profile, "Line Weight Modulation", instructions, session_id)
+
+    async def _mutate_edge_behavior_swap(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Swap between soft/hard/broken/feathered edges."""
-        preset_name, preset_changes = random.choice(EDGE_BEHAVIOR_SWAPS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Edge Behavior Swap", "edge-swapped")
+        instructions = """SWAP the edge behavior in this style.
 
-    def _mutate_boundary_echo(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Edge types:
+- Hard: crisp, defined, sharp boundaries
+- Soft: blurred, gradient, gentle transitions
+- Broken: interrupted, sketchy, fragmented
+- Feathered: soft fade at edges
+- Lost and found: varying edge definition
+- Haloed: light outline around shapes
+- Double: parallel edge lines
+
+If style has HARD edges → swap to SOFT (or vice versa).
+Make the change DRAMATIC and consistent.
+
+In your response:
+- "analysis": describe current edge behavior
+- "mutation_applied": describe the edge swap
+- "style_changes": apply to line_and_shape/texture"""
+        return await self._vlm_mutate(profile, "Edge Behavior Swap", instructions, session_id)
+
+    async def _mutate_boundary_echo(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Add thin duplicated outlines."""
-        preset_name, preset_changes = random.choice(BOUNDARY_ECHOES)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Boundary Echo", "echoed")
+        instructions = """Add BOUNDARY ECHOES to this style - duplicated/parallel outline effects.
 
-    def _mutate_halo_generation(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Echo types:
+- Offset outline: second line parallel to edge
+- Multiple echoes: 2-3 parallel lines
+- Color variation: each echo in different shade
+- Fading echoes: decreasing opacity outward
+- Inner echoes: lines inside the shape
+- Outer echoes: lines outside the shape
+- Chromatic echo: RGB-separated outlines
+
+This creates DEPTH and GRAPHIC INTEREST.
+
+In your response:
+- "analysis": describe current edge treatment
+- "mutation_applied": describe the echo effect
+- "style_changes": apply to line_and_shape"""
+        return await self._vlm_mutate(profile, "Boundary Echo", instructions, session_id)
+
+    async def _mutate_halo_generation(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Create outline glow around shapes."""
-        preset_name, preset_changes = random.choice(HALO_GENERATIONS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Halo Generation", "haloed")
+        instructions = """Add HALO GENERATION to this style - glowing outlines around shapes.
+
+Halo types:
+- Soft glow: diffuse light emanating from edges
+- Hard halo: crisp bright outline
+- Colored halo: tinted glow (warm, cool, neon)
+- Inner glow: light inside shapes near edges
+- Outer glow: light outside shapes
+- Double halo: multiple rings of light
+- Gradient halo: color-shifting glow
+
+Consider what halo style FITS the aesthetic:
+- Mystical/ethereal → soft colored glow
+- Digital/cyber → hard neon outlines
+- Dreamy/romantic → warm soft halos
+- Dramatic → high-contrast bright edges
+
+In your response:
+- "analysis": describe current edge treatment
+- "mutation_applied": describe the halo effect
+- "style_changes": apply to lighting/line_and_shape"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Halo Generation",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
     # === TEXTURE MUTATIONS ===
-    def _mutate_texture_direction_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+    async def _mutate_texture_direction_shift(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Rotate texture direction."""
-        preset_name, preset_changes = random.choice(TEXTURE_DIRECTION_SHIFTS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Texture Direction Shift", "direction-shifted")
+        instructions = """SHIFT the direction of textures in this style.
 
-    def _mutate_noise_injection(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Texture direction options:
+- Horizontal: brushstrokes/grain running left-right
+- Vertical: textures running up-down
+- Diagonal (45°): dynamic angled textures
+- Radial: textures radiating from center
+- Concentric: circular texture patterns
+- Cross-grain: perpendicular texture layers
+- Chaotic: multi-directional texture mix
+
+This affects the ENERGY and MOVEMENT in the image.
+Horizontal = calm, vertical = growth, diagonal = dynamic.
+
+In your response:
+- "analysis": describe current texture direction
+- "mutation_applied": describe the direction shift
+- "style_changes": apply to texture"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Texture Direction Shift",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_noise_injection(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Add controlled micro-noise."""
-        preset_name, preset_changes = random.choice(NOISE_INJECTIONS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Noise Injection", "noise-injected")
+        instructions = """INJECT controlled noise/grain into this style.
 
-    def _mutate_microfracture_pattern(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Noise types:
+- Fine grain: subtle, organic film-like texture
+- Coarse grain: larger, more visible particles
+- Monochromatic: grayscale noise only
+- Color noise: RGB-varied speckling
+- Luminosity noise: noise in brightness only
+- Shadow noise: noise concentrated in darks
+- Uniform: even noise distribution
+- Gradient: noise varying by tone
+
+Add noise that ENHANCES the style without overwhelming it.
+Consider what noise level and type fits the aesthetic.
+
+In your response:
+- "analysis": describe current texture smoothness
+- "mutation_applied": describe the noise injection
+- "style_changes": apply to texture"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Noise Injection",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_microfracture_pattern(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Add cracking/crazing lines."""
-        preset_name, preset_changes = random.choice(MICROFRACTURE_PATTERNS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Microfracture Pattern", "fractured")
+        instructions = """Add MICROFRACTURE PATTERNS to this style - cracking, crazing, or craquelure effects.
 
-    def _mutate_crosshatch_density_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Fracture types:
+- Craquelure: fine web of cracks (aged paint)
+- Ice cracks: geometric fracture patterns
+- Dried mud: organic crack networks
+- Shattered glass: radiating break patterns
+- Ceramic crazing: fine surface cracking
+- Bark/wood grain: organic linear splits
+- Marble veining: irregular natural lines
+
+This adds AGE, HISTORY, or TENSION to surfaces.
+Consider what fracture pattern fits the style's mood.
+
+In your response:
+- "analysis": describe current surface integrity
+- "mutation_applied": describe the fracture pattern
+- "style_changes": apply to texture"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Microfracture Pattern",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_crosshatch_density_shift(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Alter crosshatching density."""
-        preset_name, preset_changes = random.choice(CROSSHATCH_DENSITY_SHIFTS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Crosshatch Density Shift", "crosshatch-shifted")
+        instructions = """SHIFT the density of crosshatching/line-based shading in this style.
+
+Density options:
+- Dense: tight, closely-spaced lines, dark shadows
+- Sparse: widely-spaced lines, lighter feel
+- Variable: density changes with value
+- Single-direction: parallel lines only
+- Cross-hatched: intersecting line layers
+- Multi-angle: 3+ directions of lines
+- Stippled: dots instead of lines
+
+If style has hatching, INCREASE or DECREASE density dramatically.
+If no hatching, ADD hatching as a shading technique.
+
+In your response:
+- "analysis": describe current shading technique
+- "mutation_applied": describe the density shift
+- "style_changes": apply to texture/line_and_shape"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Crosshatch Density Shift",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
     # === MATERIAL/SURFACE MUTATIONS ===
-    def _mutate_background_material_swap(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+    async def _mutate_background_material_swap(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Change backdrop material."""
-        preset_name, preset_changes = random.choice(BACKGROUND_MATERIAL_SWAPS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Background Material Swap", "bg-swapped")
+        instructions = """SWAP the background material in this style - change the apparent surface/substrate.
 
-    def _mutate_surface_material_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Background materials:
+- Canvas: woven texture, fabric feel, painterly
+- Paper: smooth or textured, absorbent quality
+- Metal: reflective, industrial, cold
+- Wood: grain patterns, warm, organic
+- Stone: rough, ancient, heavy
+- Glass: transparent, reflective, modern
+- Concrete: urban, brutalist, raw
+- Fabric: soft, draped, textile patterns
+- Digital: clean, perfect, synthetic
+
+Consider what background material creates INTERESTING CONTRAST with the style.
+The material should enhance, not distract from, the content.
+
+In your response:
+- "analysis": describe current background quality
+- "mutation_applied": describe the material swap
+- "style_changes": apply to texture/composition"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Background Material Swap",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_surface_material_shift(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Transform surface feel."""
-        preset_name, preset_changes = random.choice(SURFACE_MATERIAL_SHIFTS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Surface Material Shift", "surface-shifted")
+        instructions = """SHIFT the surface material quality in this style - transform how surfaces feel.
 
-    def _mutate_translucency_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Surface qualities:
+- Matte/Chalky: soft, powdery, light-absorbing
+- Glossy/Wet: shiny, reflective, liquid-like
+- Rough/Textured: bumpy, tactile, imperfect
+- Smooth/Polished: slick, clean, refined
+- Organic/Natural: skin-like, plant-like, living
+- Metallic/Industrial: hard, cold, manufactured
+- Translucent/Waxy: semi-transparent, diffuse glow
+- Velvet/Fabric: soft, plush, luxurious
+
+Transform the dominant surface quality to something CONTRASTING.
+This changes the TACTILE FEEL of the entire style.
+
+In your response:
+- "analysis": describe current surface materiality
+- "mutation_applied": describe the surface shift
+- "style_changes": apply to texture"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Surface Material Shift",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_translucency_shift(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Alter transparency levels."""
-        preset_name, preset_changes = random.choice(TRANSLUCENCY_SHIFTS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Translucency Shift", "translucency-shifted")
+        instructions = """SHIFT the translucency/transparency in this style.
 
-    def _mutate_subsurface_scatter_tweak(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Translucency options:
+- Increase opacity: make elements more solid, opaque
+- Increase transparency: make elements see-through, ghostly
+- Add layering: translucent overlapping planes
+- Selective transparency: some elements clear, others solid
+- Gradient opacity: fading from solid to transparent
+- Glass-like: clear but with refraction/distortion
+- Frosted: diffuse semi-transparency
+- Veil effect: sheer fabric-like translucency
+
+This affects DEPTH and MYSTERY in the composition.
+More transparency = more ethereal, more opacity = more grounded.
+
+In your response:
+- "analysis": describe current transparency behavior
+- "mutation_applied": describe the translucency shift
+- "style_changes": apply to texture/composition"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Translucency Shift",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_subsurface_scatter_tweak(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Adjust internal glow in translucent materials."""
-        preset_name, preset_changes = random.choice(SUBSURFACE_SCATTER_TWEAKS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Subsurface Scatter Tweak", "SSS-tweaked")
+        instructions = """TWEAK the subsurface scattering (SSS) in this style - the internal glow in translucent materials.
 
-    def _mutate_anisotropy_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+SSS adjustments:
+- Increase SSS: more internal glow, light passing through
+- Decrease SSS: more opaque, less translucent glow
+- Warm SSS: orange/red internal light (flesh, wax)
+- Cool SSS: blue/green internal light (ice, jade)
+- Add SSS: introduce internal glow where there was none
+- Color shift: change the internal light color
+- Depth variation: shallow vs deep scatter
+
+SSS creates LIFE and ORGANIC QUALITY:
+- Skin, leaves, wax, marble all have SSS
+- It makes materials feel ALIVE and DIMENSIONAL
+
+In your response:
+- "analysis": describe current material translucency
+- "mutation_applied": describe the SSS tweak
+- "style_changes": apply to texture/lighting"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Subsurface Scatter Tweak",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_anisotropy_shift(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Change directional light reflection."""
-        preset_name, preset_changes = random.choice(ANISOTROPY_SHIFTS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Anisotropy Shift", "anisotropic")
+        instructions = """SHIFT the anisotropy in this style - directional light reflection behavior.
 
-    def _mutate_reflectivity_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Anisotropy types:
+- Hair/fiber: stretched highlights along strands
+- Brushed metal: elongated reflections in brush direction
+- Silk/satin: directional sheen following weave
+- Vinyl/records: concentric reflection rings
+- Water ripples: wavy light patterns
+- Wood grain: highlights following grain
+- Isotropic (none): uniform reflection in all directions
+
+Anisotropy creates MATERIAL CHARACTER:
+- Adds realism to hair, metal, fabric
+- Creates directional energy and movement
+
+Add or modify anisotropic highlights to enhance material feel.
+
+In your response:
+- "analysis": describe current reflection behavior
+- "mutation_applied": describe the anisotropy shift
+- "style_changes": apply to texture/lighting"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Anisotropy Shift",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_reflectivity_shift(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Change reflectivity without color change."""
-        preset_name, preset_changes = random.choice(REFLECTIVITY_SHIFTS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Reflectivity Shift", "reflectivity-shifted")
+        instructions = """SHIFT the reflectivity levels in this style - how much surfaces mirror their environment.
+
+Reflectivity levels:
+- Mirror-like: perfect environment reflections
+- High gloss: clear but imperfect reflections
+- Semi-gloss: soft, blurred reflections
+- Satin: subtle directional sheen
+- Matte: no visible reflections
+- Fresnel: reflection increases at grazing angles
+- Metallic: colored reflections (gold, copper, steel)
+
+Adjust reflectivity to change MATERIAL FEEL:
+- More reflection = wet, polished, precious
+- Less reflection = dry, aged, matte
+
+Keep colors the same but change how light interacts.
+
+In your response:
+- "analysis": describe current reflectivity
+- "mutation_applied": describe the reflectivity shift
+- "style_changes": apply to texture"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Reflectivity Shift",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
     # === TONAL MUTATIONS ===
-    def _mutate_midtone_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+    async def _mutate_midtone_shift(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Mutate midtones only."""
-        preset_name, preset_changes = random.choice(MIDTONE_SHIFTS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Midtone Shift", "midtone-shifted")
+        instructions = """SHIFT the midtones in this style - adjust the middle values while preserving highlights and shadows.
 
-    def _mutate_tonal_compression(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Midtone adjustments:
+- Lighten midtones: airier, more open feel
+- Darken midtones: moodier, more weight
+- Warm midtones: add golden/amber to mid values
+- Cool midtones: add blue/cyan to mid values
+- Increase midtone contrast: more punch in middle range
+- Flatten midtones: more uniform mid-range
+- Color shift: change midtone hue selectively
+
+Midtones carry most of the IMAGE INFORMATION.
+Shifting them changes the overall mood without losing detail.
+
+Keep highlights and deep shadows relatively stable.
+
+In your response:
+- "analysis": describe current midtone character
+- "mutation_applied": describe the midtone shift
+- "style_changes": apply to palette/lighting"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Midtone Shift",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_tonal_compression(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Compress tonal range for flatter look."""
-        preset_name, preset_changes = random.choice(TONAL_COMPRESSIONS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Tonal Compression", "compressed")
+        instructions = """COMPRESS the tonal range in this style - reduce the difference between lights and darks.
 
-    def _mutate_tonal_expansion(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Compression approaches:
+- Lift shadows: brighten dark areas
+- Lower highlights: dim bright areas
+- Both: squeeze toward midtones from both ends
+- Selective: compress only darks OR only lights
+- Zone compression: compress specific tonal zones
+
+Compression creates:
+- Flatter, more graphic look
+- Vintage/faded photograph feel
+- Softer, dreamier mood
+- Reduced drama and contrast
+
+The goal is to REDUCE tonal range for a specific aesthetic effect.
+
+In your response:
+- "analysis": describe current tonal range
+- "mutation_applied": describe the compression
+- "style_changes": apply to lighting/palette"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Tonal Compression",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_tonal_expansion(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Expand tonal range for deeper contrast."""
-        preset_name, preset_changes = random.choice(TONAL_EXPANSIONS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Tonal Expansion", "expanded")
+        instructions = """EXPAND the tonal range in this style - increase the difference between lights and darks.
 
-    def _mutate_microcontrast_tuning(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Expansion approaches:
+- Deepen shadows: push darks toward black
+- Brighten highlights: push lights toward white
+- Both: expand from both ends
+- Selective: expand only darks OR only lights
+- S-curve: expand midtone contrast
+
+Expansion creates:
+- More dramatic, punchy look
+- Higher contrast, bolder feel
+- Increased depth and dimension
+- More visual impact
+
+The goal is to INCREASE tonal range for dramatic effect.
+
+In your response:
+- "analysis": describe current tonal range
+- "mutation_applied": describe the expansion
+- "style_changes": apply to lighting/palette"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Tonal Expansion",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_microcontrast_tuning(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Adjust small-scale contrast."""
-        preset_name, preset_changes = random.choice(MICROCONTRAST_TUNINGS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Microcontrast Tuning", "microcontrast-tuned")
+        instructions = """TUNE the microcontrast in this style - the small-scale local contrast that creates texture and clarity.
 
-    def _mutate_contrast_channel_swap(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Microcontrast adjustments:
+- Increase: sharper, more defined, crispy detail
+- Decrease: softer, smoother, dreamier
+- Texture emphasis: enhance surface detail visibility
+- Edge clarity: increase definition at boundaries
+- Gritty: high microcontrast for rough feel
+- Smooth: low microcontrast for soft feel
+
+Microcontrast affects PERCEIVED SHARPNESS:
+- High = more texture, more "pop", more detail
+- Low = softer, more blended, painterly
+
+This is different from overall contrast - it's about LOCAL detail.
+
+In your response:
+- "analysis": describe current detail/texture clarity
+- "mutation_applied": describe the microcontrast tuning
+- "style_changes": apply to texture/lighting"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Microcontrast Tuning",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_contrast_channel_swap(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Modify contrast selectively by channel."""
-        preset_name, preset_changes = random.choice(CONTRAST_CHANNEL_SWAPS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Contrast Channel Swap", "channel-contrast")
+        instructions = """SWAP contrast behavior between channels - modify contrast selectively by color channel.
+
+Channel contrast options:
+- High red contrast: punchy reds, compressed cyan
+- High green contrast: vibrant greens, muted magenta
+- High blue contrast: deep blues, warm tones compressed
+- Luminosity only: contrast in brightness, not saturation
+- Saturation contrast: vivid vs muted, not light vs dark
+- Split channels: different contrast per RGB channel
+- Cross-process: inverted channel contrast (film effect)
+
+This creates UNUSUAL COLOR RELATIONSHIPS:
+- Can make certain colors pop while others recede
+- Creates stylized, non-photographic looks
+- Film cross-processing effects
+
+In your response:
+- "analysis": describe current channel balance
+- "mutation_applied": describe the channel contrast swap
+- "style_changes": apply to palette/lighting"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Contrast Channel Swap",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
     # === BLUR/FOCUS MUTATIONS ===
-    def _mutate_directional_blur(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+    async def _mutate_directional_blur(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Apply motion-like blur along vector."""
-        preset_name, preset_changes = random.choice(DIRECTIONAL_BLURS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Directional Blur", "blurred")
+        instructions = """Add DIRECTIONAL BLUR to this style - motion-like blur along a specific direction.
 
-    def _mutate_focal_plane_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Blur directions:
+- Horizontal: side-to-side motion, panning feel
+- Vertical: up-down motion, falling/rising sense
+- Diagonal: dynamic movement, action feel
+- Radial: zoom blur, explosive energy
+- Circular: spinning, rotational motion
+- Selective: blur only background or foreground
+- Speed lines: implied motion without actual blur
+
+Blur intensity:
+- Subtle: slight softness suggesting movement
+- Moderate: clear motion indication
+- Extreme: strong speed/action feel
+
+This adds DYNAMISM and ENERGY to the style.
+
+In your response:
+- "analysis": describe current motion/stillness quality
+- "mutation_applied": describe the directional blur
+- "style_changes": apply to texture/composition"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Directional Blur",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_focal_plane_shift(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Move focus point."""
-        preset_name, preset_changes = random.choice(FOCAL_PLANE_SHIFTS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Focal Plane Shift", "refocused")
+        instructions = """SHIFT the focal plane in this style - move the point of sharp focus.
 
-    def _mutate_mask_boundary_mutation(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Focal plane options:
+- Near focus: sharp foreground, blurred background
+- Far focus: sharp background, blurred foreground
+- Mid-plane: sharp middle ground, soft front and back
+- Shallow depth: very thin focus plane, extreme bokeh
+- Deep focus: everything sharp, large depth of field
+- Tilt-shift: angled focus plane, miniature effect
+- Split focus: multiple focal points
+
+Focus affects ATTENTION and NARRATIVE:
+- Guides viewer's eye to important elements
+- Creates depth and dimension
+- Can make subjects feel closer or more distant
+
+In your response:
+- "analysis": describe current focus behavior
+- "mutation_applied": describe the focal plane shift
+- "style_changes": apply to composition/texture"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Focal Plane Shift",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_mask_boundary_mutation(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Modify mask borders."""
-        preset_name, preset_changes = random.choice(MASK_BOUNDARY_MUTATIONS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Mask Boundary Mutation", "mask-modified")
+        instructions = """MUTATE the mask/border boundaries in this style - change how element edges are defined.
+
+Boundary options:
+- Soft feather: gradual fade at edges
+- Hard cut: sharp, defined boundaries
+- Irregular: organic, rough edge shapes
+- Geometric: clean, angular mask edges
+- Torn: ragged, paper-tear effect
+- Dissolve: pixelated or noisy edge transition
+- Glow edge: luminous boundary region
+- Double edge: outlined mask border
+
+This affects how ELEMENTS SEPARATE from each other:
+- Clean masks = graphic, designed feel
+- Soft masks = painterly, blended feel
+- Irregular masks = organic, natural feel
+
+In your response:
+- "analysis": describe current edge/boundary treatment
+- "mutation_applied": describe the mask boundary change
+- "style_changes": apply to composition/line_and_shape"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Mask Boundary Mutation",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
     # === SILHOUETTE MUTATIONS (EXTENDED) ===
-    def _mutate_silhouette_merge(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+    async def _mutate_silhouette_merge(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Fuse two silhouettes into composite."""
-        preset_name, preset_changes = random.choice(SILHOUETTE_MERGES)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Silhouette Merge", "merged")
+        instructions = """MERGE silhouettes in this style - fuse shapes into composite forms.
 
-    def _mutate_silhouette_subtract(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Merge approaches:
+- Overlap blend: shapes layered and fused
+- Boolean union: combine into single unified shape
+- Interpenetration: forms passing through each other
+- Shadow merge: shadows connecting separate elements
+- Contour fusion: outlines flowing into each other
+- Gradient blend: shapes fading into one another
+- Negative space merge: backgrounds unifying
+
+This creates VISUAL CONNECTION between elements:
+- Suggests relationship, unity, transformation
+- Can create new hybrid forms
+- Adds compositional cohesion
+
+In your response:
+- "analysis": describe current shape separation
+- "mutation_applied": describe the silhouette merge
+- "style_changes": apply to line_and_shape/composition"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Silhouette Merge",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_silhouette_subtract(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Remove chunks for negative-space shapes."""
-        preset_name, preset_changes = random.choice(SILHOUETTE_SUBTRACTS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Silhouette Subtract", "subtracted")
+        instructions = """SUBTRACT from silhouettes - create negative-space shapes by removing chunks.
 
-    def _mutate_silhouette_distortion(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Subtraction techniques:
+- Boolean difference: cut geometric shapes from forms
+- Bite marks: irregular chunks removed from edges
+- Window cutouts: rectangular/circular holes through shapes
+- Erosion: edges eaten away, creating ragged boundaries
+- Slice removal: clean cuts removing sections
+- Scatter holes: multiple small perforations
+- Crescent bites: curved chunks missing
+
+Negative space effects:
+- Reveals background through foreground
+- Creates visual interest through absence
+- Suggests decay, transformation, incompleteness
+- Can create secondary shapes in the gaps
+- Adds rhythm through solid/void alternation
+
+In your response:
+- "analysis": describe current silhouette solidity
+- "mutation_applied": describe the subtraction approach
+- "style_changes": apply to line_and_shape/composition"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Silhouette Subtract",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_silhouette_distortion(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Stretch/bend/fracture silhouette."""
-        preset_name, preset_changes = random.choice(SILHOUETTE_DISTORTIONS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Silhouette Distortion", "distorted")
+        instructions = """DISTORT silhouettes - stretch, bend, or fracture the shape outlines.
 
-    def _mutate_internal_geometry_twist(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Distortion types:
+- Stretch: elongate in one direction, compress in another
+- Bend: curve rigid forms, add organic flow to geometric
+- Fracture: break silhouettes into shards, fragments
+- Melt: forms drooping, flowing downward
+- Twist: spiral/helical deformation
+- Bulge: localized expansion or swelling
+- Pinch: localized compression or narrowing
+- Wave: undulating edges, ripple effects
+
+Distortion intensity:
+- Subtle: barely perceptible warping
+- Moderate: clearly visible but still recognizable
+- Extreme: heavily transformed, barely recognizable
+
+Effects on visual perception:
+- Movement and dynamism
+- Emotional tension or release
+- Surreal/dreamlike quality
+- Physical forces made visible
+
+In your response:
+- "analysis": describe current silhouette stability
+- "mutation_applied": describe the distortion type and intensity
+- "style_changes": apply to line_and_shape/composition"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Silhouette Distortion",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_internal_geometry_twist(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Twist inside while keeping silhouette."""
-        preset_name, preset_changes = random.choice(INTERNAL_GEOMETRY_TWISTS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Internal Geometry Twist", "internally-twisted")
+        instructions = """TWIST internal geometry while preserving the outer silhouette.
+
+The silhouette stays the same, but everything inside transforms:
+- Spiral twist: contents rotate around a central axis
+- Vortex: swirling from edges to center
+- Torsion: different parts twist at different rates
+- Fold: internal planes bending over themselves
+- Knot: interweaving internal structures
+- Ribbon curl: linear elements becoming coiled
+- Corkscrew: helical transformation of internals
+
+Effects of internal twist:
+- Creates visual tension (stable outside, chaotic inside)
+- Suggests motion or transformation in progress
+- Adds dynamism without changing overall form
+- Can create optical illusion effects
+- Implies hidden energy or force
+
+Preserve:
+- Outer boundary/silhouette stays intact
+- Overall recognizable form
+
+Transform:
+- Internal lines, textures, patterns
+- Inner structure and geometry
+
+In your response:
+- "analysis": describe current internal structure
+- "mutation_applied": describe the internal twist type
+- "style_changes": apply to line_and_shape/texture"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Internal Geometry Twist",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
     # === DEPTH MUTATIONS ===
-    def _mutate_background_depth_collapse(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+    async def _mutate_background_depth_collapse(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Compress background depth."""
-        preset_name, preset_changes = random.choice(BACKGROUND_DEPTH_COLLAPSES)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Background Depth Collapse", "depth-collapsed")
+        instructions = """COLLAPSE background depth - compress the sense of space behind foreground elements.
 
-    def _mutate_depth_flattening(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Depth collapse techniques:
+- Flat backdrop: remove all depth cues from background
+- Stage flat: background becomes theatrical painted flat
+- Poster space: everything pushed to 2D picture plane
+- Compressed atmosphere: reduce atmospheric perspective
+- Stacked planes: depth layers flatten onto each other
+- Ambient blur: background loses detail, becomes solid
+- Color compression: background becomes uniform tone
+
+Effects of collapsed depth:
+- Focuses attention on foreground
+- Creates graphic, poster-like quality
+- Removes distraction of deep space
+- Can create claustrophobic or intimate feeling
+- Emphasizes silhouettes against flat backgrounds
+
+Preserve:
+- Foreground detail and depth
+- Subject separation from background
+
+Flatten:
+- Background spatial recession
+- Atmospheric depth cues
+- Far-distance detail
+
+In your response:
+- "analysis": describe current background depth treatment
+- "mutation_applied": describe the depth collapse approach
+- "style_changes": apply to composition/lighting"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Background Depth Collapse",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_depth_flattening(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Reduce depth cues."""
-        preset_name, preset_changes = random.choice(DEPTH_FLATTENINGS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Depth Flattening", "flattened")
+        instructions = """FLATTEN depth - reduce all depth cues throughout the entire image.
 
-    def _mutate_depth_expansion(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Depth flattening techniques:
+- Remove atmospheric perspective (no haze/fade with distance)
+- Eliminate size scaling (near/far objects similar size)
+- Remove overlap cues (no occlusion hierarchy)
+- Flatten shadows (no depth-indicating cast shadows)
+- Uniform focus (no depth of field)
+- Isometric treatment (no perspective convergence)
+- Equal detail everywhere (no detail falloff)
+
+Flattening approaches:
+- Graphic/posterized: bold flat shapes
+- Ukiyo-e style: layered flat planes
+- Paper cutout: shapes without depth
+- Stained glass: outlined flat areas
+- Cartoon flat: cel-shaded no-depth look
+- Map view: bird's eye flat representation
+
+Effects:
+- Creates 2D graphic quality
+- Emphasizes pattern over space
+- Removes "window into world" feeling
+- Creates decorative, design-like aesthetic
+
+In your response:
+- "analysis": describe current depth cues present
+- "mutation_applied": describe the flattening approach
+- "style_changes": apply to composition/lighting/line_and_shape"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Depth Flattening",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_depth_expansion(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Exaggerate depth/perspective."""
-        preset_name, preset_changes = random.choice(DEPTH_EXPANSIONS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Depth Expansion", "depth-expanded")
+        instructions = """EXPAND depth - exaggerate all depth cues to create dramatic spatial recession.
+
+Depth expansion techniques:
+- Extreme atmospheric perspective (heavy haze/fade with distance)
+- Exaggerated size scaling (dramatic near/far size difference)
+- Strong overlap hierarchy (clear layering of planes)
+- Deep cast shadows (long, dramatic shadows)
+- Extreme depth of field (sharp foreground, blurred background)
+- Forced perspective (exaggerated convergence)
+- Detail falloff (crisp near, vague far)
+
+Expansion approaches:
+- Baroque deep space: dramatic recession into darkness
+- Wide-angle distortion: fisheye-like depth exaggeration
+- Theatrical depth: stage-like receding planes
+- Infinite regression: space extending forever
+- Vertiginous: dizzying sense of depth/height
+- Tunnel effect: space pulling viewer inward
+
+Effects:
+- Creates immersive, 3D quality
+- Adds drama and grandeur
+- Pulls viewer into the scene
+- Emphasizes spatial relationships
+
+In your response:
+- "analysis": describe current depth treatment
+- "mutation_applied": describe the depth expansion approach
+- "style_changes": apply to composition/lighting"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Depth Expansion",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
     # === COMPOSITION MUTATIONS (NEW) ===
-    def _mutate_quadrant_mutation(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+    async def _mutate_quadrant_mutation(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Mutate only one quadrant."""
-        preset_name, preset_changes = random.choice(QUADRANT_MUTATIONS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Quadrant Mutation", "quadrant-mutated")
+        instructions = """MUTATE only ONE QUADRANT - apply a localized style change to one quarter of the composition.
 
-    def _mutate_object_alignment_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Choose a quadrant:
+- Top-left: upper left quarter
+- Top-right: upper right quarter
+- Bottom-left: lower left quarter
+- Bottom-right: lower right quarter
+
+Quadrant mutation types:
+- Color shift: different palette in one quadrant
+- Texture change: different surface treatment
+- Style shift: different rendering approach
+- Detail density: more or less detail
+- Lighting variation: different light quality
+- Line weight change: thicker or thinner
+- Saturation zone: more or less vivid
+
+Effects of quadrant mutation:
+- Creates visual tension/interest
+- Draws attention to specific area
+- Suggests transition or boundary
+- Can create surreal collage effect
+- Establishes visual hierarchy
+
+The mutation should feel intentional and interesting, not like an error.
+Keep 3 quadrants consistent, dramatically change 1.
+
+In your response:
+- "analysis": describe current composition uniformity
+- "mutation_applied": describe which quadrant and what change
+- "style_changes": apply localized changes to relevant sections"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Quadrant Mutation",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_object_alignment_shift(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Rotate/offset/misalign objects."""
-        preset_name, preset_changes = random.choice(OBJECT_ALIGNMENT_SHIFTS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Object Alignment Shift", "realigned")
+        instructions = """SHIFT object alignment - rotate, offset, or misalign elements from their expected positions.
 
-    def _mutate_spatial_hierarchy_flip(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Alignment shift types:
+- Rotation: elements tilted from vertical/horizontal
+- Offset: elements displaced from center or grid
+- Stagger: elements arranged in irregular steps
+- Drift: elements floating away from anchor points
+- Cant: slight angular tilt across composition
+- Scatter: elements dispersed from organized arrangement
+- Skew: parallel lines no longer parallel
+
+Misalignment approaches:
+- Subtle tilt: barely perceptible rotation (1-5°)
+- Moderate offset: noticeable but comfortable displacement
+- Extreme misalignment: jarring, disorienting placement
+- Organic scatter: natural, random-feeling arrangement
+- Rhythmic offset: patterned displacement
+- Gravity defiant: elements floating/falling
+
+Effects:
+- Creates dynamism and movement
+- Adds tension or unease
+- Suggests instability or transformation
+- Can feel playful or unsettling
+- Breaks rigid formality
+
+In your response:
+- "analysis": describe current alignment/grid structure
+- "mutation_applied": describe the alignment shift
+- "style_changes": apply to composition/line_and_shape"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Object Alignment Shift",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_spatial_hierarchy_flip(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Reorder visual priority."""
-        preset_name, preset_changes = random.choice(SPATIAL_HIERARCHY_FLIPS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Spatial Hierarchy Flip", "hierarchy-flipped")
+        instructions = """FLIP spatial hierarchy - reorder the visual priority of elements in the composition.
 
-    def _mutate_balance_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Hierarchy elements to consider:
+- Foreground vs background dominance
+- Primary subject vs secondary elements
+- Figure vs ground relationship
+- Positive vs negative space prominence
+- Detail focus areas
+- Light/dark emphasis
+
+Hierarchy flip approaches:
+- Background promotion: make background the focal point
+- Subject demotion: reduce primary subject emphasis
+- Negative space dominance: voids become more important than forms
+- Detail inversion: detailed areas become simple, simple becomes detailed
+- Edge vs center: shift focus from center to periphery
+- Scale reversal: small elements become visually dominant
+
+Techniques to flip hierarchy:
+- Adjust contrast (boost background, reduce foreground)
+- Shift detail distribution
+- Change color saturation hierarchy
+- Alter lighting focus
+- Modify edge definition
+- Adjust scale relationships
+
+Effects:
+- Creates unexpected focal points
+- Subverts viewer expectations
+- Adds conceptual depth
+- Can create surreal or unsettling feeling
+
+In your response:
+- "analysis": describe current visual hierarchy
+- "mutation_applied": describe the hierarchy flip
+- "style_changes": apply to composition/lighting/palette"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Spatial Hierarchy Flip",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_balance_shift(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Shift overall visual weight."""
-        preset_name, preset_changes = random.choice(BALANCE_SHIFTS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Balance Shift", "rebalanced")
+        instructions = """SHIFT visual balance - redistribute the visual weight across the composition.
 
-    def _mutate_interplay_swap(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Visual weight factors:
+- Tonal mass (dark areas are heavier)
+- Color saturation (vivid is heavier)
+- Detail density (detailed areas draw attention)
+- Size and scale
+- Isolation (lone elements stand out)
+- Position (top feels lighter, bottom heavier)
+
+Balance shift directions:
+- Left-heavy: weight concentrated on left side
+- Right-heavy: weight concentrated on right side
+- Top-heavy: weight concentrated at top
+- Bottom-heavy: weight concentrated at bottom
+- Center-heavy: weight pulled to center
+- Edge-heavy: weight pushed to periphery
+- Corner anchor: weight concentrated in one corner
+
+Balance types:
+- Symmetrical: equal weight both sides
+- Asymmetrical: unequal but balanced
+- Radial: balanced around a center point
+- Crystallographic: even scatter throughout
+- Imbalanced: intentionally unstable
+
+Effects:
+- Changes visual flow and reading direction
+- Creates tension or calm
+- Guides eye movement
+- Establishes mood (stable vs dynamic)
+
+In your response:
+- "analysis": describe current visual balance
+- "mutation_applied": describe the balance shift direction
+- "style_changes": apply to composition/palette/lighting"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Balance Shift",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_interplay_swap(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Swap dominance between elements."""
-        preset_name, preset_changes = random.choice(INTERPLAY_SWAPS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Interplay Swap", "swapped")
+        instructions = """SWAP interplay dominance - exchange which elements dominate vs recede in the composition.
 
-    def _mutate_vignette_modification(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Element pairs to consider swapping:
+- Figure/ground: make background dominant, subject recessive
+- Light/shadow: shadows become primary, lit areas secondary
+- Color/neutrals: neutrals dominate, colors become accents
+- Lines/shapes: swap emphasis between linework and mass
+- Texture/smooth: textured areas recede, smooth becomes focal
+- Detail/void: empty space becomes prominent, detail recedes
+- Warm/cool: temperature dominance reversal
+
+Swap mechanisms:
+- Scale inversion: dominant element shrinks, recessive grows
+- Contrast redistribution: shift contrast to previously subtle areas
+- Saturation swap: desaturate what was vivid, saturate what was muted
+- Focus shift: blur what was sharp, sharpen what was blurred
+- Position exchange: reposition elements in visual hierarchy
+- Edge treatment: soften what was hard, define what was soft
+
+Effects of interplay swap:
+- Subverts visual expectations
+- Creates new focal dynamics
+- Reveals overlooked elements
+- Can dramatically transform perception of scene
+
+In your response:
+- "analysis": describe current element dominance relationships
+- "mutation_applied": describe which elements were swapped
+- "style_changes": apply to relevant sections"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Interplay Swap",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_vignette_modification(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Add/modify vignette."""
-        preset_name, preset_changes = random.choice(VIGNETTE_MODIFICATIONS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Vignette Modification", "vignetted")
+        instructions = """MODIFY vignette - add or alter edge darkening/lightening effects.
+
+Vignette types:
+- Classic dark: edges fade to black/dark
+- Light vignette: edges fade to white/bright
+- Color vignette: edges tinted with a specific hue
+- Burned edges: harsh, irregular darkening
+- Soft fade: gentle gradient to edge
+- Hard edge: sharp transition at border
+- Asymmetric: vignette stronger on certain sides
+
+Vignette shapes:
+- Circular/oval: classic photographic look
+- Rectangular: following frame edge
+- Irregular: organic, painterly edges
+- Directional: stronger on one side
+- Corner emphasis: darkening in corners only
+- Split: different treatment top/bottom or left/right
+
+Vignette intensity:
+- Subtle: barely noticeable edge darkening
+- Moderate: clearly present but not distracting
+- Dramatic: strong, theatrical darkening
+- Extreme: severe, almost masking edges
+
+Effects:
+- Focuses attention on center
+- Creates intimate, enclosed feeling
+- Adds vintage or cinematic quality
+- Frames the composition
+- Can add drama or mystery
+
+In your response:
+- "analysis": describe current edge treatment
+- "mutation_applied": describe the vignette modification
+- "style_changes": apply to composition/lighting"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Vignette Modification",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
     # === MOTIF MUTATIONS (NEW) ===
-    def _mutate_motif_mirroring(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+    async def _mutate_motif_mirroring(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Mirror motif H/V/diagonal."""
-        preset_name, preset_changes = random.choice(MOTIF_MIRRORINGS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Motif Mirroring", "mirrored")
+        instructions = """MIRROR motifs - reflect recurring visual elements across an axis.
 
-    def _mutate_motif_scaling(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Mirror axes:
+- Horizontal: top-bottom reflection
+- Vertical: left-right reflection
+- Diagonal: corner-to-corner reflection
+- Radial: reflection around a center point
+- Multiple: reflections creating kaleidoscope effect
+
+Mirroring approaches:
+- Perfect symmetry: exact reflection
+- Approximate symmetry: nearly mirrored with subtle variation
+- Partial mirror: only some elements reflected
+- Interrupted mirror: reflection with breaks/gaps
+- Layered reflection: multiple mirror planes
+
+What to mirror:
+- Shapes and forms
+- Color patterns
+- Texture directions
+- Line work
+- Motif arrangements
+- Compositional elements
+
+Effects of mirroring:
+- Creates formal symmetry
+- Adds visual stability and order
+- Can create butterfly/Rorschach effects
+- Suggests duality or reflection
+- Creates pattern and rhythm
+- Can feel ceremonial or sacred
+
+In your response:
+- "analysis": describe current motif arrangement
+- "mutation_applied": describe the mirror axis and approach
+- "style_changes": apply to composition/line_and_shape"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Motif Mirroring",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_motif_scaling(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Scale repeated motifs."""
-        preset_name, preset_changes = random.choice(MOTIF_SCALINGS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Motif Scaling", "scaled")
+        instructions = """SCALE motifs - change the size of recurring visual elements.
 
-    def _mutate_motif_repetition(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+Scaling directions:
+- Enlarge: make motifs bigger, more prominent
+- Shrink: make motifs smaller, more subtle
+- Variable: different sizes for different instances
+- Progressive: gradual size change across composition
+- Inverse: small becomes large, large becomes small
+
+Scaling patterns:
+- Uniform scaling: all motifs same size change
+- Hierarchical: size indicates importance
+- Distance-based: size suggests depth
+- Random scatter: varied sizes for organic feel
+- Nested: smaller versions inside larger
+- Cascading: diminishing sizes in sequence
+
+Scale relationships:
+- Micro to macro: tiny details vs large forms
+- Foreground/background: size for depth
+- Focal hierarchy: important elements larger
+- Rhythmic variation: alternating sizes
+
+Effects of scaling:
+- Creates depth and perspective
+- Establishes visual hierarchy
+- Adds variety and interest
+- Can suggest distance or importance
+- Creates pattern density variation
+
+In your response:
+- "analysis": describe current motif sizes
+- "mutation_applied": describe the scaling approach
+- "style_changes": apply to composition/line_and_shape"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Motif Scaling",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_motif_repetition(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
         """Duplicate and scatter motif."""
-        preset_name, preset_changes = random.choice(MOTIF_REPETITIONS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Motif Repetition", "repeated")
+        instructions = """ADD motif REPETITION - duplicate and scatter recurring visual elements.
+
+Repetition patterns:
+- Grid repeat: regular rows and columns
+- Scattered: random placement across composition
+- Radial: repeating around a center point
+- Linear: along a line or path
+- Clustered: grouped repetitions
+- Graduated: density changes across space
+- Border/frame: repetition along edges
+
+Repetition variations:
+- Exact copies: identical repetitions
+- Varied scale: different sizes
+- Rotated: different orientations
+- Color shifted: hue variations
+- Degraded: quality decreasing with each repeat
+- Overlapping: repetitions intersecting
+- Fading: opacity decreasing
+
+Effects of repetition:
+- Creates rhythm and pattern
+- Emphasizes motif importance
+- Fills space decoratively
+- Can suggest motion or time
+- Creates visual texture
+- Adds complexity and richness
+
+In your response:
+- "analysis": describe current motif presence
+- "mutation_applied": describe the repetition pattern
+- "style_changes": apply to composition/line_and_shape"""
+
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Motif Repetition",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
     # === COLOR ROLE MUTATIONS ===
-    def _mutate_color_role_reassignment(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
-        """Swap color roles."""
-        preset_name, preset_changes = random.choice(COLOR_ROLE_REASSIGNMENTS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Color Role Reassignment", "role-swapped")
+    async def _mutate_color_role_reassignment(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
+        """Swap color roles - reassign which colors serve as dominant, accent, background."""
+        instructions = """Identify the COLOR ROLES in this style and SWAP them to create a new hierarchy.
 
-    def _mutate_saturation_scalpel(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
-        """Selective saturation (edges/inside)."""
-        preset_name, preset_changes = random.choice(SATURATION_SCALPELS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Saturation Scalpel", "selectively-saturated")
+Color roles to analyze:
+- Dominant color: The most prominent, attention-grabbing hue
+- Secondary/supporting color: Complements or contrasts with dominant
+- Accent color: Used sparingly for highlights or emphasis
+- Background/negative space color: Base or recessive tones
 
-    def _mutate_negative_color_injection(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
-        """Apply inverted color accents."""
-        preset_name, preset_changes = random.choice(NEGATIVE_COLOR_INJECTIONS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Negative Color Injection", "inverted-accents")
+Possible reassignments:
+- Promote accent to dominant (what was subtle becomes bold)
+- Demote dominant to background (former star becomes backdrop)
+- Swap dominant and secondary (flip the hierarchy)
+- Elevate background to accent (negative space becomes punctuation)
 
-    def _mutate_ambient_color_suction(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
-        """Pull ambient into shadows."""
-        preset_name, preset_changes = random.choice(AMBIENT_COLOR_SUCTIONS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Ambient Color Suction", "ambient-sucked")
+Analyze the current color hierarchy and perform a meaningful role swap that transforms the visual impact."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Color Role Reassignment",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
-    def _mutate_local_color_mutation(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
-        """Zone-specific palette changes."""
-        preset_name, preset_changes = random.choice(LOCAL_COLOR_MUTATIONS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Local Color Mutation", "locally-colored")
+    async def _mutate_saturation_scalpel(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
+        """Apply selective saturation changes to specific areas or color ranges."""
+        instructions = """Apply SURGICAL SATURATION changes - not uniform, but targeted to specific areas or color ranges.
+
+Selective saturation approaches:
+- Edge saturation: Boost saturation at edges, desaturate centers (or vice versa)
+- Focal saturation: High saturation at focal point, fading outward
+- Hue-selective: Saturate only warm colors while desaturating cools (or vice versa)
+- Depth-based: Saturated foreground, desaturated background (atmospheric)
+- Tonal saturation: Saturate midtones, desaturate highlights/shadows
+- Complementary split: Saturate complementary pairs, mute everything else
+
+Analyze which areas or colors currently carry the most saturation, then apply a selective adjustment that creates visual interest through contrast."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Saturation Scalpel",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_negative_color_injection(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
+        """Inject inverted or complementary color accents into the style."""
+        instructions = """INJECT NEGATIVE or INVERTED colors as accent elements into the style.
+
+Negative color injection approaches:
+- Complementary injection: Add the exact complement of the dominant hue as sharp accents
+- Inverted shadows: Shadows take on inverted/negative colors
+- Chromatic aberration: Color separation at edges with opposing hues
+- Pop accents: Small areas of color-inverted highlights
+- Negative space color: Fill negative space with color opposites
+- Film negative zones: Selective areas rendered as color negatives
+
+Analyze the current palette and identify where injecting inverted/complementary colors would create maximum visual tension or interest."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Negative Color Injection",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_ambient_color_suction(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
+        """Pull ambient environmental colors into shadow areas."""
+        instructions = """PULL AMBIENT COLORS into the shadow regions, creating color bleeding and environmental influence.
+
+Ambient color suction approaches:
+- Sky suction: Pull blue/atmospheric colors into upward-facing shadows
+- Ground bounce: Pull warm earth tones into downward shadows
+- Environmental bleed: Nearby dominant colors seep into adjacent shadows
+- Complementary shadow fill: Shadows absorb the complement of highlights
+- Rim light color pull: Edge light colors bleed into shadow boundaries
+- Subsurface scatter simulation: Warm skin tones or translucent color in shadows
+
+Analyze the current lighting and palette, then define how ambient colors should infiltrate shadow regions to create richer, more atmospheric color interactions."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Ambient Color Suction",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_local_color_mutation(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
+        """Apply zone-specific palette changes - different colors in different areas."""
+        instructions = """Apply ZONE-SPECIFIC color mutations - different color treatments in different spatial regions.
+
+Local color mutation approaches:
+- Quadrant split: Each quadrant or region gets a different color treatment
+- Depth zones: Foreground/midground/background each have distinct palettes
+- Radial zones: Center vs. periphery have different color temperatures
+- Subject isolation: Subject in one palette, environment in another
+- Gradient territory: Color shifts as you move across the composition
+- Light pool zones: Areas of different light color create local palettes
+
+Analyze the composition's spatial structure and apply distinct color mutations to different zones while maintaining overall visual coherence."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Local Color Mutation",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
     # === DETAIL/FORM MUTATIONS ===
-    def _mutate_detail_density_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
-        """Where detail clusters."""
-        preset_name, preset_changes = random.choice(DETAIL_DENSITY_SHIFTS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Detail Density Shift", "detail-shifted")
+    async def _mutate_detail_density_shift(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
+        """Shift where detail clusters - redistribute visual complexity."""
+        instructions = """Analyze WHERE DETAIL CLUSTERS in this style and SHIFT the distribution.
 
-    def _mutate_form_simplification(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
-        """Reduce to simpler geometry."""
-        preset_name, preset_changes = random.choice(FORM_SIMPLIFICATIONS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Form Simplification", "simplified")
+Detail density patterns to consider:
+- Center-heavy: Detail concentrated at focal point, sparse edges
+- Edge-heavy: Rich detail at periphery, minimal center
+- Gradient density: Detail increases/decreases along an axis
+- Clustered nodes: Detail concentrated in isolated pockets
+- Even distribution: Uniform detail throughout
+- Hierarchical: Primary subject detailed, secondary elements simplified
 
-    def _mutate_form_complication(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
-        """Add micro-folds/greebles."""
-        preset_name, preset_changes = random.choice(FORM_COMPLICATIONS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Form Complication", "complicated")
+Analyze the current detail distribution and shift it to a different pattern. Consider how this affects visual weight, eye movement, and compositional balance."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Detail Density Shift",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
-    def _mutate_proportion_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
-        """Change element proportions."""
-        preset_name, preset_changes = random.choice(PROPORTION_SHIFTS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Proportion Shift", "proportion-shifted")
+    async def _mutate_form_simplification(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
+        """Reduce forms to simpler, more essential geometry."""
+        instructions = """SIMPLIFY the forms in this style - reduce complexity to essential shapes.
+
+Form simplification approaches:
+- Geometric reduction: Organic forms become basic shapes (circles, triangles, rectangles)
+- Silhouette priority: Internal detail removed, only outlines remain
+- Planar simplification: 3D forms flattened to 2D planes
+- Iconic reduction: Complex subjects become symbol-like representations
+- Mass blocking: Fine detail merged into larger shape masses
+- Contour smoothing: Jagged or complex edges become flowing curves
+
+Analyze the current form complexity and apply meaningful simplification that retains the essence while reducing visual complexity."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Form Simplification",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_form_complication(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
+        """Add complexity to forms - micro-folds, greebles, intricate detail."""
+        instructions = """COMPLICATE the forms in this style - add detail, texture, and visual complexity.
+
+Form complication approaches:
+- Greebling: Add small technical/mechanical details to surfaces
+- Micro-folds: Introduce wrinkles, creases, fabric-like complexity
+- Fractal detail: Self-similar patterns at multiple scales
+- Organic growth: Add tendrils, veins, branching structures
+- Surface articulation: Break smooth surfaces into facets or panels
+- Ornamental addition: Decorative flourishes, filigree, embellishments
+
+Analyze the current form simplicity and add meaningful complexity that enriches the visual without overwhelming the composition."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Form Complication",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_proportion_shift(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
+        """Alter the proportional relationships between elements."""
+        instructions = """SHIFT PROPORTIONS - alter the size relationships between visual elements.
+
+Proportion shift approaches:
+- Exaggeration: Enlarge key features, shrink secondary ones
+- Miniaturization: Make dominant elements smaller, elevate the minor
+- Elongation: Stretch forms vertically or horizontally
+- Compression: Squash or compact proportions
+- Head-body ratio: Alter figure proportions (chibi, heroic, realistic)
+- Negative space expansion: Grow empty space relative to subjects
+- Detail scaling: Make small details proportionally larger
+
+Analyze the current proportional relationships and shift them to create a new visual dynamic. Consider how proportion affects mood, emphasis, and style character."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Proportion Shift",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
     # === FLOW/RHYTHM MUTATIONS ===
-    def _mutate_path_flow_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
-        """Alter dominant directional flow."""
-        preset_name, preset_changes = random.choice(PATH_FLOW_SHIFTS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Path Flow Shift", "flow-shifted")
+    async def _mutate_path_flow_shift(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
+        """Alter the dominant directional flow that guides the eye."""
+        instructions = """SHIFT THE VISUAL PATH FLOW - change how the eye moves through the composition.
 
-    def _mutate_rhythm_disruption(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
-        """Break/introduce repetition intervals."""
-        preset_name, preset_changes = random.choice(RHYTHM_DISRUPTIONS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Rhythm Disruption", "rhythm-disrupted")
+Path flow approaches:
+- Diagonal dominance: Strong diagonal lines guide movement
+- Circular/spiral: Eye travels in curves or spirals
+- Z-pattern or S-curve: Classic reading patterns
+- Centripetal: All lines draw toward center
+- Centrifugal: Lines radiate outward from center
+- Vertical cascade: Downward or upward flow
+- Horizontal scan: Left-right movement emphasis
+- Chaotic/scattered: Multiple competing paths
 
-    def _mutate_rhythm_rebalance(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
-        """Adjust motif spacing."""
-        preset_name, preset_changes = random.choice(RHYTHM_REBALANCES)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Rhythm Rebalance", "rhythm-rebalanced")
+Analyze the current visual flow and redirect it. Consider how lines, edges, contrast, and color create implicit paths for the viewer's eye."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Path Flow Shift",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
-    def _mutate_directional_energy_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
-        """Alter implied flow."""
-        preset_name, preset_changes = random.choice(DIRECTIONAL_ENERGY_SHIFTS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Directional Energy Shift", "energy-shifted")
+    async def _mutate_rhythm_disruption(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
+        """Break or introduce visual repetition intervals."""
+        instructions = """DISRUPT THE VISUAL RHYTHM - break existing patterns or introduce new intervals.
+
+Rhythm disruption approaches:
+- Syncopation: Offset regular intervals, create unexpected beats
+- Break the pattern: Interrupt a repeating element with something different
+- Stutter effect: Repeat elements at irregular, jarring intervals
+- Silence insertion: Add unexpected gaps in visual rhythm
+- Tempo change: Speed up or slow down repetition frequency
+- Polyrhythm: Overlay multiple conflicting rhythmic patterns
+- Accent displacement: Move emphasis to unexpected positions
+
+Analyze the current visual rhythm (repeating elements, spacing, intervals) and introduce meaningful disruption that creates tension or interest."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Rhythm Disruption",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_rhythm_rebalance(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
+        """Rebalance visual rhythm by adjusting motif spacing and intervals."""
+        instructions = """REBALANCE THE VISUAL RHYTHM - adjust spacing and intervals for better flow.
+
+Rhythm rebalance approaches:
+- Regularize: Make irregular intervals more consistent
+- Golden ratio spacing: Apply mathematical harmony to intervals
+- Breathing room: Add more space between repeated elements
+- Tighten cadence: Compress spacing for more intensity
+- Progressive spacing: Intervals that gradually increase or decrease
+- Alternating density: Vary spacing in a predictable pattern
+- Weight distribution: Balance heavy and light rhythmic elements
+
+Analyze the current motif spacing and repetition intervals, then rebalance them to create a more harmonious or intentionally structured visual rhythm."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Rhythm Rebalance",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_directional_energy_shift(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
+        """Alter the implied directional energy and movement."""
+        instructions = """SHIFT DIRECTIONAL ENERGY - change the implied movement and force vectors.
+
+Directional energy approaches:
+- Upward thrust: Aspiration, growth, lightness
+- Downward pull: Weight, gravity, grounding
+- Explosive outward: Expansion, release, burst
+- Implosive inward: Compression, focus, concentration
+- Rotational: Spinning, swirling, cyclonic energy
+- Lateral sweep: Horizontal movement, scanning, wind
+- Tension vectors: Opposing forces creating dynamic stability
+- Static equilibrium: Balanced forces, calm, stillness
+
+Analyze the current implied energy direction and shift it to create different emotional and kinetic qualities."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Directional Energy Shift",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
     # === PERSPECTIVE MUTATIONS ===
-    def _mutate_local_perspective_bend(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
-        """Bend localized perspective."""
-        preset_name, preset_changes = random.choice(LOCAL_PERSPECTIVE_BENDS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Local Perspective Bend", "perspective-bent")
+    async def _mutate_local_perspective_bend(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
+        """Apply localized perspective distortions."""
+        instructions = """BEND PERSPECTIVE LOCALLY - apply non-uniform perspective distortions.
 
-    def _mutate_atmospheric_scatter_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
-        """Change light scatter."""
-        preset_name, preset_changes = random.choice(ATMOSPHERIC_SCATTER_SHIFTS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Atmospheric Scatter Shift", "scatter-shifted")
+Local perspective bend approaches:
+- Fisheye zones: Bulging distortion in specific areas
+- Barrel/pincushion: Curved perspective at edges
+- Tilt-shift: Selective focus with perspective compression
+- Multi-point perspective: Different vanishing points in different zones
+- Impossible geometry: Escher-like local contradictions
+- Anamorphic stretch: Elongation in specific directions
+- Spherical mapping: As if wrapped around a sphere locally
+- Reverse perspective: Objects get larger with distance
 
-    def _mutate_occlusion_pattern(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
-        """Parts hidden behind imagined layers."""
-        preset_name, preset_changes = random.choice(OCCLUSION_PATTERNS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Occlusion Pattern", "occluded")
+Analyze the current perspective and apply localized bending that creates visual interest or surreal qualities without completely breaking spatial coherence."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Local Perspective Bend",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
-    def _mutate_opacity_fog(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
-        """Translucent fog/haze layer."""
-        preset_name, preset_changes = random.choice(OPACITY_FOGS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Opacity Fog", "fogged")
+    async def _mutate_atmospheric_scatter_shift(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
+        """Change how light scatters through the atmosphere."""
+        instructions = """SHIFT ATMOSPHERIC SCATTER - change how light diffuses and scatters.
+
+Atmospheric scatter approaches:
+- Rayleigh scatter: Blue skies, warm sunsets, color shifts with distance
+- Mie scatter: Hazy, milky quality, particles in air
+- Tyndall effect: Visible light beams, god rays through particles
+- Clear atmosphere: Minimal scatter, sharp distant details
+- Dense particle: Heavy scatter, reduced visibility, soft everything
+- Chromatic scatter: Different colors scatter differently
+- Volumetric density: Variable scatter in different depth zones
+- Backscatter: Light bouncing back toward viewer
+
+Analyze the current atmospheric quality and shift the scatter characteristics to create different depth, mood, and light behavior."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Atmospheric Scatter Shift",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_occlusion_pattern(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
+        """Add imagined layers that partially hide parts of the scene."""
+        instructions = """ADD OCCLUSION PATTERNS - introduce elements that partially hide or layer over the scene.
+
+Occlusion pattern approaches:
+- Foreground framing: Branches, windows, doorways partially obscure view
+- Layered depth: Multiple translucent planes stacked
+- Partial reveal: Key elements peek through occluding shapes
+- Shadow occlusion: Dark areas hide detail, suggest depth
+- Atmospheric layers: Fog, smoke, or haze obscure distant elements
+- Geometric masks: Abstract shapes cut across the composition
+- Organic overgrowth: Vines, leaves, or organic forms creep over
+- Architectural screening: Lattice, screens, or grids filter view
+
+Analyze the composition and add occluding elements that create mystery, depth, or visual intrigue through partial concealment."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Occlusion Pattern",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_opacity_fog(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
+        """Add translucent fog or haze layers."""
+        instructions = """ADD OPACITY FOG - introduce translucent atmospheric layers.
+
+Fog and haze approaches:
+- Ground fog: Low-lying mist obscuring lower portions
+- High haze: Upper atmosphere softening, sky blending
+- Depth fog: Progressive opacity with distance
+- Volumetric pockets: Localized fog volumes in specific areas
+- Color fog: Tinted atmospheric layers (warm, cool, colored)
+- Light fog: Fog that glows or carries light
+- Morning mist: Soft, romantic, diffused atmosphere
+- Industrial haze: Urban, smoky, pollution-tinged
+- Mystical veil: Ethereal, magical, dreamlike opacity
+
+Analyze the current atmosphere and add fog/haze that enhances mood, depth, or mystery."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Opacity Fog",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
     # === OVERLAY/PATTERN MUTATIONS ===
-    def _mutate_pattern_overlay(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
-        """Apply repeating pattern overlay."""
-        preset_name, preset_changes = random.choice(PATTERN_OVERLAYS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Pattern Overlay", "overlaid")
+    async def _mutate_pattern_overlay(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
+        """Apply a repeating pattern overlay to the style."""
+        instructions = """ADD A PATTERN OVERLAY - superimpose a repeating pattern onto the style.
 
-    def _mutate_gradient_remap(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
-        """Reassign gradient behavior."""
-        preset_name, preset_changes = random.choice(GRADIENT_REMAPS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Gradient Remap", "gradient-remapped")
+Pattern overlay approaches:
+- Geometric grid: Regular squares, triangles, hexagons
+- Organic pattern: Leaves, waves, natural forms repeating
+- Halftone dots: Print-style dot patterns at various scales
+- Crosshatch: Overlapping line patterns
+- Textile pattern: Fabric-like weaves, knits, prints
+- Digital artifacts: Scanlines, pixels, glitch patterns
+- Cultural motifs: Damask, paisley, tribal, art deco
+- Noise patterns: Film grain, static, organic noise
 
-    def _mutate_frame_reinterpretation(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
-        """Alter conceptual border."""
-        preset_name, preset_changes = random.choice(FRAME_REINTERPRETATIONS)
-        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Frame Reinterpretation", "reframed")
+Analyze the style and choose an appropriate pattern overlay that complements or contrasts with the existing visual language."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Pattern Overlay",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_gradient_remap(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
+        """Reassign how gradients behave throughout the style."""
+        instructions = """REMAP GRADIENTS - change how color and value transitions work.
+
+Gradient remap approaches:
+- Linear to radial: Convert straight gradients to circular
+- Smooth to stepped: Continuous gradients become banded/posterized
+- Reversed gradients: Flip the direction of existing transitions
+- Multi-stop complexity: Add intermediate color stops
+- Asymmetric falloff: Non-linear transition curves
+- Directional change: Rotate gradient angles
+- Hard edge gradients: Sharpen soft transitions
+- Noise-disrupted: Add grain or distortion to gradients
+
+Analyze the current gradient behavior (color transitions, value falloffs, blending) and remap them to create different visual dynamics."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Gradient Remap",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
+
+    async def _mutate_frame_reinterpretation(
+        self,
+        profile: StyleProfile,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
+        """Reinterpret the conceptual frame or border of the image."""
+        instructions = """REINTERPRET THE FRAME - change how the image boundary relates to content.
+
+Frame reinterpretation approaches:
+- Breaking the frame: Elements extend beyond or interact with edges
+- Frame within frame: Nested borders, windows, screens
+- Bleeding edges: Content fades or bleeds off edges
+- Hard crop: Aggressive cropping that cuts into subjects
+- Ornamental border: Decorative frame becomes part of style
+- Frameless: No boundary acknowledgment, infinite extension implied
+- Meta-frame: The frame itself becomes subject matter
+- Irregular boundary: Non-rectangular, organic, or broken edges
+- Vignette frame: Gradual edge treatment drawing eye inward
+
+Analyze the current edge treatment and reinterpret how the frame functions in the composition."""
+        return await self._vlm_mutate(
+            profile=profile,
+            mutation_type="Frame Reinterpretation",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
     def _summarize_profile(self, profile: StyleProfile) -> str:
         """Create a text summary of a style profile for VLM prompts."""
@@ -3395,6 +4045,127 @@ Output ONLY valid JSON:
 
         return "\n".join(parts)
 
+    async def _vlm_mutate(
+        self,
+        profile: StyleProfile,
+        mutation_type: str,
+        mutation_instructions: str,
+        session_id: str | None = None,
+    ) -> tuple[StyleProfile, str]:
+        """
+        Generic VLM-powered mutation helper.
+
+        All mutation strategies use this to get intelligent, context-aware mutations.
+
+        Args:
+            profile: Current style profile to mutate
+            mutation_type: Name of the mutation (e.g., "Chroma Band Shift")
+            mutation_instructions: Specific instructions for this mutation type
+            session_id: Optional session ID for logging
+
+        Returns:
+            (mutated_profile, mutation_description)
+        """
+        profile_summary = self._summarize_profile(profile)
+
+        prompt = f"""Analyze this visual style and apply a {mutation_type} mutation.
+
+Current style:
+{profile_summary}
+
+{mutation_instructions}
+
+You must output ONLY valid JSON with this exact structure:
+{{
+    "analysis": "Brief description of what you observe in the current style relevant to this mutation",
+    "mutation_applied": "Specific description of the change you're making",
+    "style_changes": {{
+        "palette": {{
+            "dominant_colors": ["color1", "color2"],
+            "accents": ["accent1"],
+            "color_descriptions": ["description of colors"],
+            "saturation": "low/medium/high/vibrant",
+            "value_range": "description of light/dark range"
+        }},
+        "texture": {{
+            "surface": "surface texture description",
+            "noise_level": "minimal/low/medium/high",
+            "special_effects": ["effect1", "effect2"]
+        }},
+        "lighting": {{
+            "lighting_type": "type of lighting",
+            "shadows": "shadow description",
+            "highlights": "highlight description"
+        }},
+        "line_and_shape": {{
+            "line_quality": "line description",
+            "shape_language": "shape description",
+            "geometry_notes": "geometry notes"
+        }},
+        "composition": {{
+            "camera": "camera/viewpoint",
+            "framing": "framing description",
+            "negative_space_behavior": "negative space usage"
+        }},
+        "motifs": {{
+            "recurring_elements": ["element1"],
+            "forbidden_elements": ["forbidden1"]
+        }}
+    }}
+}}
+
+IMPORTANT:
+- Only include sections and fields that need to change for this mutation
+- Leave out any sections/fields that should stay the same
+- Be specific and descriptive in your changes
+- The mutation should be noticeable but coherent"""
+
+        response = await vlm_service.generate_text(
+            prompt=prompt,
+            system=f"You are a style mutation expert specializing in {mutation_type}. Analyze the given style and apply intelligent, contextual mutations. Output only valid JSON.",
+            use_text_model=True,
+        )
+
+        # Parse response
+        response = response.strip()
+        json_match = re.search(r'\{.*\}', response, re.DOTALL)
+        if not json_match:
+            raise ValueError(f"No JSON found in VLM response for {mutation_type}")
+
+        data = json.loads(json_match.group(0))
+
+        analysis = data.get("analysis", "")
+        mutation_applied = data.get("mutation_applied", mutation_type)
+        # Ensure mutation_applied is a string (VLM sometimes returns dicts)
+        if not isinstance(mutation_applied, str):
+            mutation_applied = str(mutation_applied) if mutation_applied else mutation_type
+        style_changes = data.get("style_changes", {})
+
+        if not style_changes:
+            raise ValueError(f"No style_changes in VLM response for {mutation_type}")
+
+        # Apply changes to profile
+        profile_dict = profile.model_dump()
+
+        for section, changes in style_changes.items():
+            if section in profile_dict and isinstance(changes, dict):
+                for key, value in changes.items():
+                    if key in profile_dict[section] and value is not None:
+                        # For lists, replace entirely; for strings, replace
+                        profile_dict[section][key] = value
+
+        # Update style name
+        original_name = profile_dict.get("style_name", "Style")
+        suffix = mutation_type.lower().replace(" ", "-")
+        profile_dict["style_name"] = f"{original_name} ({suffix})"
+
+        # Add mutation to core invariants
+        profile_dict["core_invariants"] = [mutation_applied] + profile_dict.get("core_invariants", [])[:4]
+
+        mutation_description = f"{mutation_type}: {mutation_applied}"
+
+        return StyleProfile(**profile_dict), mutation_description
+
     async def mutate(
         self,
         profile: StyleProfile,
@@ -3420,7 +4191,7 @@ Output ONLY valid JSON:
         await log(f"Applying mutation strategy: {strategy.value}")
 
         if strategy == MutationStrategy.RANDOM_DIMENSION:
-            mutated, description, _ = self._mutate_random_dimension(profile)
+            mutated, description, _ = await self._mutate_random_dimension(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
@@ -3430,12 +4201,12 @@ Output ONLY valid JSON:
             return mutated, description
 
         elif strategy == MutationStrategy.CROSSOVER:
-            mutated, description = self._mutate_crossover(profile)
+            mutated, description = await self._mutate_crossover(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.INVERSION:
-            mutated, description = self._mutate_inversion(profile)
+            mutated, description = await self._mutate_inversion(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
@@ -3450,47 +4221,47 @@ Output ONLY valid JSON:
             return mutated, description
 
         elif strategy == MutationStrategy.TIME_SHIFT:
-            mutated, description = self._mutate_time_shift(profile)
+            mutated, description = await self._mutate_time_shift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.MEDIUM_SWAP:
-            mutated, description = self._mutate_medium_swap(profile)
+            mutated, description = await self._mutate_medium_swap(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.MOOD_SHIFT:
-            mutated, description = self._mutate_mood_shift(profile)
+            mutated, description = await self._mutate_mood_shift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.SCALE_WARP:
-            mutated, description = self._mutate_scale_warp(profile)
+            mutated, description = await self._mutate_scale_warp(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.DECAY:
-            mutated, description = self._mutate_decay(profile)
+            mutated, description = await self._mutate_decay(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.REMIX:
-            mutated, description = self._mutate_remix(profile)
+            mutated, description = await self._mutate_remix(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.CONSTRAIN:
-            mutated, description = self._mutate_constrain(profile)
+            mutated, description = await self._mutate_constrain(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.CULTURE_SHIFT:
-            mutated, description = self._mutate_culture_shift(profile)
+            mutated, description = await self._mutate_culture_shift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.CHAOS:
-            mutated, description = self._mutate_chaos(profile)
+            mutated, description = await self._mutate_chaos(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
@@ -3501,80 +4272,80 @@ Output ONLY valid JSON:
 
         # === SPATIAL MUTATIONS ===
         elif strategy == MutationStrategy.TOPOLOGY_FOLD:
-            mutated, description = self._mutate_topology_fold(profile)
+            mutated, description = await self._mutate_topology_fold(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.SILHOUETTE_SHIFT:
-            mutated, description = self._mutate_silhouette_shift(profile)
+            mutated, description = await self._mutate_silhouette_shift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.PERSPECTIVE_DRIFT:
-            mutated, description = self._mutate_perspective_drift(profile)
+            mutated, description = await self._mutate_perspective_drift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.AXIS_SWAP:
-            mutated, description = self._mutate_axis_swap(profile)
+            mutated, description = await self._mutate_axis_swap(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === PHYSICS MUTATIONS ===
         elif strategy == MutationStrategy.PHYSICS_BEND:
-            mutated, description = self._mutate_physics_bend(profile)
+            mutated, description = await self._mutate_physics_bend(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.CHROMATIC_GRAVITY:
-            mutated, description = self._mutate_chromatic_gravity(profile)
+            mutated, description = await self._mutate_chromatic_gravity(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.MATERIAL_TRANSMUTE:
-            mutated, description = self._mutate_material_transmute(profile)
+            mutated, description = await self._mutate_material_transmute(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.TEMPORAL_EXPOSURE:
-            mutated, description = self._mutate_temporal_exposure(profile)
+            mutated, description = await self._mutate_temporal_exposure(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === PATTERN MUTATIONS ===
         elif strategy == MutationStrategy.MOTIF_SPLICE:
-            mutated, description = self._mutate_motif_splice(profile)
+            mutated, description = await self._mutate_motif_splice(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.RHYTHM_OVERLAY:
-            mutated, description = self._mutate_rhythm_overlay(profile)
+            mutated, description = await self._mutate_rhythm_overlay(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.HARMONIC_BALANCE:
-            mutated, description = self._mutate_harmonic_balance(profile)
+            mutated, description = await self._mutate_harmonic_balance(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.SYMMETRY_BREAK:
-            mutated, description = self._mutate_symmetry_break(profile)
+            mutated, description = await self._mutate_symmetry_break(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === DENSITY MUTATIONS ===
         elif strategy == MutationStrategy.DENSITY_SHIFT:
-            mutated, description = self._mutate_density_shift(profile)
+            mutated, description = await self._mutate_density_shift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.DIMENSIONAL_SHIFT:
-            mutated, description = self._mutate_dimensional_shift(profile)
+            mutated, description = await self._mutate_dimensional_shift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.MICRO_MACRO_SWAP:
-            mutated, description = self._mutate_micro_macro_swap(profile)
+            mutated, description = await self._mutate_micro_macro_swap(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
@@ -3585,12 +4356,12 @@ Output ONLY valid JSON:
 
         # === NARRATIVE MUTATIONS ===
         elif strategy == MutationStrategy.NARRATIVE_RESONANCE:
-            mutated, description = self._mutate_narrative_resonance(profile)
+            mutated, description = await self._mutate_narrative_resonance(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.ARCHETYPE_MASK:
-            mutated, description = self._mutate_archetype_mask(profile)
+            mutated, description = await self._mutate_archetype_mask(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
@@ -3600,420 +4371,420 @@ Output ONLY valid JSON:
             return mutated, description
 
         elif strategy == MutationStrategy.SPECTRAL_ECHO:
-            mutated, description = self._mutate_spectral_echo(profile)
+            mutated, description = await self._mutate_spectral_echo(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === ENVIRONMENT MUTATIONS ===
         elif strategy == MutationStrategy.CLIMATE_MORPH:
-            mutated, description = self._mutate_climate_morph(profile)
+            mutated, description = await self._mutate_climate_morph(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.BIOME_SHIFT:
-            mutated, description = self._mutate_biome_shift(profile)
+            mutated, description = await self._mutate_biome_shift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === TECHNICAL MUTATIONS ===
         elif strategy == MutationStrategy.ALGORITHMIC_WRINKLE:
-            mutated, description = self._mutate_algorithmic_wrinkle(profile)
+            mutated, description = await self._mutate_algorithmic_wrinkle(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.SYMBOLIC_REDUCTION:
-            mutated, description = self._mutate_symbolic_reduction(profile)
+            mutated, description = await self._mutate_symbolic_reduction(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === CHROMATIC MUTATIONS ===
         elif strategy == MutationStrategy.CHROMA_BAND_SHIFT:
-            mutated, description = self._mutate_chroma_band_shift(profile)
+            mutated, description = await self._mutate_chroma_band_shift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.CHROMATIC_NOISE:
-            mutated, description = self._mutate_chromatic_noise(profile)
+            mutated, description = await self._mutate_chromatic_noise(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.CHROMATIC_TEMPERATURE_SPLIT:
-            mutated, description = self._mutate_chromatic_temperature_split(profile)
+            mutated, description = await self._mutate_chromatic_temperature_split(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.CHROMATIC_FUSE:
-            mutated, description = self._mutate_chromatic_fuse(profile)
+            mutated, description = await self._mutate_chromatic_fuse(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.CHROMATIC_SPLIT:
-            mutated, description = self._mutate_chromatic_split(profile)
+            mutated, description = await self._mutate_chromatic_split(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === LIGHTING/SHADOW MUTATIONS ===
         elif strategy == MutationStrategy.AMBIENT_OCCLUSION_VARIANCE:
-            mutated, description = self._mutate_ambient_occlusion_variance(profile)
+            mutated, description = await self._mutate_ambient_occlusion_variance(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.SPECULAR_FLIP:
-            mutated, description = self._mutate_specular_flip(profile)
+            mutated, description = await self._mutate_specular_flip(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.BLOOM_VARIANCE:
-            mutated, description = self._mutate_bloom_variance(profile)
+            mutated, description = await self._mutate_bloom_variance(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.DESYNC_LIGHTING_CHANNELS:
-            mutated, description = self._mutate_desync_lighting_channels(profile)
+            mutated, description = await self._mutate_desync_lighting_channels(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.HIGHLIGHT_SHIFT:
-            mutated, description = self._mutate_highlight_shift(profile)
+            mutated, description = await self._mutate_highlight_shift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.SHADOW_RECODE:
-            mutated, description = self._mutate_shadow_recode(profile)
+            mutated, description = await self._mutate_shadow_recode(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.LIGHTING_ANGLE_SHIFT:
-            mutated, description = self._mutate_lighting_angle_shift(profile)
+            mutated, description = await self._mutate_lighting_angle_shift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.HIGHLIGHT_BLOOM_COLORIZE:
-            mutated, description = self._mutate_highlight_bloom_colorize(profile)
+            mutated, description = await self._mutate_highlight_bloom_colorize(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.MICRO_SHADOWING:
-            mutated, description = self._mutate_micro_shadowing(profile)
+            mutated, description = await self._mutate_micro_shadowing(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.MACRO_SHADOW_PIVOT:
-            mutated, description = self._mutate_macro_shadow_pivot(profile)
+            mutated, description = await self._mutate_macro_shadow_pivot(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === CONTOUR/EDGE MUTATIONS ===
         elif strategy == MutationStrategy.CONTOUR_SIMPLIFY:
-            mutated, description = self._mutate_contour_simplify(profile)
+            mutated, description = await self._mutate_contour_simplify(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.CONTOUR_COMPLEXIFY:
-            mutated, description = self._mutate_contour_complexify(profile)
+            mutated, description = await self._mutate_contour_complexify(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.LINE_WEIGHT_MODULATION:
-            mutated, description = self._mutate_line_weight_modulation(profile)
+            mutated, description = await self._mutate_line_weight_modulation(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.EDGE_BEHAVIOR_SWAP:
-            mutated, description = self._mutate_edge_behavior_swap(profile)
+            mutated, description = await self._mutate_edge_behavior_swap(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.BOUNDARY_ECHO:
-            mutated, description = self._mutate_boundary_echo(profile)
+            mutated, description = await self._mutate_boundary_echo(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.HALO_GENERATION:
-            mutated, description = self._mutate_halo_generation(profile)
+            mutated, description = await self._mutate_halo_generation(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === TEXTURE MUTATIONS ===
         elif strategy == MutationStrategy.TEXTURE_DIRECTION_SHIFT:
-            mutated, description = self._mutate_texture_direction_shift(profile)
+            mutated, description = await self._mutate_texture_direction_shift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.NOISE_INJECTION:
-            mutated, description = self._mutate_noise_injection(profile)
+            mutated, description = await self._mutate_noise_injection(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.MICROFRACTURE_PATTERN:
-            mutated, description = self._mutate_microfracture_pattern(profile)
+            mutated, description = await self._mutate_microfracture_pattern(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.CROSSHATCH_DENSITY_SHIFT:
-            mutated, description = self._mutate_crosshatch_density_shift(profile)
+            mutated, description = await self._mutate_crosshatch_density_shift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === MATERIAL/SURFACE MUTATIONS ===
         elif strategy == MutationStrategy.BACKGROUND_MATERIAL_SWAP:
-            mutated, description = self._mutate_background_material_swap(profile)
+            mutated, description = await self._mutate_background_material_swap(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.SURFACE_MATERIAL_SHIFT:
-            mutated, description = self._mutate_surface_material_shift(profile)
+            mutated, description = await self._mutate_surface_material_shift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.TRANSLUCENCY_SHIFT:
-            mutated, description = self._mutate_translucency_shift(profile)
+            mutated, description = await self._mutate_translucency_shift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.SUBSURFACE_SCATTER_TWEAK:
-            mutated, description = self._mutate_subsurface_scatter_tweak(profile)
+            mutated, description = await self._mutate_subsurface_scatter_tweak(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.ANISOTROPY_SHIFT:
-            mutated, description = self._mutate_anisotropy_shift(profile)
+            mutated, description = await self._mutate_anisotropy_shift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.REFLECTIVITY_SHIFT:
-            mutated, description = self._mutate_reflectivity_shift(profile)
+            mutated, description = await self._mutate_reflectivity_shift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === TONAL MUTATIONS ===
         elif strategy == MutationStrategy.MIDTONE_SHIFT:
-            mutated, description = self._mutate_midtone_shift(profile)
+            mutated, description = await self._mutate_midtone_shift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.TONAL_COMPRESSION:
-            mutated, description = self._mutate_tonal_compression(profile)
+            mutated, description = await self._mutate_tonal_compression(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.TONAL_EXPANSION:
-            mutated, description = self._mutate_tonal_expansion(profile)
+            mutated, description = await self._mutate_tonal_expansion(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.MICROCONTRAST_TUNING:
-            mutated, description = self._mutate_microcontrast_tuning(profile)
+            mutated, description = await self._mutate_microcontrast_tuning(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.CONTRAST_CHANNEL_SWAP:
-            mutated, description = self._mutate_contrast_channel_swap(profile)
+            mutated, description = await self._mutate_contrast_channel_swap(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === BLUR/FOCUS MUTATIONS ===
         elif strategy == MutationStrategy.DIRECTIONAL_BLUR:
-            mutated, description = self._mutate_directional_blur(profile)
+            mutated, description = await self._mutate_directional_blur(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.FOCAL_PLANE_SHIFT:
-            mutated, description = self._mutate_focal_plane_shift(profile)
+            mutated, description = await self._mutate_focal_plane_shift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.MASK_BOUNDARY_MUTATION:
-            mutated, description = self._mutate_mask_boundary_mutation(profile)
+            mutated, description = await self._mutate_mask_boundary_mutation(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === SILHOUETTE MUTATIONS (EXTENDED) ===
         elif strategy == MutationStrategy.SILHOUETTE_MERGE:
-            mutated, description = self._mutate_silhouette_merge(profile)
+            mutated, description = await self._mutate_silhouette_merge(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.SILHOUETTE_SUBTRACT:
-            mutated, description = self._mutate_silhouette_subtract(profile)
+            mutated, description = await self._mutate_silhouette_subtract(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.SILHOUETTE_DISTORTION:
-            mutated, description = self._mutate_silhouette_distortion(profile)
+            mutated, description = await self._mutate_silhouette_distortion(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.INTERNAL_GEOMETRY_TWIST:
-            mutated, description = self._mutate_internal_geometry_twist(profile)
+            mutated, description = await self._mutate_internal_geometry_twist(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === DEPTH MUTATIONS ===
         elif strategy == MutationStrategy.BACKGROUND_DEPTH_COLLAPSE:
-            mutated, description = self._mutate_background_depth_collapse(profile)
+            mutated, description = await self._mutate_background_depth_collapse(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.DEPTH_FLATTENING:
-            mutated, description = self._mutate_depth_flattening(profile)
+            mutated, description = await self._mutate_depth_flattening(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.DEPTH_EXPANSION:
-            mutated, description = self._mutate_depth_expansion(profile)
+            mutated, description = await self._mutate_depth_expansion(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === COMPOSITION MUTATIONS (NEW) ===
         elif strategy == MutationStrategy.QUADRANT_MUTATION:
-            mutated, description = self._mutate_quadrant_mutation(profile)
+            mutated, description = await self._mutate_quadrant_mutation(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.OBJECT_ALIGNMENT_SHIFT:
-            mutated, description = self._mutate_object_alignment_shift(profile)
+            mutated, description = await self._mutate_object_alignment_shift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.SPATIAL_HIERARCHY_FLIP:
-            mutated, description = self._mutate_spatial_hierarchy_flip(profile)
+            mutated, description = await self._mutate_spatial_hierarchy_flip(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.BALANCE_SHIFT:
-            mutated, description = self._mutate_balance_shift(profile)
+            mutated, description = await self._mutate_balance_shift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.INTERPLAY_SWAP:
-            mutated, description = self._mutate_interplay_swap(profile)
+            mutated, description = await self._mutate_interplay_swap(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.VIGNETTE_MODIFICATION:
-            mutated, description = self._mutate_vignette_modification(profile)
+            mutated, description = await self._mutate_vignette_modification(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === MOTIF MUTATIONS (NEW) ===
         elif strategy == MutationStrategy.MOTIF_MIRRORING:
-            mutated, description = self._mutate_motif_mirroring(profile)
+            mutated, description = await self._mutate_motif_mirroring(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.MOTIF_SCALING:
-            mutated, description = self._mutate_motif_scaling(profile)
+            mutated, description = await self._mutate_motif_scaling(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.MOTIF_REPETITION:
-            mutated, description = self._mutate_motif_repetition(profile)
+            mutated, description = await self._mutate_motif_repetition(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === COLOR ROLE MUTATIONS ===
         elif strategy == MutationStrategy.COLOR_ROLE_REASSIGNMENT:
-            mutated, description = self._mutate_color_role_reassignment(profile)
+            mutated, description = await self._mutate_color_role_reassignment(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.SATURATION_SCALPEL:
-            mutated, description = self._mutate_saturation_scalpel(profile)
+            mutated, description = await self._mutate_saturation_scalpel(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.NEGATIVE_COLOR_INJECTION:
-            mutated, description = self._mutate_negative_color_injection(profile)
+            mutated, description = await self._mutate_negative_color_injection(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.AMBIENT_COLOR_SUCTION:
-            mutated, description = self._mutate_ambient_color_suction(profile)
+            mutated, description = await self._mutate_ambient_color_suction(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.LOCAL_COLOR_MUTATION:
-            mutated, description = self._mutate_local_color_mutation(profile)
+            mutated, description = await self._mutate_local_color_mutation(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === DETAIL/FORM MUTATIONS ===
         elif strategy == MutationStrategy.DETAIL_DENSITY_SHIFT:
-            mutated, description = self._mutate_detail_density_shift(profile)
+            mutated, description = await self._mutate_detail_density_shift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.FORM_SIMPLIFICATION:
-            mutated, description = self._mutate_form_simplification(profile)
+            mutated, description = await self._mutate_form_simplification(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.FORM_COMPLICATION:
-            mutated, description = self._mutate_form_complication(profile)
+            mutated, description = await self._mutate_form_complication(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.PROPORTION_SHIFT:
-            mutated, description = self._mutate_proportion_shift(profile)
+            mutated, description = await self._mutate_proportion_shift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === FLOW/RHYTHM MUTATIONS ===
         elif strategy == MutationStrategy.PATH_FLOW_SHIFT:
-            mutated, description = self._mutate_path_flow_shift(profile)
+            mutated, description = await self._mutate_path_flow_shift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.RHYTHM_DISRUPTION:
-            mutated, description = self._mutate_rhythm_disruption(profile)
+            mutated, description = await self._mutate_rhythm_disruption(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.RHYTHM_REBALANCE:
-            mutated, description = self._mutate_rhythm_rebalance(profile)
+            mutated, description = await self._mutate_rhythm_rebalance(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.DIRECTIONAL_ENERGY_SHIFT:
-            mutated, description = self._mutate_directional_energy_shift(profile)
+            mutated, description = await self._mutate_directional_energy_shift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === PERSPECTIVE MUTATIONS ===
         elif strategy == MutationStrategy.LOCAL_PERSPECTIVE_BEND:
-            mutated, description = self._mutate_local_perspective_bend(profile)
+            mutated, description = await self._mutate_local_perspective_bend(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.ATMOSPHERIC_SCATTER_SHIFT:
-            mutated, description = self._mutate_atmospheric_scatter_shift(profile)
+            mutated, description = await self._mutate_atmospheric_scatter_shift(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.OCCLUSION_PATTERN:
-            mutated, description = self._mutate_occlusion_pattern(profile)
+            mutated, description = await self._mutate_occlusion_pattern(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.OPACITY_FOG:
-            mutated, description = self._mutate_opacity_fog(profile)
+            mutated, description = await self._mutate_opacity_fog(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === OVERLAY/PATTERN MUTATIONS ===
         elif strategy == MutationStrategy.PATTERN_OVERLAY:
-            mutated, description = self._mutate_pattern_overlay(profile)
+            mutated, description = await self._mutate_pattern_overlay(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.GRADIENT_REMAP:
-            mutated, description = self._mutate_gradient_remap(profile)
+            mutated, description = await self._mutate_gradient_remap(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.FRAME_REINTERPRETATION:
-            mutated, description = self._mutate_frame_reinterpretation(profile)
+            mutated, description = await self._mutate_frame_reinterpretation(profile, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 

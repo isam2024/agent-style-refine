@@ -601,18 +601,22 @@ async def auto_explore(
     session_id: str,
     num_steps: int = 5,
     branch_threshold: float = 85.0,
+    parent_snapshot_id: str | None = Query(None, description="Snapshot to start from (overrides current_snapshot_id)"),
+    strategy: str | None = Query(None, description="Specific strategy to use (overrides session preferred_strategies)"),
     db: AsyncSession = Depends(get_db),
 ):
     """
     Auto-run multiple exploration steps.
 
-    Continues from the current snapshot, running up to num_steps exploration
-    iterations. Can optionally auto-branch when a high-scoring snapshot is found.
+    Continues from the specified snapshot (or current snapshot), running up to
+    num_steps exploration iterations. Each step chains from the previous.
 
     Args:
         session_id: The exploration session
         num_steps: Number of exploration steps to run (1-20)
         branch_threshold: Auto-branch if combined score exceeds this (0-100)
+        parent_snapshot_id: Snapshot to start from (optional, defaults to current)
+        strategy: Specific strategy to use for all steps (optional, overrides session defaults)
 
     Returns:
         Summary of the auto-exploration run
@@ -630,6 +634,9 @@ async def auto_explore(
 
     if not session:
         raise HTTPException(status_code=404, detail="Exploration session not found")
+
+    # If parent_snapshot_id provided, set it as the starting point
+    starting_snapshot_id = parent_snapshot_id or session.current_snapshot_id
 
     session.status = ExplorationStatus.EXPLORING.value
     await db.commit()
@@ -649,15 +656,19 @@ async def auto_explore(
             )
             session = result.scalar_one()
 
-            # Determine current state
+            # Determine current state - use starting_snapshot_id for first step,
+            # then follow the chain via current_snapshot_id
             parent_snapshot = None
             parent_image_b64 = None
             current_profile = StyleProfile(**session.base_style_profile_json)
             parent_depth = -1
 
-            if session.current_snapshot_id:
+            # For first step, use starting_snapshot_id; for subsequent steps, use current_snapshot_id
+            target_snapshot_id = starting_snapshot_id if step == 0 else session.current_snapshot_id
+
+            if target_snapshot_id:
                 for snap in session.snapshots:
-                    if snap.id == session.current_snapshot_id:
+                    if snap.id == target_snapshot_id:
                         parent_snapshot = snap
                         current_profile = StyleProfile(**snap.style_profile_json)
                         parent_depth = snap.depth
@@ -678,10 +689,17 @@ async def auto_explore(
                 except FileNotFoundError:
                     pass
 
-            # Get preferred strategies
-            preferred_strategies = [
-                MutationStrategy(s) for s in session.preferred_strategies_json
-            ]
+            # Determine strategy - use explicit strategy if provided, otherwise use session defaults
+            use_strategy = None
+            preferred_strategies = None
+            if strategy:
+                # Explicit strategy overrides session defaults
+                use_strategy = MutationStrategy(strategy)
+            else:
+                # Fall back to session's preferred strategies
+                preferred_strategies = [
+                    MutationStrategy(s) for s in session.preferred_strategies_json
+                ]
 
             # Get subject
             subject = current_profile.suggested_test_prompt or current_profile.original_subject or "abstract scene"
@@ -692,7 +710,7 @@ async def auto_explore(
                     current_profile=current_profile,
                     parent_image_b64=parent_image_b64,
                     subject=subject,
-                    strategy=None,  # Random from preferred
+                    strategy=use_strategy,
                     preferred_strategies=preferred_strategies,
                     session_id=session_id,
                 )

@@ -525,13 +525,24 @@ export async function exploreStep(
 export async function autoExplore(
   sessionId: string,
   numSteps: number = 5,
-  branchThreshold: number = 101  // Default to 101 so it always runs all steps
+  branchThreshold: number = 101,  // Default to 101 so it always runs all steps
+  parentSnapshotId?: string,
+  strategy?: string
 ): Promise<AutoExploreResult> {
+  const params = new URLSearchParams();
+  params.append('num_steps', numSteps.toString());
+  params.append('branch_threshold', branchThreshold.toString());
+  if (parentSnapshotId) {
+    params.append('parent_snapshot_id', parentSnapshotId);
+  }
+  if (strategy) {
+    params.append('strategy', strategy);
+  }
   return fetchJson<AutoExploreResult>(
-    `${API_BASE}/explorer/sessions/${sessionId}/auto-explore?num_steps=${numSteps}&branch_threshold=${branchThreshold}`,
+    `${API_BASE}/explorer/sessions/${sessionId}/auto-explore?${params.toString()}`,
     {
       method: 'POST',
-      timeout: LONG_TIMEOUT,
+      timeout: LONG_TIMEOUT * numSteps,  // Scale timeout with steps
     }
   );
 }
