@@ -3,6 +3,7 @@ import { useParams, Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   listStyles,
+  getStyle,
   writePrompt,
   writeAndGenerate,
   getGenerationHistory,
@@ -34,6 +35,13 @@ function PromptWriter() {
   const { data: styles } = useQuery({
     queryKey: ['styles'],
     queryFn: () => listStyles(),
+  })
+
+  // Fetch full style details when a style is selected
+  const { data: selectedStyle } = useQuery({
+    queryKey: ['style', selectedStyleId],
+    queryFn: () => getStyle(selectedStyleId!),
+    enabled: !!selectedStyleId,
   })
 
   const { data: history, isLoading: historyLoading } = useQuery({
@@ -165,6 +173,106 @@ function PromptWriter() {
               </div>
             )}
           </div>
+
+          {/* Style Guide - Shows rules for the selected style */}
+          {selectedStyle && selectedStyle.style_rules && (
+            <div className="bg-white rounded-xl border border-slate-200 p-4">
+              <h3 className="text-sm font-medium text-slate-700 mb-3 flex items-center gap-2">
+                <span>Style Guide</span>
+                <span className="text-xs text-slate-400 font-normal">
+                  ({selectedStyle.name})
+                </span>
+              </h3>
+
+              <div className="space-y-3 text-xs">
+                {/* Technique Keywords */}
+                {selectedStyle.style_rules.technique_keywords?.length > 0 && (
+                  <div>
+                    <span className="text-blue-600 font-medium block mb-1">Technique:</span>
+                    <div className="flex flex-wrap gap-1">
+                      {selectedStyle.style_rules.technique_keywords.map((t, i) => (
+                        <span key={i} className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded">
+                          {t}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Mood Keywords */}
+                {selectedStyle.style_rules.mood_keywords?.length > 0 && (
+                  <div>
+                    <span className="text-purple-600 font-medium block mb-1">Mood:</span>
+                    <div className="flex flex-wrap gap-1">
+                      {selectedStyle.style_rules.mood_keywords.map((m, i) => (
+                        <span key={i} className="bg-purple-50 text-purple-700 px-2 py-0.5 rounded">
+                          {m}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Always Include */}
+                {selectedStyle.style_rules.always_include?.length > 0 && (
+                  <div>
+                    <span className="text-green-600 font-medium block mb-1">Always Include:</span>
+                    <ul className="list-disc list-inside text-slate-600 space-y-0.5 ml-1">
+                      {selectedStyle.style_rules.always_include.map((r, i) => (
+                        <li key={i}>{r}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Always Avoid */}
+                {selectedStyle.style_rules.always_avoid?.length > 0 && (
+                  <div>
+                    <span className="text-red-600 font-medium block mb-1">Always Avoid:</span>
+                    <ul className="list-disc list-inside text-slate-600 space-y-0.5 ml-1">
+                      {selectedStyle.style_rules.always_avoid.map((r, i) => (
+                        <li key={i}>{r}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Emphasize */}
+                {selectedStyle.style_rules.emphasize?.length > 0 && (
+                  <div>
+                    <span className="text-amber-600 font-medium block mb-1">Emphasize:</span>
+                    <ul className="list-disc list-inside text-slate-600 space-y-0.5 ml-1">
+                      {selectedStyle.style_rules.emphasize.map((r, i) => (
+                        <li key={i}>{r}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* De-emphasize */}
+                {selectedStyle.style_rules.de_emphasize?.length > 0 && (
+                  <div>
+                    <span className="text-slate-500 font-medium block mb-1">De-emphasize:</span>
+                    <ul className="list-disc list-inside text-slate-400 space-y-0.5 ml-1">
+                      {selectedStyle.style_rules.de_emphasize.map((r, i) => (
+                        <li key={i}>{r}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                {/* Empty state */}
+                {(!selectedStyle.style_rules.technique_keywords?.length &&
+                  !selectedStyle.style_rules.mood_keywords?.length &&
+                  !selectedStyle.style_rules.always_include?.length &&
+                  !selectedStyle.style_rules.always_avoid?.length) && (
+                  <div className="text-slate-400 text-center py-2">
+                    No style rules defined for this style.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Subject Input */}
           <div className="bg-white rounded-xl border border-slate-200 p-4">

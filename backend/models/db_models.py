@@ -211,3 +211,101 @@ class GenerationHistory(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow
     )
+
+
+# ============================================================
+# Style Explorer Models (Divergent Exploration)
+# ============================================================
+
+class ExplorationSession(Base):
+    """A style exploration session that diverges rather than converges.
+
+    Starting from a reference image/style, each iteration intentionally
+    mutates and explores variations to discover new aesthetic directions.
+    """
+    __tablename__ = "exploration_sessions"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=generate_uuid
+    )
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+
+    # Starting point
+    reference_image_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    base_style_profile_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+
+    # Settings
+    auto_mode: Mapped[bool] = mapped_column(Boolean, default=False)
+    mutations_per_step: Mapped[int] = mapped_column(Integer, default=1)
+    preferred_strategies_json: Mapped[list] = mapped_column(
+        JSON, default=["random_dimension", "what_if", "amplify"]
+    )
+
+    # State
+    current_snapshot_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    total_snapshots: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(20), default="created")
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+    )
+
+    # Relationships
+    snapshots: Mapped[list["ExplorationSnapshot"]] = relationship(
+        back_populates="session", cascade="all, delete-orphan"
+    )
+
+
+class ExplorationSnapshot(Base):
+    """A single snapshot in an exploration tree.
+
+    Each snapshot represents one mutation/variation with its generated
+    image, scores, and link to its parent for tree navigation.
+    """
+    __tablename__ = "exploration_snapshots"
+
+    id: Mapped[str] = mapped_column(
+        String(36), primary_key=True, default=generate_uuid
+    )
+    session_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("exploration_sessions.id"), nullable=False
+    )
+    parent_id: Mapped[str | None] = mapped_column(
+        String(36), ForeignKey("exploration_snapshots.id"), nullable=True
+    )
+
+    # Content
+    style_profile_json: Mapped[dict] = mapped_column(JSON, nullable=False)
+    generated_image_path: Mapped[str] = mapped_column(String(500), nullable=False)
+    prompt_used: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    # Mutation info
+    mutation_strategy: Mapped[str] = mapped_column(String(50), nullable=False)
+    mutation_description: Mapped[str] = mapped_column(Text, nullable=False)
+
+    # Scores (0-100)
+    novelty_score: Mapped[float | None] = mapped_column(Integer, nullable=True)
+    coherence_score: Mapped[float | None] = mapped_column(Integer, nullable=True)
+    interest_score: Mapped[float | None] = mapped_column(Integer, nullable=True)
+    combined_score: Mapped[float | None] = mapped_column(Integer, nullable=True)
+
+    # Tree structure
+    depth: Mapped[int] = mapped_column(Integer, default=0)
+    branch_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+
+    # User interaction
+    is_favorite: Mapped[bool] = mapped_column(Boolean, default=False)
+    user_notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow
+    )
+
+    # Relationships
+    session: Mapped["ExplorationSession"] = relationship(back_populates="snapshots")
+    parent: Mapped["ExplorationSnapshot | None"] = relationship(
+        "ExplorationSnapshot", remote_side=[id], backref="children"
+    )

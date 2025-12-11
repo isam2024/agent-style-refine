@@ -154,7 +154,8 @@ function LogWindow({ sessionId, isActive, onClose, onComplete }: LogWindowProps)
     }
   }
 
-  if (!isActive) return null
+  // Show log window if active OR if there are logs to display
+  if (!isActive && logs.length === 0) return null
 
   return (
     <div className="bg-slate-900 rounded-lg border border-slate-700 overflow-hidden">

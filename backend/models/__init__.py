@@ -17,7 +17,13 @@ from backend.models.schemas import (
     GenerationResponse,
     CritiqueRequest,
 )
-from backend.models.db_models import Session, StyleProfileDB, Iteration
+from backend.models.db_models import (
+    Session,
+    StyleProfileDB,
+    Iteration,
+    ExplorationSession,
+    ExplorationSnapshot,
+)
 
 __all__ = [
     "StyleProfile",
@@ -40,4 +46,6 @@ __all__ = [
     "Session",
     "StyleProfileDB",
     "Iteration",
+    "ExplorationSession",
+    "ExplorationSnapshot",
 ]

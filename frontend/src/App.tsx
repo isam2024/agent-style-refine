@@ -4,6 +4,8 @@ import Session from './pages/Session'
 import HypothesisExplorer from './pages/HypothesisExplorer'
 import StyleLibrary from './pages/StyleLibrary'
 import PromptWriter from './pages/PromptWriter'
+import ExplorationList from './pages/ExplorationList'
+import StyleExplorer from './pages/StyleExplorer'
 
 function App() {
   return (
@@ -51,6 +53,18 @@ function App() {
               >
                 Write Prompts
               </NavLink>
+              <NavLink
+                to="/explore"
+                className={({ isActive }) =>
+                  `px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isActive
+                      ? 'bg-orange-100 text-orange-700'
+                      : 'text-slate-600 hover:bg-slate-100'
+                  }`
+                }
+              >
+                Explore
+              </NavLink>
             </nav>
           </div>
         </div>
@@ -70,6 +84,10 @@ function App() {
           {/* Prompt Writer */}
           <Route path="/write" element={<PromptWriter />} />
           <Route path="/write/:styleId" element={<PromptWriter />} />
+
+          {/* Style Explorer */}
+          <Route path="/explore" element={<ExplorationList />} />
+          <Route path="/explore/:sessionId" element={<StyleExplorer />} />
         </Routes>
       </main>
     </div>

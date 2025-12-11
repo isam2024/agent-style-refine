@@ -253,13 +253,55 @@ async def apply_profile_update(
     """Apply an updated style profile from critique."""
     result = await db.execute(
         select(Session)
-        .options(selectinload(Session.style_profiles))
+        .options(selectinload(Session.style_profiles), selectinload(Session.iterations))
         .where(Session.id == session_id)
     )
     session = result.scalar_one_or_none()
 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
+
+    # Expand palette from approved iterations
+    # Get the most recent approved iteration
+    approved_iterations = [it for it in session.iterations if it.approved and it.image_path]
+    if approved_iterations:
+        latest_approved = max(approved_iterations, key=lambda x: x.created_at)
+
+        # Extract colors from the approved iteration image
+        try:
+            iteration_image_b64 = await storage_service.load_image(latest_approved.image_path)
+            from backend.services.color_extractor import extract_colors_from_b64
+            new_colors = extract_colors_from_b64(iteration_image_b64)
+
+            # Merge with existing palette (deduplicate exact matches only)
+            existing_dominant = set(updated_profile.palette.dominant_colors)
+            existing_accents = set(updated_profile.palette.accents)
+
+            # Add all new dominant colors (no limit)
+            for color in new_colors["dominant_colors"]:
+                if color not in existing_dominant:
+                    existing_dominant.add(color)
+
+            # Add all new accent colors (no limit)
+            for color in new_colors["accents"]:
+                if color not in existing_accents:
+                    existing_accents.add(color)
+
+            # Update the profile with expanded palette
+            updated_profile.palette.dominant_colors = list(existing_dominant)
+            updated_profile.palette.accents = list(existing_accents)
+
+            # Merge color descriptions (keep all unique)
+            existing_descs = set(updated_profile.palette.color_descriptions or [])
+            for desc in new_colors.get("color_descriptions", []):
+                if desc not in existing_descs:
+                    existing_descs.add(desc)
+            updated_profile.palette.color_descriptions = list(existing_descs)
+
+            logger.info(f"Expanded palette: {len(existing_dominant)} dominant, {len(existing_accents)} accents")
+        except Exception as e:
+            logger.warning(f"Failed to expand palette from iteration: {e}")
+            # Continue without palette expansion
 
     current_version = max(
         (sp.version for sp in session.style_profiles), default=0

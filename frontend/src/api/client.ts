@@ -12,6 +12,12 @@ import {
   HypothesisExploreResponse,
   HypothesisSet,
   SessionMode,
+  ExplorationSessionSummary,
+  ExplorationSession,
+  ExplorationSnapshot,
+  ExplorationTree,
+  AutoExploreResult,
+  MutationStrategy,
 } from '../types';
 
 const API_BASE = '/api';
@@ -466,4 +472,164 @@ export async function clearComfyUIQueue(): Promise<{ status: string; message: st
       method: 'POST',
     }
   );
+}
+
+// ============================================================
+// Style Explorer API
+// ============================================================
+
+export async function listExplorations(): Promise<ExplorationSessionSummary[]> {
+  return fetchJson<ExplorationSessionSummary[]>(`${API_BASE}/explorer/sessions`);
+}
+
+export async function createExploration(
+  name: string,
+  imageB64: string,
+  preferredStrategies: MutationStrategy[] = ['random_dimension', 'what_if', 'amplify']
+): Promise<ExplorationSession> {
+  return fetchJson<ExplorationSession>(`${API_BASE}/explorer/sessions`, {
+    method: 'POST',
+    body: JSON.stringify({
+      name,
+      image_b64: imageB64,
+      preferred_strategies: preferredStrategies,
+    }),
+    timeout: LONG_TIMEOUT,
+  });
+}
+
+export async function getExploration(sessionId: string): Promise<ExplorationSession> {
+  return fetchJson<ExplorationSession>(`${API_BASE}/explorer/sessions/${sessionId}`);
+}
+
+export async function deleteExploration(sessionId: string): Promise<void> {
+  await fetchJson(`${API_BASE}/explorer/sessions/${sessionId}`, { method: 'DELETE' });
+}
+
+export async function exploreStep(
+  sessionId: string,
+  strategy?: MutationStrategy,
+  parentSnapshotId?: string
+): Promise<{ snapshot: ExplorationSnapshot; image_b64: string }> {
+  return fetchJson(`${API_BASE}/explorer/sessions/${sessionId}/explore`, {
+    method: 'POST',
+    body: JSON.stringify({
+      session_id: sessionId,
+      strategy,
+      parent_snapshot_id: parentSnapshotId,
+    }),
+    timeout: LONG_TIMEOUT,
+  });
+}
+
+export async function autoExplore(
+  sessionId: string,
+  numSteps: number = 5,
+  branchThreshold: number = 101  // Default to 101 so it always runs all steps
+): Promise<AutoExploreResult> {
+  return fetchJson<AutoExploreResult>(
+    `${API_BASE}/explorer/sessions/${sessionId}/auto-explore?num_steps=${numSteps}&branch_threshold=${branchThreshold}`,
+    {
+      method: 'POST',
+      timeout: LONG_TIMEOUT,
+    }
+  );
+}
+
+export async function getExplorationTree(sessionId: string): Promise<ExplorationTree> {
+  return fetchJson<ExplorationTree>(`${API_BASE}/explorer/sessions/${sessionId}/tree`);
+}
+
+export interface BatchExploreResult {
+  session_id: string;
+  parent_snapshot_id: string | null;
+  results: Array<{
+    id?: string;
+    strategy: string;
+    mutation_description?: string;
+    combined_score?: number;
+    image_b64?: string;
+    error?: string;
+  }>;
+  successful: number;
+  failed: number;
+}
+
+export async function batchExplore(
+  sessionId: string,
+  strategies: MutationStrategy[],
+  iterations: number = 1,
+  parentSnapshotId?: string
+): Promise<BatchExploreResult> {
+  const params = new URLSearchParams();
+  strategies.forEach(s => params.append('strategies', s));
+  params.append('iterations', iterations.toString());
+  if (parentSnapshotId) {
+    params.append('parent_snapshot_id', parentSnapshotId);
+  }
+  return fetchJson<BatchExploreResult>(
+    `${API_BASE}/explorer/sessions/${sessionId}/batch-explore?${params.toString()}`,
+    {
+      method: 'POST',
+      timeout: LONG_TIMEOUT * iterations * strategies.length, // Scale timeout with work
+    }
+  );
+}
+
+export async function setCurrentSnapshot(sessionId: string, snapshotId: string): Promise<void> {
+  await fetchJson(`${API_BASE}/explorer/sessions/${sessionId}/set-current?snapshot_id=${snapshotId}`, {
+    method: 'POST',
+  });
+}
+
+export async function resetExplorationStatus(sessionId: string): Promise<void> {
+  await fetchJson(`${API_BASE}/explorer/sessions/${sessionId}/reset-status`, {
+    method: 'POST',
+  });
+}
+
+export async function updateExplorationStrategies(
+  sessionId: string,
+  strategies: MutationStrategy[]
+): Promise<void> {
+  await fetchJson(`${API_BASE}/explorer/sessions/${sessionId}/strategies`, {
+    method: 'PATCH',
+    body: JSON.stringify(strategies),
+  });
+}
+
+export async function getFavoriteSnapshots(sessionId: string): Promise<ExplorationSnapshot[]> {
+  return fetchJson<ExplorationSnapshot[]>(`${API_BASE}/explorer/sessions/${sessionId}/favorites`);
+}
+
+export async function getSnapshot(snapshotId: string): Promise<ExplorationSnapshot> {
+  return fetchJson<ExplorationSnapshot>(`${API_BASE}/explorer/snapshots/${snapshotId}`);
+}
+
+export async function toggleSnapshotFavorite(snapshotId: string): Promise<{ id: string; is_favorite: boolean }> {
+  return fetchJson(`${API_BASE}/explorer/snapshots/${snapshotId}/favorite`, {
+    method: 'POST',
+  });
+}
+
+export async function updateSnapshot(
+  snapshotId: string,
+  updates: { is_favorite?: boolean; user_notes?: string; branch_name?: string }
+): Promise<void> {
+  await fetchJson(`${API_BASE}/explorer/snapshots/${snapshotId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(updates),
+  });
+}
+
+export async function snapshotToStyle(
+  snapshotId: string,
+  name: string,
+  description?: string,
+  tags: string[] = []
+): Promise<{ id: string; name: string; created: boolean }> {
+  return fetchJson(`${API_BASE}/explorer/snapshots/${snapshotId}/to-style`, {
+    method: 'POST',
+    body: JSON.stringify({ snapshot_id: snapshotId, name, description, tags }),
+  });
 }

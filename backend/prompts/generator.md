@@ -36,9 +36,11 @@ These are non-negotiable. Every prompt you write MUST preserve these characteris
    - Pay special attention to structural invariants (pose, layout, composition)
    - Then apply stylistic invariants (rendering, technique)
 
-3. **Color Language**: Use explicit color descriptions based on the palette.
-   - Reference specific tones: "deep navy (#1b2a4a)", "warm amber glow"
-   - Describe color relationships: "cool shadows contrasting with warm highlights"
+3. **Color Language**: Use color RELATIONSHIPS and TREATMENT, not specific hex codes.
+   - Describe tones and temperature: "deep navy blue", "warm amber glow", "muted sage green"
+   - Describe relationships: "cool shadows contrasting with warm highlights", "analogous color harmony"
+   - Describe saturation/value: "highly saturated primaries", "desaturated pastels", "high contrast"
+   - DO NOT include hex codes - image generators don't understand them
 
 4. **Lighting Setup**: Always describe lighting explicitly.
    - Direction: "backlit", "side-lit from the left", "ambient top-down"

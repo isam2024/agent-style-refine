@@ -379,3 +379,221 @@ class IterationStepResult(BaseModel):
     prompt_used: str
     critique: CritiqueResult
     updated_profile: StyleProfile
+
+
+# ============================================================
+# Style Explorer Schemas (Divergent Exploration)
+# ============================================================
+
+class MutationStrategy(str, Enum):
+    """Available mutation strategies for style exploration."""
+    # === Core mutations ===
+    RANDOM_DIMENSION = "random_dimension"  # Push a random dimension to extreme
+    WHAT_IF = "what_if"                    # VLM-guided creative mutation
+    CROSSOVER = "crossover"                # Blend with a donor style
+    INVERSION = "inversion"                # Flip a characteristic
+    AMPLIFY = "amplify"                    # Exaggerate existing traits
+    DIVERGE = "diverge"                    # Extract-and-deviate using critique loop
+    REFINE = "refine"                      # Reduce extremes toward balance
+
+    # === Style transformations ===
+    TIME_SHIFT = "time_shift"              # Apply different era/decade aesthetic
+    MEDIUM_SWAP = "medium_swap"            # Change apparent artistic medium
+    MOOD_SHIFT = "mood_shift"              # Transform emotional tone
+    CULTURE_SHIFT = "culture_shift"        # Apply different cultural aesthetics
+
+    # === Composition mutations ===
+    SCALE_WARP = "scale_warp"              # Change apparent scale/perspective
+    REMIX = "remix"                        # Shuffle elements between style sections
+    CONSTRAIN = "constrain"                # Limit to single color or simple shapes
+    CHAOS = "chaos"                        # Multiple random small mutations at once
+    DECAY = "decay"                        # Add entropy/age/weathering
+
+    # === Spatial mutations ===
+    TOPOLOGY_FOLD = "topology_fold"        # Non-Euclidean/impossible geometry
+    SILHOUETTE_SHIFT = "silhouette_shift"  # Modify contour/profile shape
+    PERSPECTIVE_DRIFT = "perspective_drift"  # Surreal camera angles, sliding vanishing points
+    AXIS_SWAP = "axis_swap"                # Rotate conceptual axes (vertical↔horizontal)
+
+    # === Physics mutations ===
+    PHYSICS_BEND = "physics_bend"          # Alter physical laws (gravity, light behavior)
+    CHROMATIC_GRAVITY = "chromatic_gravity"  # Colors cluster or repel in new ways
+    MATERIAL_TRANSMUTE = "material_transmute"  # Swap material properties (glass→fur)
+    TEMPORAL_EXPOSURE = "temporal_exposure"  # Long exposure, freeze frames, ghost trails
+
+    # === Pattern mutations ===
+    MOTIF_SPLICE = "motif_splice"          # Inject recurring foreign motif
+    RHYTHM_OVERLAY = "rhythm_overlay"      # Apply tempo-based visual patterns
+    HARMONIC_BALANCE = "harmonic_balance"  # Musical composition logic for visuals
+    SYMMETRY_BREAK = "symmetry_break"      # Break or force symmetry
+
+    # === Density mutations ===
+    DENSITY_SHIFT = "density_shift"        # Vary visual information density
+    DIMENSIONAL_SHIFT = "dimensional_shift"  # Flatten or deepen (2D↔2.5D↔3D)
+    MICRO_MACRO_SWAP = "micro_macro_swap"  # Swap scales (tiny↔big patterns)
+    ESSENCE_STRIP = "essence_strip"        # Remove secondary features, reveal core
+
+    # === Narrative mutations ===
+    NARRATIVE_RESONANCE = "narrative_resonance"  # Add implied story fragments
+    ARCHETYPE_MASK = "archetype_mask"      # Map onto mythological archetypes
+    ANOMALY_INJECT = "anomaly_inject"      # Single deliberate rule violation
+    SPECTRAL_ECHO = "spectral_echo"        # Ghost-layers of earlier generations
+
+    # === Environment mutations ===
+    CLIMATE_MORPH = "climate_morph"        # Apply environmental system changes
+    BIOME_SHIFT = "biome_shift"            # Reframe as new ecosystem
+
+    # === Technical mutations ===
+    ALGORITHMIC_WRINKLE = "algorithmic_wrinkle"  # Deterministic computational artifacts
+    SYMBOLIC_REDUCTION = "symbolic_reduction"    # Turn features into metaphoric shapes
+
+
+class ExplorationStatus(str, Enum):
+    """Status of an exploration session."""
+    CREATED = "created"
+    EXPLORING = "exploring"
+    PAUSED = "paused"
+    COMPLETED = "completed"
+
+
+class ExplorationSessionCreate(BaseModel):
+    """Request to create a new exploration session."""
+    name: str = Field(description="Name for this exploration")
+    image_b64: str = Field(description="Base64 encoded reference image")
+    preferred_strategies: list[MutationStrategy] = Field(
+        default=[MutationStrategy.RANDOM_DIMENSION, MutationStrategy.WHAT_IF, MutationStrategy.AMPLIFY],
+        description="Which mutation strategies to use"
+    )
+
+
+class ExplorationSessionResponse(BaseModel):
+    """Response for an exploration session."""
+    id: str
+    name: str
+    reference_image_path: str
+    base_style_profile: StyleProfile
+    status: ExplorationStatus
+    total_snapshots: int
+    current_snapshot_id: str | None
+    preferred_strategies: list[str]
+    created_at: datetime
+    updated_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ExplorationSessionSummary(BaseModel):
+    """Summary view of an exploration session for listing."""
+    id: str
+    name: str
+    status: ExplorationStatus
+    total_snapshots: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ExplorationScores(BaseModel):
+    """Scores for an exploration snapshot."""
+    novelty: float = Field(ge=0, le=100, description="How different from parent (0-100)")
+    coherence: float = Field(ge=0, le=100, description="Is it still a valid style (0-100)")
+    interest: float = Field(ge=0, le=100, description="Is it visually striking (0-100)")
+    combined: float = Field(ge=0, le=100, description="Weighted combination")
+
+
+class ExplorationSnapshotResponse(BaseModel):
+    """Response for an exploration snapshot."""
+    id: str
+    session_id: str
+    parent_id: str | None
+    style_profile: StyleProfile
+    generated_image_path: str
+    prompt_used: str | None
+    mutation_strategy: str
+    mutation_description: str
+    scores: ExplorationScores | None
+    depth: int
+    branch_name: str | None
+    is_favorite: bool
+    user_notes: str | None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+
+class ExploreRequest(BaseModel):
+    """Request to run one exploration step."""
+    session_id: str
+    strategy: MutationStrategy | None = Field(
+        default=None,
+        description="Specific strategy to use, or None for random from preferences"
+    )
+    parent_snapshot_id: str | None = Field(
+        default=None,
+        description="Snapshot to branch from, or None for current"
+    )
+
+
+class ExploreResponse(BaseModel):
+    """Response from an exploration step."""
+    snapshot: ExplorationSnapshotResponse
+    image_b64: str = Field(description="Base64 encoded generated image")
+
+
+class AutoExploreRequest(BaseModel):
+    """Request to auto-run multiple exploration steps."""
+    session_id: str
+    num_steps: int = Field(default=5, ge=1, le=20, description="Number of steps to run")
+    branch_threshold: float = Field(
+        default=85.0,
+        ge=0,
+        le=100,
+        description="Auto-branch if combined score exceeds this"
+    )
+
+
+class AutoExploreResponse(BaseModel):
+    """Response from auto-exploration."""
+    snapshots_created: int
+    best_snapshot_id: str | None
+    best_score: float | None
+    stopped_reason: str  # "completed", "threshold_reached", "user_stopped"
+
+
+class SnapshotUpdateRequest(BaseModel):
+    """Request to update a snapshot (favorite, notes)."""
+    is_favorite: bool | None = None
+    user_notes: str | None = None
+    branch_name: str | None = None
+
+
+class ExplorationTreeNode(BaseModel):
+    """A node in the exploration tree for visualization."""
+    id: str
+    parent_id: str | None
+    depth: int
+    mutation_strategy: str
+    mutation_description: str
+    combined_score: float | None
+    is_favorite: bool
+    children_count: int
+    thumbnail_path: str  # For tree visualization
+
+
+class ExplorationTreeResponse(BaseModel):
+    """Full tree structure for visualization."""
+    session_id: str
+    root_nodes: list[ExplorationTreeNode]  # Entry points (depth=0)
+    total_nodes: int
+    max_depth: int
+
+
+class SnapshotToStyleRequest(BaseModel):
+    """Request to convert a snapshot to a trained style."""
+    snapshot_id: str
+    name: str
+    description: str | None = None
+    tags: list[str] = Field(default=[])

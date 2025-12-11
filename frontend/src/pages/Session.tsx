@@ -521,7 +521,10 @@ function Session() {
                   <div className="flex gap-2">
                     {!autoImproveMutation.isPending ? (
                       <button
-                        onClick={() => autoImproveMutation.mutate()}
+                        onClick={() => {
+                          console.log('[Session] 🎯 AUTO-IMPROVE BUTTON CLICKED')
+                          autoImproveMutation.mutate()
+                        }}
                         disabled={!subject.trim()}
                         className="flex-1 px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 font-medium"
                       >

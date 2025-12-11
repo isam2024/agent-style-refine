@@ -128,6 +128,9 @@ class VLMService:
             "model": use_model,
             "messages": messages,
             "stream": False,
+            "options": {
+                "num_predict": 8192,  # Allow very long responses for critic (includes full style profile)
+            }
         }
 
         # Force JSON output for structured tasks (extraction, critique)

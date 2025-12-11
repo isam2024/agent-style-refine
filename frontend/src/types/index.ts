@@ -259,3 +259,136 @@ export interface HypothesisSelectRequest {
   session_id: string;
   hypothesis_id: string;
 }
+
+// ============================================================
+// Style Explorer Types
+// ============================================================
+
+export type MutationStrategy =
+  // Core mutations
+  | 'random_dimension'
+  | 'what_if'
+  | 'crossover'
+  | 'inversion'
+  | 'amplify'
+  | 'diverge'
+  | 'refine'
+  // Style transformations
+  | 'time_shift'
+  | 'medium_swap'
+  | 'mood_shift'
+  | 'culture_shift'
+  // Composition mutations
+  | 'scale_warp'
+  | 'remix'
+  | 'constrain'
+  | 'chaos'
+  | 'decay'
+  // Spatial mutations
+  | 'topology_fold'
+  | 'silhouette_shift'
+  | 'perspective_drift'
+  | 'axis_swap'
+  // Physics mutations
+  | 'physics_bend'
+  | 'chromatic_gravity'
+  | 'material_transmute'
+  | 'temporal_exposure'
+  // Pattern mutations
+  | 'motif_splice'
+  | 'rhythm_overlay'
+  | 'harmonic_balance'
+  | 'symmetry_break'
+  // Density mutations
+  | 'density_shift'
+  | 'dimensional_shift'
+  | 'micro_macro_swap'
+  | 'essence_strip'
+  // Narrative mutations
+  | 'narrative_resonance'
+  | 'archetype_mask'
+  | 'anomaly_inject'
+  | 'spectral_echo'
+  // Environment mutations
+  | 'climate_morph'
+  | 'biome_shift'
+  // Technical mutations
+  | 'algorithmic_wrinkle'
+  | 'symbolic_reduction';
+export type ExplorationStatus = 'created' | 'exploring' | 'paused' | 'completed';
+
+export interface ExplorationScores {
+  novelty: number;
+  coherence: number;
+  interest: number;
+  combined: number;
+}
+
+export interface ExplorationSnapshot {
+  id: string;
+  session_id: string;
+  parent_id: string | null;
+  style_profile: StyleProfile;
+  generated_image_path: string;
+  image_b64?: string;
+  prompt_used: string | null;
+  mutation_strategy: string;
+  mutation_description: string;
+  scores: ExplorationScores | null;
+  depth: number;
+  branch_name: string | null;
+  is_favorite: boolean;
+  user_notes: string | null;
+  created_at: string;
+}
+
+export interface ExplorationSessionSummary {
+  id: string;
+  name: string;
+  status: ExplorationStatus;
+  total_snapshots: number;
+  created_at: string;
+}
+
+export interface ExplorationSession extends ExplorationSessionSummary {
+  reference_image_b64: string | null;
+  base_style_profile: StyleProfile;
+  preferred_strategies: string[];
+  current_snapshot_id: string | null;
+  snapshots: ExplorationSnapshot[];
+  updated_at: string;
+}
+
+export interface ExplorationTreeNode {
+  id: string;
+  parent_id: string | null;
+  depth: number;
+  mutation_strategy: string;
+  mutation_description: string;
+  combined_score: number | null;
+  is_favorite: boolean;
+  children_count: number;
+  image_path: string;
+}
+
+export interface ExplorationTree {
+  session_id: string;
+  root_nodes: ExplorationTreeNode[];
+  all_nodes: ExplorationTreeNode[];
+  total_nodes: number;
+  max_depth: number;
+  current_snapshot_id: string | null;
+}
+
+export interface AutoExploreResult {
+  session_id: string;
+  snapshots_created: number;
+  snapshots: Array<{
+    id: string;
+    combined_score: number;
+    mutation: string;
+  }>;
+  best_snapshot_id: string | null;
+  best_score: number;
+  stopped_reason: string;
+}

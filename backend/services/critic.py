@@ -319,11 +319,74 @@ IMPORTANT:
 
         return "\n".join(lines)
 
+    def _try_repair_truncated_json(self, response: str) -> dict | None:
+        """
+        Attempt to salvage data from truncated VLM JSON responses.
+
+        The VLM often returns valid JSON that gets cut off at the end (token limits).
+        This method extracts what we can, especially the critical match_scores.
+
+        Returns dict with salvaged data, or None if nothing usable found.
+        """
+        import re
+
+        result = {}
+
+        # Extract match_scores object - this is the critical data we need
+        # Pattern matches "match_scores": { ... } with nested content
+        scores_pattern = r'"match_scores"\s*:\s*\{([^}]+)\}'
+        scores_match = re.search(scores_pattern, response)
+        if scores_match:
+            try:
+                scores_str = "{" + scores_match.group(1) + "}"
+                # Clean up any trailing issues
+                scores_str = re.sub(r',\s*}', '}', scores_str)  # Remove trailing commas
+                scores_dict = json.loads(scores_str)
+                result["match_scores"] = scores_dict
+                logger.info(f"[repair] Salvaged match_scores from truncated JSON: {scores_dict}")
+            except Exception as e:
+                logger.warning(f"[repair] Could not parse match_scores: {e}")
+
+        # Extract array fields with a more robust pattern
+        for field in ["preserved_traits", "lost_traits", "interesting_mutations"]:
+            # Match the field name followed by an array
+            pattern = rf'"{field}"\s*:\s*\[((?:[^\[\]]|\[(?:[^\[\]]|\[[^\[\]]*\])*\])*)\]'
+            match = re.search(pattern, response)
+            if match:
+                try:
+                    array_str = "[" + match.group(1) + "]"
+                    # Clean up the array string
+                    array_str = re.sub(r',\s*]', ']', array_str)  # Remove trailing commas
+                    result[field] = json.loads(array_str)
+                except Exception as e:
+                    logger.warning(f"[repair] Could not parse {field}: {e}")
+                    result[field] = []
+            else:
+                result[field] = []
+
+        # If we got match_scores, this repair was successful
+        if "match_scores" in result and result["match_scores"]:
+            # Validate that we have the essential score fields
+            scores = result["match_scores"]
+            required_fields = ["palette", "line_and_shape", "texture", "lighting", "composition", "motifs", "overall"]
+            if all(field in scores for field in required_fields):
+                logger.info(f"[repair] Successfully repaired truncated JSON - extracted all required scores")
+                return result
+            else:
+                missing = [f for f in required_fields if f not in scores]
+                logger.warning(f"[repair] Partial repair - missing score fields: {missing}")
+                # Still return what we have if we got most fields
+                if len([f for f in required_fields if f in scores]) >= 4:
+                    return result
+
+        return None
+
     def _parse_json_response(self, response: str, style_profile: StyleProfile) -> dict:
         """
-        Extract JSON from VLM response. RAISES ValueError if JSON cannot be parsed.
+        Extract JSON from VLM response.
 
-        NO FALLBACK - fails explicitly to surface VLM output issues.
+        First tries standard JSON parsing, then falls back to repair logic
+        for truncated responses (common with VLM token limits).
         """
         import re
 
@@ -353,7 +416,17 @@ IMPORTANT:
                 except:
                     pass
 
-        # NO FALLBACK - fail explicitly if VLM didn't return valid JSON
+        # If standard parsing failed, try to repair truncated JSON
+        if not parsed:
+            logger.warning(f"[critic] Standard JSON parsing failed, attempting truncated JSON repair...")
+            repaired = self._try_repair_truncated_json(response)
+            if repaired and "match_scores" in repaired:
+                logger.info(f"[critic] Using repaired data from truncated response")
+                parsed = repaired
+                # Mark that we used repair so we know to use current style profile
+                parsed["_was_repaired"] = True
+
+        # Still no valid data - fail explicitly
         if not parsed:
             logger.error(f"CRITIC FAILED: Could not parse JSON from VLM response.")
             logger.error(f"Response preview: {response[:500]}")
@@ -361,6 +434,9 @@ IMPORTANT:
                 f"Critic VLM failed to return valid JSON. This would corrupt training with fake scores. "
                 f"Check VLM model capacity or simplify critique prompt. Response: {response[:500]}"
             )
+
+        # Check if this was a repaired truncated response
+        was_repaired = parsed.pop("_was_repaired", False)
 
         # Validate and merge parsed data
         result = {
@@ -385,10 +461,13 @@ IMPORTANT:
             result["interesting_mutations"] = parsed["interesting_mutations"]
 
         # Extract updated style profile (merge with current if present)
+        # If response was repaired from truncation, updated_style_profile is likely missing/corrupt
         if "updated_style_profile" in parsed and isinstance(parsed["updated_style_profile"], dict):
             base_profile = style_profile.model_dump()
             self._deep_merge(base_profile, parsed["updated_style_profile"])
             result["updated_style_profile"] = base_profile
+        elif was_repaired:
+            logger.info(f"[repair] Using current style profile (VLM response was truncated)")
 
         return result
 
