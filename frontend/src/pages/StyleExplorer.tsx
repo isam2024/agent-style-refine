@@ -15,6 +15,7 @@ import {
 import { ExplorationSnapshot, MutationStrategy, WSMessage } from '../types'
 import LogWindow from '../components/LogWindow'
 import ExplorationTreeView from '../components/ExplorationTree'
+import StrategySelectionModal, { ALL_STRATEGIES, STRATEGY_PRESETS } from '../components/StrategySelectionModal'
 
 // Helper function to extract relative path from absolute path
 function extractRelativePath(absolutePath: string): string {
@@ -26,305 +27,15 @@ function extractRelativePath(absolutePath: string): string {
   return absolutePath
 }
 
-// Exploration presets - predefined strategy combinations
-const EXPLORATION_PRESETS: Record<string, { name: string; description: string; strategies: MutationStrategy[] }> = {
-  balanced: {
-    name: 'Balanced',
-    description: 'A mix of core strategies for varied exploration',
-    strategies: ['random_dimension', 'what_if', 'amplify', 'diverge'],
-  },
-  creative: {
-    name: 'Creative',
-    description: 'VLM-guided mutations for artistic exploration',
-    strategies: ['what_if', 'diverge', 'crossover', 'mood_shift'],
-  },
-  aggressive: {
-    name: 'Aggressive',
-    description: 'Bold mutations that push boundaries',
-    strategies: ['inversion', 'diverge', 'amplify', 'chaos'],
-  },
-  subtle: {
-    name: 'Subtle',
-    description: 'Gentle variations that stay closer to the original',
-    strategies: ['random_dimension', 'amplify', 'refine'],
-  },
-  transformation: {
-    name: 'Transformation',
-    description: 'Major style transformations (era, medium, culture)',
-    strategies: ['time_shift', 'medium_swap', 'culture_shift', 'scale_warp'],
-  },
-  emotional: {
-    name: 'Emotional',
-    description: 'Focus on mood and atmosphere changes',
-    strategies: ['mood_shift', 'decay', 'constrain'],
-  },
-  experimental: {
-    name: 'Experimental',
-    description: 'Unpredictable, wild mutations',
-    strategies: ['chaos', 'remix', 'constrain', 'decay'],
-  },
-  all: {
-    name: 'All Strategies',
-    description: 'Run every available strategy',
-    strategies: [
-      'random_dimension', 'what_if', 'crossover', 'inversion', 'amplify', 'diverge',
-      'time_shift', 'medium_swap', 'mood_shift', 'scale_warp', 'decay', 'remix', 'constrain', 'culture_shift', 'chaos', 'refine',
-      'topology_fold', 'silhouette_shift', 'perspective_drift', 'axis_swap',
-      'physics_bend', 'chromatic_gravity', 'material_transmute', 'temporal_exposure',
-      'motif_splice', 'rhythm_overlay', 'harmonic_balance', 'symmetry_break',
-      'density_shift', 'dimensional_shift', 'micro_macro_swap', 'essence_strip',
-      'narrative_resonance', 'archetype_mask', 'anomaly_inject', 'spectral_echo',
-      'climate_morph', 'biome_shift',
-      'algorithmic_wrinkle', 'symbolic_reduction',
-    ],
-  },
-  // New category presets
-  spatial: {
-    name: 'Spatial',
-    description: 'Space and perspective warping mutations',
-    strategies: ['topology_fold', 'silhouette_shift', 'perspective_drift', 'axis_swap'],
-  },
-  physics: {
-    name: 'Physics',
-    description: 'Physical law bending mutations',
-    strategies: ['physics_bend', 'chromatic_gravity', 'material_transmute', 'temporal_exposure'],
-  },
-  pattern: {
-    name: 'Pattern',
-    description: 'Visual rhythm and pattern mutations',
-    strategies: ['motif_splice', 'rhythm_overlay', 'harmonic_balance', 'symmetry_break'],
-  },
-  density: {
-    name: 'Density',
-    description: 'Space filling and scale mutations',
-    strategies: ['density_shift', 'dimensional_shift', 'micro_macro_swap', 'essence_strip'],
-  },
-  narrative: {
-    name: 'Narrative',
-    description: 'Story and symbolism mutations',
-    strategies: ['narrative_resonance', 'archetype_mask', 'anomaly_inject', 'spectral_echo'],
-  },
-  environment: {
-    name: 'Environment',
-    description: 'Weather and ecosystem mutations',
-    strategies: ['climate_morph', 'biome_shift'],
-  },
-  technical: {
-    name: 'Technical',
-    description: 'Computational and symbolic mutations',
-    strategies: ['algorithmic_wrinkle', 'symbolic_reduction'],
-  },
-}
+// Build a lookup map from ALL_STRATEGIES for display
+const STRATEGY_LOOKUP = ALL_STRATEGIES.reduce((acc, s) => {
+  acc[s.key] = { name: s.name, description: s.description }
+  return acc
+}, {} as Record<string, { name: string; description: string }>)
 
-// Strategy display names and colors
-const STRATEGY_INFO: Record<string, { name: string; color: string; description: string }> = {
-  random_dimension: {
-    name: 'Random Dimension',
-    color: 'bg-blue-100 text-blue-700',
-    description: 'Push a random dimension to an extreme',
-  },
-  what_if: {
-    name: 'What If?',
-    color: 'bg-purple-100 text-purple-700',
-    description: 'VLM-guided creative mutation',
-  },
-  crossover: {
-    name: 'Crossover',
-    color: 'bg-green-100 text-green-700',
-    description: 'Blend with a different art style',
-  },
-  inversion: {
-    name: 'Inversion',
-    color: 'bg-orange-100 text-orange-700',
-    description: 'Flip a characteristic to its opposite',
-  },
-  amplify: {
-    name: 'Amplify',
-    color: 'bg-red-100 text-red-700',
-    description: 'Exaggerate existing traits',
-  },
-  diverge: {
-    name: 'Diverge',
-    color: 'bg-pink-100 text-pink-700',
-    description: 'Extract-and-deviate: analyze style then deliberately break from it',
-  },
-  time_shift: {
-    name: 'Time Shift',
-    color: 'bg-amber-100 text-amber-700',
-    description: 'Transport to a different era (Art Deco, 80s Memphis, etc.)',
-  },
-  medium_swap: {
-    name: 'Medium Swap',
-    color: 'bg-cyan-100 text-cyan-700',
-    description: 'Change artistic medium (oil paint, watercolor, pencil, etc.)',
-  },
-  mood_shift: {
-    name: 'Mood Shift',
-    color: 'bg-violet-100 text-violet-700',
-    description: 'Transform emotional tone (serene, anxious, joyful, etc.)',
-  },
-  scale_warp: {
-    name: 'Scale Warp',
-    color: 'bg-emerald-100 text-emerald-700',
-    description: 'Change perspective/scale (macro, cosmic, miniature, etc.)',
-  },
-  decay: {
-    name: 'Decay',
-    color: 'bg-stone-100 text-stone-700',
-    description: 'Add entropy/aging (weathered, rusted, overgrown, etc.)',
-  },
-  remix: {
-    name: 'Remix',
-    color: 'bg-fuchsia-100 text-fuchsia-700',
-    description: 'Shuffle elements between style sections',
-  },
-  constrain: {
-    name: 'Constrain',
-    color: 'bg-slate-100 text-slate-700',
-    description: 'Apply strict limits (monochrome, basic shapes, etc.)',
-  },
-  culture_shift: {
-    name: 'Culture Shift',
-    color: 'bg-rose-100 text-rose-700',
-    description: 'Apply cultural aesthetics (Japanese, Moroccan, Celtic, etc.)',
-  },
-  chaos: {
-    name: 'Chaos',
-    color: 'bg-red-100 text-red-700',
-    description: 'Multiple random mutations at once',
-  },
-  refine: {
-    name: 'Refine',
-    color: 'bg-teal-100 text-teal-700',
-    description: 'Moderate extremes toward balance (opposite of amplify)',
-  },
-  // Spatial mutations
-  topology_fold: {
-    name: 'Topology Fold',
-    color: 'bg-indigo-100 text-indigo-700',
-    description: 'Warp spatial logic (mobius, recursive, tesseract, etc.)',
-  },
-  silhouette_shift: {
-    name: 'Silhouette Shift',
-    color: 'bg-sky-100 text-sky-700',
-    description: 'Transform shape language (angular, organic, crystalline, etc.)',
-  },
-  perspective_drift: {
-    name: 'Perspective Drift',
-    color: 'bg-cyan-100 text-cyan-700',
-    description: 'Shift viewpoint logic (fish-eye, orthographic, anamorphic, etc.)',
-  },
-  axis_swap: {
-    name: 'Axis Swap',
-    color: 'bg-blue-100 text-blue-700',
-    description: 'Rotate compositional orientation (diagonal, spiral, radial, etc.)',
-  },
-  // Physics mutations
-  physics_bend: {
-    name: 'Physics Bend',
-    color: 'bg-violet-100 text-violet-700',
-    description: 'Alter physical laws (zero-g, liquid time, reverse entropy, etc.)',
-  },
-  chromatic_gravity: {
-    name: 'Chromatic Gravity',
-    color: 'bg-fuchsia-100 text-fuchsia-700',
-    description: 'Colors become forces (bleeding, pooling, orbiting, etc.)',
-  },
-  material_transmute: {
-    name: 'Material Transmute',
-    color: 'bg-pink-100 text-pink-700',
-    description: 'Transform all surfaces to new material (glass, mercury, velvet, etc.)',
-  },
-  temporal_exposure: {
-    name: 'Temporal Exposure',
-    color: 'bg-rose-100 text-rose-700',
-    description: 'Layer time within image (motion blur, frozen moment, time-lapse, etc.)',
-  },
-  // Pattern mutations
-  motif_splice: {
-    name: 'Motif Splice',
-    color: 'bg-orange-100 text-orange-700',
-    description: 'Inject recurring visual patterns (fractals, tessellation, etc.)',
-  },
-  rhythm_overlay: {
-    name: 'Rhythm Overlay',
-    color: 'bg-amber-100 text-amber-700',
-    description: 'Add visual cadence (syncopated, crescendo, polyrhythmic, etc.)',
-  },
-  harmonic_balance: {
-    name: 'Harmonic Balance',
-    color: 'bg-yellow-100 text-yellow-700',
-    description: 'Apply compositional harmony (golden ratio, rule of thirds, dynamic symmetry)',
-  },
-  symmetry_break: {
-    name: 'Symmetry Break',
-    color: 'bg-lime-100 text-lime-700',
-    description: 'Disrupt or introduce symmetry (bilateral, rotational, translational)',
-  },
-  // Density mutations
-  density_shift: {
-    name: 'Density Shift',
-    color: 'bg-green-100 text-green-700',
-    description: 'Adjust visual density (sparse, cluttered, gradient, etc.)',
-  },
-  dimensional_shift: {
-    name: 'Dimensional Shift',
-    color: 'bg-emerald-100 text-emerald-700',
-    description: 'Flatten or deepen space (isometric, 2.5D, hyper-dimensional)',
-  },
-  micro_macro_swap: {
-    name: 'Micro/Macro Swap',
-    color: 'bg-teal-100 text-teal-700',
-    description: 'Flip detail scale (micro becomes macro, macro becomes micro)',
-  },
-  essence_strip: {
-    name: 'Essence Strip',
-    color: 'bg-cyan-100 text-cyan-700',
-    description: 'VLM-guided reduction to pure essence (minimal, iconic, distilled)',
-  },
-  // Narrative mutations
-  narrative_resonance: {
-    name: 'Narrative Resonance',
-    color: 'bg-blue-100 text-blue-700',
-    description: 'Apply story archetypes (hero\'s journey, tragedy, rebirth, etc.)',
-  },
-  archetype_mask: {
-    name: 'Archetype Mask',
-    color: 'bg-indigo-100 text-indigo-700',
-    description: 'Overlay universal symbols (shadow, trickster, sage, etc.)',
-  },
-  anomaly_inject: {
-    name: 'Anomaly Inject',
-    color: 'bg-purple-100 text-purple-700',
-    description: 'VLM-guided surreal intrusion (impossible object, glitch, etc.)',
-  },
-  spectral_echo: {
-    name: 'Spectral Echo',
-    color: 'bg-violet-100 text-violet-700',
-    description: 'Add ghostly afterimages and traces (motion trails, memories, etc.)',
-  },
-  // Environment mutations
-  climate_morph: {
-    name: 'Climate Morph',
-    color: 'bg-sky-100 text-sky-700',
-    description: 'Apply weather/atmosphere (fog, rain, heat shimmer, aurora, etc.)',
-  },
-  biome_shift: {
-    name: 'Biome Shift',
-    color: 'bg-green-100 text-green-700',
-    description: 'Transport to different ecosystem (deep sea, volcanic, arctic, etc.)',
-  },
-  // Technical mutations
-  algorithmic_wrinkle: {
-    name: 'Algorithmic Wrinkle',
-    color: 'bg-slate-100 text-slate-700',
-    description: 'Add computational artifacts (dithering, scanlines, compression, etc.)',
-  },
-  symbolic_reduction: {
-    name: 'Symbolic Reduction',
-    color: 'bg-stone-100 text-stone-700',
-    description: 'Reduce to symbolic/iconic representation (hieroglyphic, emoji, pictogram)',
-  },
+// Get display name for a strategy
+function getStrategyDisplayName(strategyKey: string): string {
+  return STRATEGY_LOOKUP[strategyKey]?.name || strategyKey.replace(/_/g, ' ')
 }
 
 function StyleExplorer() {
@@ -341,8 +52,9 @@ function StyleExplorer() {
   const [showLog, setShowLog] = useState(false)
   const [viewMode, setViewMode] = useState<'gallery' | 'tree'>('gallery')
   const [batchModalOpen, setBatchModalOpen] = useState(false)
-  const [batchStrategies, setBatchStrategies] = useState<MutationStrategy[]>(['random_dimension', 'what_if', 'diverge'])
+  const [batchStrategies, setBatchStrategies] = useState<MutationStrategy[]>(STRATEGY_PRESETS.core.strategies)
   const [batchIterations, setBatchIterations] = useState(1)
+  const [showStrategySelectionModal, setShowStrategySelectionModal] = useState(false)
 
   const wsRef = useRef<WebSocket | null>(null)
 
@@ -499,14 +211,6 @@ function StyleExplorer() {
     },
   })
 
-  const toggleBatchStrategy = (strategy: MutationStrategy) => {
-    setBatchStrategies(prev =>
-      prev.includes(strategy)
-        ? prev.filter(s => s !== strategy)
-        : [...prev, strategy]
-    )
-  }
-
   if (isLoading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -601,8 +305,8 @@ function StyleExplorer() {
               className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500"
             >
               <option value="">Random from preferences</option>
-              {Object.entries(STRATEGY_INFO).map(([key, info]) => (
-                <option key={key} value={key}>{info.name}</option>
+              {ALL_STRATEGIES.map((strategy) => (
+                <option key={strategy.key} value={strategy.key}>{strategy.name}</option>
               ))}
             </select>
           </div>
@@ -785,57 +489,66 @@ function StyleExplorer() {
       {/* Batch Explore Modal */}
       {batchModalOpen && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-lg">
             <h3 className="text-lg font-semibold text-slate-800 mb-2">Batch Explore</h3>
             <p className="text-sm text-slate-600 mb-4">
               Run multiple strategies at once from {selectedSnapshot ? 'selected snapshot' : 'current position'}.
               Each strategy creates a separate branch.
             </p>
 
-            {/* Presets */}
+            {/* Strategy Selection Summary */}
+            <div className="border border-slate-200 rounded-lg p-4 bg-slate-50 mb-4">
+              <div className="flex items-center justify-between mb-3">
+                <span className="text-lg font-semibold text-purple-600">
+                  {batchStrategies.length} strategies selected
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowStrategySelectionModal(true)}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm"
+                >
+                  Select Strategies
+                </button>
+              </div>
+
+              {batchStrategies.length > 0 ? (
+                <div className="flex flex-wrap gap-1.5 max-h-[150px] overflow-y-auto">
+                  {batchStrategies.slice(0, 15).map((strategy) => (
+                    <span
+                      key={strategy}
+                      className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs"
+                    >
+                      {getStrategyDisplayName(strategy)}
+                    </span>
+                  ))}
+                  {batchStrategies.length > 15 && (
+                    <span className="px-2 py-1 bg-slate-200 text-slate-600 rounded text-xs">
+                      +{batchStrategies.length - 15} more
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <p className="text-sm text-slate-500 italic">
+                  No strategies selected. Click "Select Strategies" to choose.
+                </p>
+              )}
+            </div>
+
+            {/* Quick Presets */}
             <div className="mb-4">
-              <div className="text-sm font-medium text-slate-700 mb-2">Quick Presets</div>
+              <label className="block text-xs font-medium text-slate-500 mb-2">Quick Presets</label>
               <div className="flex flex-wrap gap-2">
-                {Object.entries(EXPLORATION_PRESETS).map(([key, preset]) => (
+                {Object.entries(STRATEGY_PRESETS).map(([key, preset]) => (
                   <button
                     key={key}
+                    type="button"
                     onClick={() => setBatchStrategies(preset.strategies)}
-                    className={`px-3 py-1 text-sm rounded-full border transition-colors ${
-                      JSON.stringify(batchStrategies.sort()) === JSON.stringify(preset.strategies.sort())
-                        ? 'border-purple-500 bg-purple-100 text-purple-700'
-                        : 'border-slate-300 hover:border-slate-400 text-slate-600'
-                    }`}
-                    title={preset.description}
+                    className="px-3 py-1 text-xs border border-slate-300 rounded-lg hover:bg-slate-100"
                   >
-                    {preset.name}
+                    {preset.name} ({preset.strategies.length})
                   </button>
                 ))}
               </div>
-            </div>
-
-            <div className="text-sm font-medium text-slate-700 mb-2">Strategies ({batchStrategies.length} selected)</div>
-            <div className="space-y-2 mb-4">
-              {Object.entries(STRATEGY_INFO).map(([key, info]) => (
-                <label
-                  key={key}
-                  className={`flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${
-                    batchStrategies.includes(key as MutationStrategy)
-                      ? 'border-purple-500 bg-purple-50'
-                      : 'border-slate-200 hover:border-slate-300'
-                  }`}
-                >
-                  <input
-                    type="checkbox"
-                    checked={batchStrategies.includes(key as MutationStrategy)}
-                    onChange={() => toggleBatchStrategy(key as MutationStrategy)}
-                    className="mt-0.5"
-                  />
-                  <div>
-                    <div className="font-medium text-slate-800">{info.name}</div>
-                    <div className="text-xs text-slate-500">{info.description}</div>
-                  </div>
-                </label>
-              ))}
             </div>
 
             {/* Iterations */}
@@ -846,15 +559,21 @@ function StyleExplorer() {
               <input
                 type="number"
                 value={batchIterations}
-                onChange={(e) => setBatchIterations(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+                onChange={(e) => setBatchIterations(Math.max(1, Math.min(10, parseInt(e.target.value) || 1)))}
                 className="w-20 px-3 py-2 border border-slate-300 rounded-lg text-center"
                 min={1}
-                max={20}
+                max={10}
               />
               <span className="text-sm text-slate-500">
                 = {batchStrategies.length * batchIterations} total images
               </span>
             </div>
+
+            {batchStrategies.length * batchIterations > 50 && (
+              <div className="mb-4 p-2 bg-amber-50 border border-amber-200 rounded text-sm text-amber-700">
+                Warning: Generating {batchStrategies.length * batchIterations} images may take a while.
+              </div>
+            )}
 
             <div className="flex justify-end gap-3">
               <button
@@ -865,7 +584,7 @@ function StyleExplorer() {
               </button>
               <button
                 onClick={() => batchMutation.mutate()}
-                disabled={batchStrategies.length === 0 || batchMutation.isPending || batchStrategies.length * batchIterations > 20}
+                disabled={batchStrategies.length === 0 || batchMutation.isPending}
                 className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50"
               >
                 {batchMutation.isPending ? 'Running...' : `Run ${batchStrategies.length * batchIterations} Images`}
@@ -874,6 +593,16 @@ function StyleExplorer() {
           </div>
         </div>
       )}
+
+      {/* Strategy Selection Modal */}
+      <StrategySelectionModal
+        isOpen={showStrategySelectionModal}
+        onClose={() => setShowStrategySelectionModal(false)}
+        selectedStrategies={batchStrategies}
+        onSelectionChange={setBatchStrategies}
+        title="Select Batch Strategies"
+        description="Choose which strategies to run in batch exploration"
+      />
     </div>
   )
 }
@@ -897,10 +626,7 @@ function SnapshotCard({
   onSetCurrent,
   onExport,
 }: SnapshotCardProps) {
-  const strategyInfo = STRATEGY_INFO[snapshot.mutation_strategy] || {
-    name: snapshot.mutation_strategy,
-    color: 'bg-slate-100 text-slate-700',
-  }
+  const strategyName = getStrategyDisplayName(snapshot.mutation_strategy)
 
   const imageSrc = snapshot.image_b64
     ? `data:image/png;base64,${snapshot.image_b64}`
@@ -980,8 +706,8 @@ function SnapshotCard({
 
       {/* Info */}
       <div className="p-3">
-        <div className={`inline-block text-xs px-2 py-0.5 rounded ${strategyInfo.color}`}>
-          {strategyInfo.name}
+        <div className="inline-block text-xs px-2 py-0.5 rounded bg-purple-100 text-purple-700">
+          {strategyName}
         </div>
         <div className="text-xs text-slate-600 mt-1 line-clamp-2">
           {snapshot.mutation_description.replace(/^[^:]+:\s*/, '')}

@@ -314,7 +314,99 @@ export type MutationStrategy =
   | 'biome_shift'
   // Technical mutations
   | 'algorithmic_wrinkle'
-  | 'symbolic_reduction';
+  | 'symbolic_reduction'
+  // === NEW MUTATIONS (75 additional) ===
+  // Chromatic mutations
+  | 'chroma_band_shift'
+  | 'chromatic_noise'
+  | 'chromatic_temperature_split'
+  | 'chromatic_fuse'
+  | 'chromatic_split'
+  // Lighting/Shadow mutations
+  | 'ambient_occlusion_variance'
+  | 'specular_flip'
+  | 'bloom_variance'
+  | 'desync_lighting_channels'
+  | 'highlight_shift'
+  | 'shadow_recode'
+  | 'lighting_angle_shift'
+  | 'highlight_bloom_colorize'
+  | 'micro_shadowing'
+  | 'macro_shadow_pivot'
+  // Contour/Edge mutations
+  | 'contour_simplify'
+  | 'contour_complexify'
+  | 'line_weight_modulation'
+  | 'edge_behavior_swap'
+  | 'boundary_echo'
+  | 'halo_generation'
+  // Texture mutations
+  | 'texture_direction_shift'
+  | 'noise_injection'
+  | 'microfracture_pattern'
+  | 'crosshatch_density_shift'
+  // Material/Surface mutations
+  | 'background_material_swap'
+  | 'surface_material_shift'
+  | 'translucency_shift'
+  | 'subsurface_scatter_tweak'
+  | 'anisotropy_shift'
+  | 'reflectivity_shift'
+  // Tonal mutations
+  | 'midtone_shift'
+  | 'tonal_compression'
+  | 'tonal_expansion'
+  | 'microcontrast_tuning'
+  | 'contrast_channel_swap'
+  // Blur/Focus mutations
+  | 'directional_blur'
+  | 'focal_plane_shift'
+  | 'mask_boundary_mutation'
+  // Silhouette mutations (extended)
+  | 'silhouette_merge'
+  | 'silhouette_subtract'
+  | 'silhouette_distortion'
+  | 'internal_geometry_twist'
+  // Depth mutations
+  | 'background_depth_collapse'
+  | 'depth_flattening'
+  | 'depth_expansion'
+  // Composition mutations (new)
+  | 'quadrant_mutation'
+  | 'object_alignment_shift'
+  | 'spatial_hierarchy_flip'
+  | 'balance_shift'
+  | 'interplay_swap'
+  | 'vignette_modification'
+  // Motif mutations (new)
+  | 'motif_mirroring'
+  | 'motif_scaling'
+  | 'motif_repetition'
+  // Color role mutations
+  | 'color_role_reassignment'
+  | 'saturation_scalpel'
+  | 'negative_color_injection'
+  | 'ambient_color_suction'
+  | 'local_color_mutation'
+  // Detail/Form mutations
+  | 'detail_density_shift'
+  | 'form_simplification'
+  | 'form_complication'
+  | 'proportion_shift'
+  // Flow/Rhythm mutations
+  | 'path_flow_shift'
+  | 'rhythm_disruption'
+  | 'rhythm_rebalance'
+  | 'directional_energy_shift'
+  // Perspective mutations
+  | 'local_perspective_bend'
+  | 'atmospheric_scatter_shift'
+  | 'occlusion_pattern'
+  | 'opacity_fog'
+  // Overlay/Pattern mutations
+  | 'pattern_overlay'
+  | 'gradient_remap'
+  | 'frame_reinterpretation';
 export type ExplorationStatus = 'created' | 'exploring' | 'paused' | 'completed';
 
 export interface ExplorationScores {

@@ -4,12 +4,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { listExplorations, createExploration, deleteExploration, exploreStep } from '../api/client'
 import { ExplorationSessionSummary, MutationStrategy } from '../types'
 import ImageUpload from '../components/ImageUpload'
+import StrategySelectionModal from '../components/StrategySelectionModal'
 
 function ExplorationList() {
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
   const [showCreate, setShowCreate] = useState(false)
+  const [showStrategyModal, setShowStrategyModal] = useState(false)
   const [newName, setNewName] = useState('')
   const [newImage, setNewImage] = useState<string | null>(null)
   const [selectedStrategies, setSelectedStrategies] = useState<MutationStrategy[]>([
@@ -50,74 +52,6 @@ function ExplorationList() {
   const handleImageSelect = useCallback((imageB64: string) => {
     setNewImage(imageB64)
   }, [])
-
-  const toggleStrategy = (strategy: MutationStrategy) => {
-    setSelectedStrategies((prev) =>
-      prev.includes(strategy)
-        ? prev.filter((s) => s !== strategy)
-        : [...prev, strategy]
-    )
-  }
-
-  const allStrategies: { key: MutationStrategy; name: string; description: string; category: string }[] = [
-    // Core mutations
-    { key: 'random_dimension', name: 'Random Dimension', description: 'Push random style dimensions to extremes', category: 'Core' },
-    { key: 'what_if', name: 'What If?', description: 'VLM-guided creative mutations', category: 'Core' },
-    { key: 'crossover', name: 'Crossover', description: 'Blend with different art styles', category: 'Core' },
-    { key: 'inversion', name: 'Inversion', description: 'Flip characteristics to opposites', category: 'Core' },
-    { key: 'amplify', name: 'Amplify', description: 'Exaggerate existing traits', category: 'Core' },
-    { key: 'diverge', name: 'Diverge', description: 'Extract-and-deviate: analyze then break from it', category: 'Core' },
-    { key: 'refine', name: 'Refine', description: 'Moderate extremes toward balance', category: 'Core' },
-    // Style transformations
-    { key: 'time_shift', name: 'Time Shift', description: 'Transport to a different era (Art Deco, 80s Memphis, etc.)', category: 'Style' },
-    { key: 'medium_swap', name: 'Medium Swap', description: 'Change artistic medium (oil, watercolor, pencil, etc.)', category: 'Style' },
-    { key: 'mood_shift', name: 'Mood Shift', description: 'Transform emotional tone (serene, anxious, joyful, etc.)', category: 'Style' },
-    { key: 'culture_shift', name: 'Culture Shift', description: 'Apply cultural aesthetics (Japanese, Moroccan, Celtic, etc.)', category: 'Style' },
-    // Composition mutations
-    { key: 'scale_warp', name: 'Scale Warp', description: 'Change perspective/scale (macro, cosmic, miniature)', category: 'Composition' },
-    { key: 'decay', name: 'Decay', description: 'Add entropy/aging (weathered, rusted, overgrown)', category: 'Composition' },
-    { key: 'remix', name: 'Remix', description: 'Shuffle elements between style sections', category: 'Composition' },
-    { key: 'constrain', name: 'Constrain', description: 'Apply strict limits (monochrome, basic shapes)', category: 'Composition' },
-    { key: 'chaos', name: 'Chaos', description: 'Multiple random mutations at once', category: 'Composition' },
-    // Spatial mutations
-    { key: 'topology_fold', name: 'Topology Fold', description: 'Warp spatial logic (mobius, recursive, tesseract)', category: 'Spatial' },
-    { key: 'silhouette_shift', name: 'Silhouette Shift', description: 'Transform shape language (angular, organic, crystalline)', category: 'Spatial' },
-    { key: 'perspective_drift', name: 'Perspective Drift', description: 'Shift viewpoint (fish-eye, orthographic, anamorphic)', category: 'Spatial' },
-    { key: 'axis_swap', name: 'Axis Swap', description: 'Rotate orientation (diagonal, spiral, radial)', category: 'Spatial' },
-    // Physics mutations
-    { key: 'physics_bend', name: 'Physics Bend', description: 'Alter physical laws (zero-g, liquid time, reverse entropy)', category: 'Physics' },
-    { key: 'chromatic_gravity', name: 'Chromatic Gravity', description: 'Colors become forces (bleeding, pooling, orbiting)', category: 'Physics' },
-    { key: 'material_transmute', name: 'Material Transmute', description: 'Transform surfaces (glass, mercury, velvet)', category: 'Physics' },
-    { key: 'temporal_exposure', name: 'Temporal Exposure', description: 'Layer time (motion blur, frozen moment, time-lapse)', category: 'Physics' },
-    // Pattern mutations
-    { key: 'motif_splice', name: 'Motif Splice', description: 'Inject recurring patterns (fractals, tessellation)', category: 'Pattern' },
-    { key: 'rhythm_overlay', name: 'Rhythm Overlay', description: 'Add visual cadence (syncopated, crescendo)', category: 'Pattern' },
-    { key: 'harmonic_balance', name: 'Harmonic Balance', description: 'Apply compositional harmony (golden ratio, rule of thirds)', category: 'Pattern' },
-    { key: 'symmetry_break', name: 'Symmetry Break', description: 'Disrupt or introduce symmetry (bilateral, rotational)', category: 'Pattern' },
-    // Density mutations
-    { key: 'density_shift', name: 'Density Shift', description: 'Adjust visual density (sparse, cluttered, gradient)', category: 'Density' },
-    { key: 'dimensional_shift', name: 'Dimensional Shift', description: 'Flatten or deepen space (isometric, 2.5D)', category: 'Density' },
-    { key: 'micro_macro_swap', name: 'Micro/Macro Swap', description: 'Flip detail scale (micro becomes macro)', category: 'Density' },
-    { key: 'essence_strip', name: 'Essence Strip', description: 'VLM-guided reduction to pure essence', category: 'Density' },
-    // Narrative mutations
-    { key: 'narrative_resonance', name: 'Narrative Resonance', description: 'Apply story archetypes (hero\'s journey, tragedy)', category: 'Narrative' },
-    { key: 'archetype_mask', name: 'Archetype Mask', description: 'Overlay universal symbols (shadow, trickster, sage)', category: 'Narrative' },
-    { key: 'anomaly_inject', name: 'Anomaly Inject', description: 'VLM-guided surreal intrusion (impossible object)', category: 'Narrative' },
-    { key: 'spectral_echo', name: 'Spectral Echo', description: 'Add ghostly afterimages and traces', category: 'Narrative' },
-    // Environment mutations
-    { key: 'climate_morph', name: 'Climate Morph', description: 'Apply weather/atmosphere (fog, rain, aurora)', category: 'Environment' },
-    { key: 'biome_shift', name: 'Biome Shift', description: 'Transport to different ecosystem (deep sea, volcanic)', category: 'Environment' },
-    // Technical mutations
-    { key: 'algorithmic_wrinkle', name: 'Algorithmic Wrinkle', description: 'Add computational artifacts (dithering, scanlines)', category: 'Technical' },
-    { key: 'symbolic_reduction', name: 'Symbolic Reduction', description: 'Reduce to symbolic representation (hieroglyphic, emoji)', category: 'Technical' },
-  ]
-
-  // Group strategies by category for display
-  const strategyCategories = allStrategies.reduce((acc, strategy) => {
-    if (!acc[strategy.category]) acc[strategy.category] = []
-    acc[strategy.category].push(strategy)
-    return acc
-  }, {} as Record<string, typeof allStrategies>)
 
   return (
     <div className="space-y-6">
@@ -166,60 +100,104 @@ function ExplorationList() {
               </div>
             </div>
 
-            {/* Right: Strategy Selection */}
+            {/* Right: Strategy Selection Summary */}
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-2">
-                Mutation Strategies ({selectedStrategies.length} selected)
+                Mutation Strategies
               </label>
               <p className="text-xs text-slate-500 mb-3">
                 Select which strategies will be used during exploration
               </p>
-              <div className="max-h-[500px] overflow-y-auto space-y-4 pr-2">
-                {Object.entries(strategyCategories).map(([category, strategies]) => (
-                  <div key={category}>
-                    <div className="flex items-center justify-between mb-2">
-                      <h4 className="text-sm font-semibold text-slate-600">{category}</h4>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const categoryKeys = strategies.map(s => s.key)
-                          const allSelected = categoryKeys.every(k => selectedStrategies.includes(k))
-                          if (allSelected) {
-                            setSelectedStrategies(prev => prev.filter(s => !categoryKeys.includes(s)))
-                          } else {
-                            setSelectedStrategies(prev => [...new Set([...prev, ...categoryKeys])])
-                          }
-                        }}
-                        className="text-xs text-purple-600 hover:text-purple-700"
+
+              {/* Strategy summary card */}
+              <div className="border border-slate-200 rounded-lg p-4 bg-slate-50">
+                <div className="flex items-center justify-between mb-3">
+                  <span className="text-lg font-semibold text-purple-600">
+                    {selectedStrategies.length} strategies selected
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowStrategyModal(true)}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 text-sm"
+                  >
+                    Select Strategies
+                  </button>
+                </div>
+
+                {selectedStrategies.length > 0 ? (
+                  <div className="flex flex-wrap gap-1.5 max-h-[200px] overflow-y-auto">
+                    {selectedStrategies.slice(0, 20).map((strategy) => (
+                      <span
+                        key={strategy}
+                        className="px-2 py-1 bg-purple-100 text-purple-700 rounded text-xs"
                       >
-                        {strategies.every(s => selectedStrategies.includes(s.key)) ? 'Deselect all' : 'Select all'}
-                      </button>
-                    </div>
-                    <div className="space-y-1">
-                      {strategies.map((strategy) => (
-                        <label
-                          key={strategy.key}
-                          className={`flex items-start gap-3 p-2 rounded-lg border cursor-pointer transition-colors ${
-                            selectedStrategies.includes(strategy.key)
-                              ? 'border-purple-500 bg-purple-50'
-                              : 'border-slate-200 hover:border-slate-300'
-                          }`}
-                        >
-                          <input
-                            type="checkbox"
-                            checked={selectedStrategies.includes(strategy.key)}
-                            onChange={() => toggleStrategy(strategy.key)}
-                            className="mt-0.5"
-                          />
-                          <div>
-                            <div className="font-medium text-slate-800 text-sm">{strategy.name}</div>
-                            <div className="text-xs text-slate-500">{strategy.description}</div>
-                          </div>
-                        </label>
-                      ))}
-                    </div>
+                        {strategy.replace(/_/g, ' ')}
+                      </span>
+                    ))}
+                    {selectedStrategies.length > 20 && (
+                      <span className="px-2 py-1 bg-slate-200 text-slate-600 rounded text-xs">
+                        +{selectedStrategies.length - 20} more
+                      </span>
+                    )}
                   </div>
-                ))}
+                ) : (
+                  <p className="text-sm text-slate-500 italic">
+                    No strategies selected. Click "Select Strategies" to choose.
+                  </p>
+                )}
+              </div>
+
+              {/* Quick presets */}
+              <div className="mt-4">
+                <label className="block text-xs font-medium text-slate-500 mb-2">Quick Presets</label>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedStrategies(['random_dimension', 'what_if', 'amplify', 'diverge'])}
+                    className="px-3 py-1 text-xs border border-slate-300 rounded-lg hover:bg-slate-100"
+                  >
+                    Core (4)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedStrategies([
+                      'chroma_band_shift', 'chromatic_noise', 'chromatic_temperature_split',
+                      'color_role_reassignment', 'saturation_scalpel'
+                    ])}
+                    className="px-3 py-1 text-xs border border-slate-300 rounded-lg hover:bg-slate-100"
+                  >
+                    Chromatic (5)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedStrategies([
+                      'ambient_occlusion_variance', 'specular_flip', 'highlight_shift',
+                      'shadow_recode', 'lighting_angle_shift'
+                    ])}
+                    className="px-3 py-1 text-xs border border-slate-300 rounded-lg hover:bg-slate-100"
+                  >
+                    Lighting (5)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedStrategies([
+                      'contour_simplify', 'contour_complexify', 'line_weight_modulation',
+                      'edge_behavior_swap', 'boundary_echo'
+                    ])}
+                    className="px-3 py-1 text-xs border border-slate-300 rounded-lg hover:bg-slate-100"
+                  >
+                    Contour (5)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedStrategies([
+                      'time_shift', 'medium_swap', 'mood_shift', 'culture_shift'
+                    ])}
+                    className="px-3 py-1 text-xs border border-slate-300 rounded-lg hover:bg-slate-100"
+                  >
+                    Style (4)
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -246,6 +224,14 @@ function ExplorationList() {
           </div>
         </div>
       )}
+
+      {/* Strategy Selection Modal */}
+      <StrategySelectionModal
+        isOpen={showStrategyModal}
+        onClose={() => setShowStrategyModal(false)}
+        selectedStrategies={selectedStrategies}
+        onSelectionChange={setSelectedStrategies}
+      />
 
       {/* Explorations List */}
       {isLoading ? (

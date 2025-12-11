@@ -447,6 +447,113 @@ class MutationStrategy(str, Enum):
     ALGORITHMIC_WRINKLE = "algorithmic_wrinkle"  # Deterministic computational artifacts
     SYMBOLIC_REDUCTION = "symbolic_reduction"    # Turn features into metaphoric shapes
 
+    # === Chromatic mutations ===
+    CHROMA_BAND_SHIFT = "chroma_band_shift"      # Shift colors only within specific hue band
+    CHROMATIC_NOISE = "chromatic_noise"          # Color-channel-separated noise like film grain
+    CHROMATIC_TEMPERATURE_SPLIT = "chromatic_temperature_split"  # Warm highlights, cool shadows
+    CHROMATIC_FUSE = "chromatic_fuse"            # Merge several hues into one unified mega-hue
+    CHROMATIC_SPLIT = "chromatic_split"          # Separate one hue into sub-hues
+
+    # === Lighting/Shadow mutations ===
+    AMBIENT_OCCLUSION_VARIANCE = "ambient_occlusion_variance"  # Alter AO softness/darkness
+    SPECULAR_FLIP = "specular_flip"              # Matte→glossy, glossy→matte
+    BLOOM_VARIANCE = "bloom_variance"            # Adjust bloom amount/radius/aura
+    DESYNC_LIGHTING_CHANNELS = "desync_lighting_channels"  # Randomize lighting independently
+    HIGHLIGHT_SHIFT = "highlight_shift"          # Modify highlight behavior
+    SHADOW_RECODE = "shadow_recode"              # Rewrite shadow behavior/color
+    LIGHTING_ANGLE_SHIFT = "lighting_angle_shift"  # Move light source direction
+    HIGHLIGHT_BLOOM_COLORIZE = "highlight_bloom_colorize"  # Change highlight bloom color
+    MICRO_SHADOWING = "micro_shadowing"          # Create small crisp micro-shadows
+    MACRO_SHADOW_PIVOT = "macro_shadow_pivot"    # Reposition large shadow masses
+
+    # === Contour/Edge mutations ===
+    CONTOUR_SIMPLIFY = "contour_simplify"        # Reduce contour lines for poster-like shapes
+    CONTOUR_COMPLEXIFY = "contour_complexify"    # Add secondary/tertiary contour lines
+    LINE_WEIGHT_MODULATION = "line_weight_modulation"  # Change outline weight/tapering
+    EDGE_BEHAVIOR_SWAP = "edge_behavior_swap"    # Soft/hard/broken/feathered edges
+    BOUNDARY_ECHO = "boundary_echo"              # Add thin duplicated outlines
+    HALO_GENERATION = "halo_generation"          # Create outline glow around shapes
+
+    # === Texture mutations ===
+    TEXTURE_DIRECTION_SHIFT = "texture_direction_shift"  # Rotate texture direction
+    NOISE_INJECTION = "noise_injection"          # Add controlled micro-noise
+    MICROFRACTURE_PATTERN = "microfracture_pattern"  # Add cracking/crazing lines
+    CROSSHATCH_DENSITY_SHIFT = "crosshatch_density_shift"  # Alter crosshatching density
+
+    # === Material/Surface mutations ===
+    BACKGROUND_MATERIAL_SWAP = "background_material_swap"  # Change backdrop material
+    SURFACE_MATERIAL_SHIFT = "surface_material_shift"  # Transform surface feel
+    TRANSLUCENCY_SHIFT = "translucency_shift"    # Alter transparency levels
+    SUBSURFACE_SCATTER_TWEAK = "subsurface_scatter_tweak"  # Adjust internal glow
+    ANISOTROPY_SHIFT = "anisotropy_shift"        # Change directional light reflection
+    REFLECTIVITY_SHIFT = "reflectivity_shift"    # Change reflectivity without color change
+
+    # === Tonal mutations ===
+    MIDTONE_SHIFT = "midtone_shift"              # Mutate midtones only
+    TONAL_COMPRESSION = "tonal_compression"      # Flatten tonal range
+    TONAL_EXPANSION = "tonal_expansion"          # Expand tonal range
+    MICROCONTRAST_TUNING = "microcontrast_tuning"  # Adjust small-scale contrast
+    CONTRAST_CHANNEL_SWAP = "contrast_channel_swap"  # Selective channel contrast
+
+    # === Blur/Focus mutations ===
+    DIRECTIONAL_BLUR = "directional_blur"        # Motion-like blur along vector
+    FOCAL_PLANE_SHIFT = "focal_plane_shift"      # Move focus point
+    MASK_BOUNDARY_MUTATION = "mask_boundary_mutation"  # Modify mask borders
+
+    # === Silhouette mutations ===
+    SILHOUETTE_MERGE = "silhouette_merge"        # Fuse two silhouettes
+    SILHOUETTE_SUBTRACT = "silhouette_subtract"  # Remove chunks for negative-space
+    SILHOUETTE_DISTORTION = "silhouette_distortion"  # Stretch/bend/fracture silhouette
+    INTERNAL_GEOMETRY_TWIST = "internal_geometry_twist"  # Twist inside, keep silhouette
+
+    # === Depth mutations ===
+    BACKGROUND_DEPTH_COLLAPSE = "background_depth_collapse"  # Compress background depth
+    DEPTH_FLATTENING = "depth_flattening"        # Reduce depth cues
+    DEPTH_EXPANSION = "depth_expansion"          # Exaggerate depth/perspective
+
+    # === Composition mutations (new) ===
+    QUADRANT_MUTATION = "quadrant_mutation"      # Mutate only one quadrant
+    OBJECT_ALIGNMENT_SHIFT = "object_alignment_shift"  # Rotate/offset/misalign objects
+    SPATIAL_HIERARCHY_FLIP = "spatial_hierarchy_flip"  # Reorder visual priority
+    BALANCE_SHIFT = "balance_shift"              # Shift overall visual weight
+    INTERPLAY_SWAP = "interplay_swap"            # Swap dominance between elements
+    VIGNETTE_MODIFICATION = "vignette_modification"  # Add/modify vignette
+
+    # === Motif mutations (new) ===
+    MOTIF_MIRRORING = "motif_mirroring"          # Mirror motif H/V/diagonal
+    MOTIF_SCALING = "motif_scaling"              # Scale repeated motifs
+    MOTIF_REPETITION = "motif_repetition"        # Duplicate and scatter motif
+
+    # === Color role mutations ===
+    COLOR_ROLE_REASSIGNMENT = "color_role_reassignment"  # Swap color roles
+    SATURATION_SCALPEL = "saturation_scalpel"    # Selective saturation (edges/inside)
+    NEGATIVE_COLOR_INJECTION = "negative_color_injection"  # Inverted color accents
+    AMBIENT_COLOR_SUCTION = "ambient_color_suction"  # Pull ambient into shadows
+    LOCAL_COLOR_MUTATION = "local_color_mutation"  # Zone-specific palette changes
+
+    # === Detail/Form mutations ===
+    DETAIL_DENSITY_SHIFT = "detail_density_shift"  # Where detail clusters
+    FORM_SIMPLIFICATION = "form_simplification"  # Reduce to simpler geometry
+    FORM_COMPLICATION = "form_complication"      # Add micro-folds/greebles
+    PROPORTION_SHIFT = "proportion_shift"        # Change element proportions
+
+    # === Flow/Rhythm mutations ===
+    PATH_FLOW_SHIFT = "path_flow_shift"          # Alter dominant directional flow
+    RHYTHM_DISRUPTION = "rhythm_disruption"      # Break/introduce repetition intervals
+    RHYTHM_REBALANCE = "rhythm_rebalance"        # Adjust motif spacing
+    DIRECTIONAL_ENERGY_SHIFT = "directional_energy_shift"  # Alter implied flow
+
+    # === Perspective mutations ===
+    LOCAL_PERSPECTIVE_BEND = "local_perspective_bend"  # Bend localized perspective
+    ATMOSPHERIC_SCATTER_SHIFT = "atmospheric_scatter_shift"  # Change light scatter
+    OCCLUSION_PATTERN = "occlusion_pattern"      # Parts hidden behind imagined layers
+    OPACITY_FOG = "opacity_fog"                  # Translucent fog/haze layer
+
+    # === Overlay/Pattern mutations ===
+    PATTERN_OVERLAY = "pattern_overlay"          # Apply repeating pattern overlay
+    GRADIENT_REMAP = "gradient_remap"            # Reassign gradient behavior
+    FRAME_REINTERPRETATION = "frame_reinterpretation"  # Alter conceptual border
+
 
 class ExplorationStatus(str, Enum):
     """Status of an exploration session."""

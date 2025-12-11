@@ -1135,6 +1135,486 @@ SYMBOLIC_REDUCTIONS = [
     }),
 ]
 
+# ============================================================
+# NEW MUTATION DATA STRUCTURES (75 new strategies)
+# ============================================================
+
+# Chromatic mutations
+CHROMA_BAND_SHIFTS = [
+    ("Red Band Shift", {"palette": {"color_descriptions": ["shifted reds to orange", "warm red mutations", "coral undertones"]}}),
+    ("Green Band Shift", {"palette": {"color_descriptions": ["shifted greens to teal", "cool green mutations", "aqua undertones"]}}),
+    ("Blue Band Shift", {"palette": {"color_descriptions": ["shifted blues to purple", "violet undertones", "indigo mutations"]}}),
+    ("Yellow Band Shift", {"palette": {"color_descriptions": ["shifted yellows to gold", "amber mutations", "ochre undertones"]}}),
+    ("Cyan Band Shift", {"palette": {"color_descriptions": ["shifted cyans to turquoise", "sea-foam mutations"]}}),
+    ("Magenta Band Shift", {"palette": {"color_descriptions": ["shifted magentas to fuchsia", "pink undertones"]}}),
+]
+
+CHROMATIC_NOISE_TYPES = [
+    ("Film Grain RGB", {"texture": {"surface": "RGB channel separated grain, film-like color noise", "noise_level": "medium"}}),
+    ("VHS Chroma", {"texture": {"surface": "VHS-style chroma bleeding, analog color shift", "noise_level": "high"}}),
+    ("Digital Color Banding", {"texture": {"surface": "subtle color banding, posterized gradients", "noise_level": "low"}}),
+    ("Halftone Scatter", {"texture": {"surface": "CMYK halftone dot pattern, print-style separation", "noise_level": "medium"}}),
+]
+
+CHROMATIC_TEMPERATURE_SPLITS = [
+    ("Warm Highlights/Cool Shadows", {"lighting": {"highlights": "warm golden amber highlights", "shadows": "cool blue-tinted shadows"}}),
+    ("Cool Highlights/Warm Shadows", {"lighting": {"highlights": "cool silver-white highlights", "shadows": "warm brown-tinted shadows"}}),
+    ("Split Complementary", {"palette": {"color_descriptions": ["orange highlights", "teal shadows", "neutral midtones"]}}),
+]
+
+CHROMATIC_FUSES = [
+    ("Unified Warm", {"palette": {"color_descriptions": ["all hues fused toward golden amber", "unified warm mega-hue"], "saturation": "medium"}}),
+    ("Unified Cool", {"palette": {"color_descriptions": ["all hues fused toward steel blue", "unified cool mega-hue"], "saturation": "medium"}}),
+    ("Unified Earth", {"palette": {"color_descriptions": ["all hues fused toward earth brown", "unified natural mega-hue"], "saturation": "low"}}),
+]
+
+CHROMATIC_SPLITS = [
+    ("Analogous Expansion", {"palette": {"color_descriptions": ["primary hue split into neighboring hues", "analogous complexity"]}}),
+    ("Complementary Split", {"palette": {"color_descriptions": ["primary hue split with complement", "tension palette"]}}),
+    ("Triadic Split", {"palette": {"color_descriptions": ["primary hue split into triadic harmony", "balanced complexity"]}}),
+]
+
+# Lighting/Shadow mutations
+AMBIENT_OCCLUSION_VARIANTS = [
+    ("Soft Wide AO", {"lighting": {"shadows": "soft wide ambient occlusion, gentle crevice darkening"}}),
+    ("Crisp Tight AO", {"lighting": {"shadows": "crisp tight ambient occlusion, sharp corner shadows"}}),
+    ("Minimal AO", {"lighting": {"shadows": "minimal ambient occlusion, flat lighting appearance"}}),
+    ("Exaggerated AO", {"lighting": {"shadows": "exaggerated deep ambient occlusion, dramatic depth"}}),
+]
+
+SPECULAR_FLIPS = [
+    ("Matte to Glossy", {"texture": {"surface": "glossy reflective surfaces, mirror-like sheen", "special_effects": ["specular highlights", "reflections"]}}),
+    ("Glossy to Matte", {"texture": {"surface": "completely matte surfaces, diffuse only, no shine", "special_effects": []}}),
+    ("Selective Flip", {"texture": {"surface": "inverted shininess - originally matte areas now glossy, glossy now matte"}}),
+]
+
+BLOOM_VARIANTS = [
+    ("No Bloom", {"texture": {"special_effects": []}, "lighting": {"highlights": "sharp defined highlights, no glow"}}),
+    ("Subtle Bloom", {"texture": {"special_effects": ["subtle light bloom"]}, "lighting": {"highlights": "gentle glow around bright areas"}}),
+    ("Heavy Bloom", {"texture": {"special_effects": ["intense bloom", "light halos"]}, "lighting": {"highlights": "dramatic glowing highlights, aureole effect"}}),
+    ("Chromatic Bloom", {"texture": {"special_effects": ["rainbow chromatic aberration bloom"]}, "lighting": {"highlights": "prismatic color-separated glow"}}),
+]
+
+DESYNC_LIGHTING_CHANNELS = [
+    ("Intensity Randomized", {"lighting": {"lighting_type": "varied intensity across scene, inconsistent brightness"}}),
+    ("Color Randomized", {"lighting": {"lighting_type": "multi-colored light sources, varied tints"}}),
+    ("Direction Randomized", {"lighting": {"lighting_type": "multiple conflicting light directions", "shadows": "contradictory shadow directions"}}),
+]
+
+HIGHLIGHT_SHIFTS = [
+    ("Soft Bloom Highlights", {"lighting": {"highlights": "soft blooming highlights, gentle glow spread"}}),
+    ("Sharp Specular Highlights", {"lighting": {"highlights": "razor-sharp specular pinpoints, crisp reflections"}}),
+    ("Inverted Highlights", {"lighting": {"highlights": "highlights in unexpected areas, reversed luminance"}}),
+    ("Colored Highlights", {"lighting": {"highlights": "tinted colored highlights, non-white speculars"}}),
+]
+
+SHADOW_RECODES = [
+    ("Colorful Shadows", {"lighting": {"shadows": "vibrant colored shadows, complementary tints"}}),
+    ("Geometric Shadows", {"lighting": {"shadows": "geometric hard-edged shadows, graphic shapes"}}),
+    ("Cinematic Shadows", {"lighting": {"shadows": "ultra-soft cinematic shadows, film noir style"}}),
+    ("Absent Shadows", {"lighting": {"shadows": "minimal to no shadows, flat lighting"}}),
+]
+
+LIGHTING_ANGLE_SHIFTS = [
+    ("Top-Down", {"lighting": {"lighting_type": "overhead top-down lighting", "shadows": "shadows directly below subjects"}}),
+    ("Side-Lit", {"lighting": {"lighting_type": "dramatic side lighting", "shadows": "long horizontal shadows"}}),
+    ("Backlit", {"lighting": {"lighting_type": "strong backlighting, rim light", "shadows": "shadows toward viewer"}}),
+    ("Under-Lit", {"lighting": {"lighting_type": "eerie underlighting", "shadows": "upward-cast shadows"}}),
+]
+
+HIGHLIGHT_BLOOM_COLORIZES = [
+    ("Golden Bloom", {"lighting": {"highlights": "golden amber bloom color"}, "texture": {"special_effects": ["warm golden glow"]}}),
+    ("Cool Bloom", {"lighting": {"highlights": "cool blue-white bloom"}, "texture": {"special_effects": ["cool ethereal glow"]}}),
+    ("Magenta Bloom", {"lighting": {"highlights": "magenta-pink bloom"}, "texture": {"special_effects": ["romantic pink glow"]}}),
+]
+
+MICRO_SHADOWINGS = [
+    ("Crisp Micro-Shadows", {"lighting": {"shadows": "tiny crisp micro-shadows adding dimensional detail"}}),
+    ("Stippled Shadows", {"lighting": {"shadows": "stippled micro-shadow pattern, textural depth"}}),
+]
+
+MACRO_SHADOW_PIVOTS = [
+    ("Shadow Mass Left", {"lighting": {"shadows": "large shadow masses repositioned to left side"}}),
+    ("Shadow Mass Right", {"lighting": {"shadows": "large shadow masses repositioned to right side"}}),
+    ("Central Shadow", {"lighting": {"shadows": "shadow mass centered, dramatic central darkness"}}),
+    ("Peripheral Shadow", {"lighting": {"shadows": "shadows pushed to edges, vignette-like"}}),
+]
+
+# Contour/Edge mutations
+CONTOUR_SIMPLIFIES = [
+    ("Poster Simple", {"line_and_shape": {"line_quality": "reduced contour lines, poster-like simplicity", "shape_language": "graphic simplified shapes"}}),
+    ("Single Outline", {"line_and_shape": {"line_quality": "single clean outline only, no internal lines"}}),
+    ("Block Shapes", {"line_and_shape": {"line_quality": "no contour lines, pure shape blocks", "shape_language": "flat color blocks"}}),
+]
+
+CONTOUR_COMPLEXIFIES = [
+    ("Secondary Contours", {"line_and_shape": {"line_quality": "added secondary contour lines emphasizing form"}}),
+    ("Tertiary Detail", {"line_and_shape": {"line_quality": "multiple layered contour lines, exaggerated depth"}}),
+    ("Cross-Contour", {"line_and_shape": {"line_quality": "cross-contour lines showing volume, topographic"}}),
+]
+
+LINE_WEIGHT_MODULATIONS = [
+    ("Thin Lines", {"line_and_shape": {"line_quality": "uniformly thin delicate lines"}}),
+    ("Thick Lines", {"line_and_shape": {"line_quality": "bold thick uniform lines"}}),
+    ("Tapered Lines", {"line_and_shape": {"line_quality": "tapered lines thick-to-thin, calligraphic"}}),
+    ("Variable Weight", {"line_and_shape": {"line_quality": "highly variable line weights, expressive strokes"}}),
+]
+
+EDGE_BEHAVIOR_SWAPS = [
+    ("Soft Edges", {"line_and_shape": {"line_quality": "soft feathered edges, gentle transitions"}}),
+    ("Hard Edges", {"line_and_shape": {"line_quality": "razor-sharp hard edges, crisp boundaries"}}),
+    ("Broken Edges", {"line_and_shape": {"line_quality": "broken interrupted edges, sketchy boundaries"}}),
+    ("Pixelated Edges", {"line_and_shape": {"line_quality": "pixelated aliased edges, digital artifact"}}),
+]
+
+BOUNDARY_ECHOES = [
+    ("Single Echo", {"line_and_shape": {"line_quality": "thin duplicated outline offset by few pixels"}}),
+    ("Multiple Echoes", {"line_and_shape": {"line_quality": "multiple concentric outline echoes, ripple effect"}}),
+    ("Offset Echo", {"line_and_shape": {"line_quality": "offset shadow outline, dimensional echo"}}),
+]
+
+HALO_GENERATIONS = [
+    ("Soft Halo", {"texture": {"special_effects": ["soft glow halo around shapes"]}, "lighting": {"highlights": "gentle luminous outline"}}),
+    ("Hard Halo", {"texture": {"special_effects": ["crisp defined halo outline"]}, "lighting": {"highlights": "sharp glowing border"}}),
+    ("Colored Halo", {"texture": {"special_effects": ["colored aura halo"]}, "lighting": {"highlights": "chromatic outline glow"}}),
+]
+
+# Texture mutations
+TEXTURE_DIRECTION_SHIFTS = [
+    ("Horizontal Texture", {"texture": {"surface": "horizontally oriented texture direction"}}),
+    ("Vertical Texture", {"texture": {"surface": "vertically oriented texture direction"}}),
+    ("Diagonal Texture", {"texture": {"surface": "diagonal 45-degree texture direction"}}),
+    ("Radial Texture", {"texture": {"surface": "radially emanating texture pattern"}}),
+]
+
+NOISE_INJECTIONS = [
+    ("Fine Grain", {"texture": {"surface": "fine grain noise, subtle texture", "noise_level": "low"}}),
+    ("Heavy Grain", {"texture": {"surface": "heavy film grain, gritty texture", "noise_level": "high"}}),
+    ("Stippling", {"texture": {"surface": "stippled dot pattern noise", "noise_level": "medium"}}),
+    ("Banding Noise", {"texture": {"surface": "horizontal banding artifacts", "noise_level": "low"}}),
+]
+
+MICROFRACTURE_PATTERNS = [
+    ("Fine Crazing", {"texture": {"surface": "fine crackle crazing pattern across surfaces"}}),
+    ("Bold Cracks", {"texture": {"surface": "bold visible crack lines, fractured appearance"}}),
+    ("Shattered", {"texture": {"surface": "shattered glass-like fracture pattern"}}),
+]
+
+CROSSHATCH_DENSITY_SHIFTS = [
+    ("Sparse Crosshatch", {"texture": {"surface": "sparse widely-spaced crosshatching"}}),
+    ("Dense Crosshatch", {"texture": {"surface": "dense tight crosshatching, rich texture"}}),
+    ("Angled Crosshatch", {"texture": {"surface": "crosshatching at unusual angles"}}),
+]
+
+# Material/Surface mutations
+BACKGROUND_MATERIAL_SWAPS = [
+    ("Paper Background", {"texture": {"surface": "paper texture backdrop, fibrous"}}),
+    ("Metal Background", {"texture": {"surface": "brushed metal backdrop, industrial"}}),
+    ("Digital Noise Background", {"texture": {"surface": "digital noise static backdrop"}}),
+    ("Velvet Background", {"texture": {"surface": "velvet soft fabric backdrop"}}),
+    ("Concrete Background", {"texture": {"surface": "raw concrete textured backdrop"}}),
+]
+
+SURFACE_MATERIAL_SHIFTS = [
+    ("Glossy to Matte", {"texture": {"surface": "matte diffuse surface, no reflections"}}),
+    ("Rough to Smooth", {"texture": {"surface": "smooth polished surface, refined"}}),
+    ("Porous to Solid", {"texture": {"surface": "solid impermeable surface, sealed"}}),
+    ("Metallic Sheen", {"texture": {"surface": "metallic reflective surface quality"}}),
+]
+
+TRANSLUCENCY_SHIFTS = [
+    ("Add Translucency", {"texture": {"surface": "translucent semi-transparent materials", "special_effects": ["subsurface glow"]}}),
+    ("Remove Translucency", {"texture": {"surface": "fully opaque solid materials", "special_effects": []}}),
+    ("Glass-Like", {"texture": {"surface": "glass-like transparency, refractive", "special_effects": ["light refraction"]}}),
+]
+
+SUBSURFACE_SCATTER_TWEAKS = [
+    ("Add SSS", {"texture": {"special_effects": ["subsurface scattering", "internal glow"]}, "lighting": {"highlights": "soft internal light transmission"}}),
+    ("Remove SSS", {"texture": {"special_effects": []}, "lighting": {"highlights": "surface-only lighting, no internal glow"}}),
+    ("Strong SSS", {"texture": {"special_effects": ["strong subsurface scattering", "wax-like glow"]}}),
+]
+
+ANISOTROPY_SHIFTS = [
+    ("Brushed Metal", {"texture": {"surface": "anisotropic brushed metal reflections, directional"}}),
+    ("Hair-Like", {"texture": {"surface": "anisotropic hair-like strand reflections"}}),
+    ("Silk Sheen", {"texture": {"surface": "anisotropic silk fabric sheen, flowing"}}),
+]
+
+REFLECTIVITY_SHIFTS = [
+    ("Mirror-Like", {"texture": {"surface": "highly reflective mirror-like surfaces", "special_effects": ["sharp reflections"]}}),
+    ("Muted Reflections", {"texture": {"surface": "muted soft reflections, diffuse", "special_effects": ["blurred reflections"]}}),
+    ("No Reflections", {"texture": {"surface": "non-reflective matte surfaces", "special_effects": []}}),
+]
+
+# Tonal mutations
+MIDTONE_SHIFTS = [
+    ("Lighter Midtones", {"palette": {"value_range": "lifted midtones, lighter overall feel"}}),
+    ("Darker Midtones", {"palette": {"value_range": "pushed down midtones, moodier"}}),
+    ("Warmer Midtones", {"palette": {"value_range": "warm-tinted midtones", "color_descriptions": ["amber midtones"]}}),
+    ("Cooler Midtones", {"palette": {"value_range": "cool-tinted midtones", "color_descriptions": ["blue-gray midtones"]}}),
+]
+
+TONAL_COMPRESSIONS = [
+    ("Flat Graphic", {"palette": {"value_range": "compressed flat tonal range, graphic poster look"}}),
+    ("Hazy Compressed", {"palette": {"value_range": "compressed hazy tonal range, foggy"}}),
+]
+
+TONAL_EXPANSIONS = [
+    ("High Dynamic", {"palette": {"value_range": "expanded HDR tonal range, deep shadows bright highlights"}}),
+    ("Dramatic Contrast", {"palette": {"value_range": "dramatically expanded contrast, theatrical"}}),
+]
+
+MICROCONTRAST_TUNINGS = [
+    ("Crisp Texture", {"texture": {"surface": "high microcontrast, crisp texture detail"}}),
+    ("Soft Texture", {"texture": {"surface": "low microcontrast, smooth texture"}}),
+]
+
+CONTRAST_CHANNEL_SWAPS = [
+    ("Luminance Contrast", {"palette": {"value_range": "luminance-only contrast adjustment"}}),
+    ("Chroma Contrast", {"palette": {"value_range": "chrominance-only contrast, color punch"}}),
+    ("Hue Contrast", {"palette": {"value_range": "hue variation contrast, color diversity"}}),
+]
+
+# Blur/Focus mutations
+DIRECTIONAL_BLURS = [
+    ("Horizontal Motion", {"texture": {"special_effects": ["horizontal motion blur"]}, "composition": {"structural_notes": "horizontal movement implied"}}),
+    ("Vertical Motion", {"texture": {"special_effects": ["vertical motion blur"]}, "composition": {"structural_notes": "vertical movement implied"}}),
+    ("Radial Zoom", {"texture": {"special_effects": ["radial zoom blur"]}, "composition": {"structural_notes": "explosive outward motion"}}),
+    ("Rotational", {"texture": {"special_effects": ["rotational spin blur"]}, "composition": {"structural_notes": "spinning motion"}}),
+]
+
+FOCAL_PLANE_SHIFTS = [
+    ("Foreground Focus", {"composition": {"depth": "sharp foreground, blurred background"}, "texture": {"special_effects": ["shallow depth of field"]}}),
+    ("Background Focus", {"composition": {"depth": "blurred foreground, sharp background"}, "texture": {"special_effects": ["reverse focus"]}}),
+    ("Tilt-Shift", {"composition": {"depth": "selective miniature effect focus"}, "texture": {"special_effects": ["tilt-shift blur"]}}),
+]
+
+MASK_BOUNDARY_MUTATIONS = [
+    ("Soft Masks", {"line_and_shape": {"line_quality": "soft feathered mask boundaries"}}),
+    ("Hard Masks", {"line_and_shape": {"line_quality": "crisp hard mask boundaries"}}),
+    ("Torn Masks", {"line_and_shape": {"line_quality": "torn irregular mask boundaries"}}),
+    ("Stippled Masks", {"line_and_shape": {"line_quality": "stippled dissolving mask boundaries"}}),
+]
+
+# Silhouette mutations (extended)
+SILHOUETTE_MERGES = [
+    ("Overlapping Merge", {"line_and_shape": {"shape_language": "overlapping silhouettes fused into composite"}}),
+    ("Blended Merge", {"line_and_shape": {"shape_language": "smoothly blended merged silhouettes"}}),
+]
+
+SILHOUETTE_SUBTRACTS = [
+    ("Negative Cutout", {"line_and_shape": {"shape_language": "negative space cutouts in silhouette"}}),
+    ("Fragmented", {"line_and_shape": {"shape_language": "fragmented broken silhouette chunks"}}),
+]
+
+SILHOUETTE_DISTORTIONS = [
+    ("Stretched", {"line_and_shape": {"shape_language": "vertically stretched silhouette"}}),
+    ("Compressed", {"line_and_shape": {"shape_language": "horizontally compressed silhouette"}}),
+    ("Bent", {"line_and_shape": {"shape_language": "bent curved silhouette distortion"}}),
+    ("Fractured", {"line_and_shape": {"shape_language": "fractured shattered silhouette"}}),
+]
+
+INTERNAL_GEOMETRY_TWISTS = [
+    ("Internal Spiral", {"line_and_shape": {"geometry_notes": "internal spiraling twist, silhouette preserved"}}),
+    ("Internal Vortex", {"line_and_shape": {"geometry_notes": "internal vortex distortion, outer shape intact"}}),
+]
+
+# Depth mutations
+BACKGROUND_DEPTH_COLLAPSES = [
+    ("Compressed Depth", {"composition": {"depth": "compressed background depth, objects appear closer"}}),
+    ("Flattened Backdrop", {"composition": {"depth": "completely flattened backdrop, stage-like"}}),
+]
+
+DEPTH_FLATTENINGS = [
+    ("2D Poster", {"composition": {"depth": "flattened 2D poster-like depth"}, "line_and_shape": {"shape_language": "flat graphic shapes"}}),
+    ("Isometric Flat", {"composition": {"depth": "isometric pseudo-3D, no perspective convergence"}}),
+]
+
+DEPTH_EXPANSIONS = [
+    ("Exaggerated Perspective", {"composition": {"depth": "dramatically exaggerated perspective depth", "camera": "extreme wide angle"}}),
+    ("Long Gradient Depth", {"composition": {"depth": "extended atmospheric depth gradient"}}),
+]
+
+# Composition mutations (new)
+QUADRANT_MUTATIONS = [
+    ("Top-Left Mutated", {"composition": {"structural_notes": "top-left quadrant stylistically different"}}),
+    ("Top-Right Mutated", {"composition": {"structural_notes": "top-right quadrant stylistically different"}}),
+    ("Bottom-Left Mutated", {"composition": {"structural_notes": "bottom-left quadrant stylistically different"}}),
+    ("Bottom-Right Mutated", {"composition": {"structural_notes": "bottom-right quadrant stylistically different"}}),
+]
+
+OBJECT_ALIGNMENT_SHIFTS = [
+    ("Slight Rotation", {"composition": {"structural_notes": "objects slightly rotated off-axis"}}),
+    ("Offset Misalign", {"composition": {"structural_notes": "objects offset from expected positions"}}),
+    ("Scattered", {"composition": {"structural_notes": "objects scattered in deliberate disarray"}}),
+]
+
+SPATIAL_HIERARCHY_FLIPS = [
+    ("Background Dominant", {"composition": {"framing": "background dominates, subject minimized", "structural_notes": "inverted spatial priority"}}),
+    ("Midground Primary", {"composition": {"framing": "midground becomes primary focus", "structural_notes": "middle-layer emphasis"}}),
+]
+
+BALANCE_SHIFTS = [
+    ("Heavy Left", {"composition": {"structural_notes": "visual weight shifted to left side"}}),
+    ("Heavy Right", {"composition": {"structural_notes": "visual weight shifted to right side"}}),
+    ("Heavy Top", {"composition": {"structural_notes": "visual weight shifted to top"}}),
+    ("Heavy Bottom", {"composition": {"structural_notes": "visual weight shifted to bottom"}}),
+]
+
+INTERPLAY_SWAPS = [
+    ("Subject-Background Swap", {"composition": {"framing": "background and subject visual dominance swapped"}}),
+    ("Positive-Negative Swap", {"composition": {"negative_space_behavior": "positive and negative space roles exchanged"}}),
+]
+
+VIGNETTE_MODIFICATIONS = [
+    ("Dark Vignette", {"lighting": {"shadows": "dark corner vignette"}, "composition": {"framing": "darkened edges focus center"}}),
+    ("Light Vignette", {"lighting": {"highlights": "bright corner vignette"}, "composition": {"framing": "brightened edges"}}),
+    ("Color Vignette", {"palette": {"color_descriptions": ["colored edge tinting"]}, "composition": {"framing": "chromatic vignette"}}),
+    ("Reverse Vignette", {"lighting": {"highlights": "bright edges dark center"}, "composition": {"framing": "inverted vignette"}}),
+]
+
+# Motif mutations (new)
+MOTIF_MIRRORINGS = [
+    ("Horizontal Mirror", {"motifs": {"recurring_elements": ["horizontally mirrored motif"]}, "composition": {"structural_notes": "bilateral horizontal symmetry"}}),
+    ("Vertical Mirror", {"motifs": {"recurring_elements": ["vertically mirrored motif"]}, "composition": {"structural_notes": "bilateral vertical symmetry"}}),
+    ("Diagonal Mirror", {"motifs": {"recurring_elements": ["diagonally mirrored motif"]}, "composition": {"structural_notes": "diagonal reflection symmetry"}}),
+]
+
+MOTIF_SCALINGS = [
+    ("Enlarged Motifs", {"motifs": {"recurring_elements": ["scaled up repeated motifs"]}}),
+    ("Miniaturized Motifs", {"motifs": {"recurring_elements": ["scaled down repeated motifs"]}}),
+    ("Variable Scale", {"motifs": {"recurring_elements": ["motifs at varying scales"]}}),
+]
+
+MOTIF_REPETITIONS = [
+    ("Grid Scatter", {"motifs": {"recurring_elements": ["motif duplicated in grid pattern"]}, "composition": {"structural_notes": "regular grid repetition"}}),
+    ("Random Scatter", {"motifs": {"recurring_elements": ["motif randomly scattered"]}, "composition": {"structural_notes": "organic random repetition"}}),
+    ("Radial Scatter", {"motifs": {"recurring_elements": ["motif repeated radially"]}, "composition": {"structural_notes": "radial pattern repetition"}}),
+]
+
+# Color role mutations
+COLOR_ROLE_REASSIGNMENTS = [
+    ("Accent to Base", {"palette": {"color_descriptions": ["accent color becomes dominant base"]}}),
+    ("Base to Accent", {"palette": {"color_descriptions": ["base color demoted to accent"]}}),
+    ("Background to Subject", {"palette": {"color_descriptions": ["background hue applied to subject"]}}),
+]
+
+SATURATION_SCALPELS = [
+    ("Saturated Edges", {"palette": {"color_descriptions": ["high saturation on edges only"]}}),
+    ("Saturated Interior", {"palette": {"color_descriptions": ["high saturation inside shapes only"]}}),
+    ("Desaturated Edges", {"palette": {"color_descriptions": ["desaturated edges, saturated centers"]}}),
+]
+
+NEGATIVE_COLOR_INJECTIONS = [
+    ("Micro Inverts", {"palette": {"color_descriptions": ["tiny inverted color accent spots"]}}),
+    ("Accent Inverts", {"palette": {"accents": ["inverted complementary micro-accents"]}}),
+]
+
+AMBIENT_COLOR_SUCTIONS = [
+    ("Shadow Pull", {"lighting": {"shadows": "ambient palette colors pulled into shadows"}, "palette": {"color_descriptions": ["colored undertone shadows"]}}),
+    ("Undertone Pull", {"palette": {"color_descriptions": ["ambient colors as undertones throughout"]}}),
+]
+
+LOCAL_COLOR_MUTATIONS = [
+    ("Midtone Color Change", {"palette": {"color_descriptions": ["midtones only color shifted"]}}),
+    ("Shadow Color Change", {"palette": {"color_descriptions": ["shadows only color shifted"]}}),
+    ("Highlight Color Change", {"palette": {"color_descriptions": ["highlights only color shifted"]}}),
+]
+
+# Detail/Form mutations
+DETAIL_DENSITY_SHIFTS = [
+    ("Face Detail Focus", {"composition": {"structural_notes": "high detail on faces, low elsewhere"}}),
+    ("Background Detail Focus", {"composition": {"structural_notes": "high detail in background, simplified foreground"}}),
+    ("Even Detail", {"composition": {"structural_notes": "uniform detail distribution"}}),
+]
+
+FORM_SIMPLIFICATIONS = [
+    ("Rounded Forms", {"line_and_shape": {"shape_language": "simplified rounded forms", "geometry_notes": "soft rounded reduction"}}),
+    ("Blocked Forms", {"line_and_shape": {"shape_language": "simplified blocked angular forms", "geometry_notes": "cubic reduction"}}),
+    ("Silhouette Only", {"line_and_shape": {"shape_language": "reduced to pure silhouette", "geometry_notes": "flat shape reduction"}}),
+]
+
+FORM_COMPLICATIONS = [
+    ("Micro-Folds", {"line_and_shape": {"geometry_notes": "added micro-fold surface detail"}}),
+    ("Greebles", {"line_and_shape": {"geometry_notes": "added greeble fine detail complexity"}}),
+    ("Fractal Subdivision", {"line_and_shape": {"geometry_notes": "fractal subdivided detail complexity"}}),
+]
+
+PROPORTION_SHIFTS = [
+    ("Elongated", {"line_and_shape": {"shape_language": "vertically elongated proportions"}, "composition": {"structural_notes": "stretched forms"}}),
+    ("Squashed", {"line_and_shape": {"shape_language": "vertically squashed proportions"}, "composition": {"structural_notes": "compressed forms"}}),
+    ("Widened", {"line_and_shape": {"shape_language": "horizontally widened proportions"}}),
+]
+
+# Flow/Rhythm mutations
+PATH_FLOW_SHIFTS = [
+    ("Horizontal Flow", {"composition": {"structural_notes": "dominant horizontal directional flow"}}),
+    ("Vertical Flow", {"composition": {"structural_notes": "dominant vertical directional flow"}}),
+    ("Diagonal Flow", {"composition": {"structural_notes": "dominant diagonal directional flow"}}),
+    ("Spiral Flow", {"composition": {"structural_notes": "spiral inward/outward directional flow"}}),
+]
+
+RHYTHM_DISRUPTIONS = [
+    ("Irregular Spacing", {"composition": {"structural_notes": "irregular syncopated spacing rhythm"}}),
+    ("Regular to Irregular", {"composition": {"structural_notes": "broken regular rhythm into irregular"}}),
+]
+
+RHYTHM_REBALANCES = [
+    ("Even Spacing", {"composition": {"structural_notes": "evenly spaced regular rhythm"}}),
+    ("Accelerating Spacing", {"composition": {"structural_notes": "accelerating spacing rhythm"}}),
+]
+
+DIRECTIONAL_ENERGY_SHIFTS = [
+    ("Leftward Energy", {"composition": {"structural_notes": "implied energy flow leftward"}}),
+    ("Rightward Energy", {"composition": {"structural_notes": "implied energy flow rightward"}}),
+    ("Upward Energy", {"composition": {"structural_notes": "implied energy flow upward"}}),
+    ("Downward Energy", {"composition": {"structural_notes": "implied energy flow downward"}}),
+]
+
+# Perspective mutations
+LOCAL_PERSPECTIVE_BENDS = [
+    ("Warped Center", {"composition": {"camera": "locally warped center perspective"}}),
+    ("Bent Edges", {"composition": {"camera": "perspective bent at frame edges"}}),
+]
+
+ATMOSPHERIC_SCATTER_SHIFTS = [
+    ("Heavy Scatter", {"lighting": {"lighting_type": "heavy atmospheric light scatter, hazy"}}),
+    ("Minimal Scatter", {"lighting": {"lighting_type": "minimal atmospheric scatter, clear"}}),
+]
+
+OCCLUSION_PATTERNS = [
+    ("Layered Occlusion", {"composition": {"depth": "objects partially hidden behind imagined layers"}}),
+    ("Foreground Occlusion", {"composition": {"depth": "foreground elements occluding subject"}}),
+]
+
+OPACITY_FOGS = [
+    ("Light Fog", {"lighting": {"lighting_type": "light translucent fog layer"}, "palette": {"color_descriptions": ["fog-muted colors"]}}),
+    ("Heavy Fog", {"lighting": {"lighting_type": "heavy dense fog layer"}, "palette": {"color_descriptions": ["heavily fog-obscured"]}}),
+    ("Colored Fog", {"lighting": {"lighting_type": "tinted colored fog layer"}, "palette": {"color_descriptions": ["color-tinted atmospheric haze"]}}),
+]
+
+# Overlay/Pattern mutations
+PATTERN_OVERLAYS = [
+    ("Grid Overlay", {"texture": {"surface": "subtle grid pattern overlay", "special_effects": ["grid pattern"]}}),
+    ("Dot Overlay", {"texture": {"surface": "halftone dot pattern overlay", "special_effects": ["halftone"]}}),
+    ("Spiral Overlay", {"texture": {"surface": "spiral pattern overlay", "special_effects": ["spiral pattern"]}}),
+    ("Scanline Overlay", {"texture": {"surface": "horizontal scanline overlay", "special_effects": ["scanlines"]}}),
+]
+
+GRADIENT_REMAPS = [
+    ("Multi-Stop", {"palette": {"value_range": "multi-stop complex gradients"}}),
+    ("Sharp Transitions", {"palette": {"value_range": "sharp stepped gradient transitions"}}),
+    ("Circular Gradients", {"palette": {"value_range": "radial circular gradients"}}),
+    ("Axial Gradients", {"palette": {"value_range": "linear axial gradients"}}),
+]
+
+FRAME_REINTERPRETATIONS = [
+    ("Film Frame", {"composition": {"framing": "film strip frame borders", "structural_notes": "cinematic frame aesthetic"}}),
+    ("Comic Panel", {"composition": {"framing": "comic book panel borders", "structural_notes": "sequential art framing"}}),
+    ("Torn Paper", {"composition": {"framing": "torn paper edge frame", "structural_notes": "organic ripped border"}}),
+    ("Circular Frame", {"composition": {"framing": "circular vignette frame", "structural_notes": "round framing"}}),
+]
+
 
 class StyleExplorer:
     """
@@ -2487,6 +2967,401 @@ Output ONLY valid JSON:
         symbol_name, symbol_changes = random.choice(SYMBOLIC_REDUCTIONS)
         return self._apply_preset_mutation(profile, symbol_name, symbol_changes, "Symbolic Reduction", "symbolic")
 
+    # ============================================================
+    # NEW MUTATION METHODS (75 new strategies)
+    # ============================================================
+
+    # === CHROMATIC MUTATIONS ===
+    def _mutate_chroma_band_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Shift colors only within specific hue band."""
+        preset_name, preset_changes = random.choice(CHROMA_BAND_SHIFTS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Chroma Band Shift", "hue-shifted")
+
+    def _mutate_chromatic_noise(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Add color-channel-separated noise like film grain."""
+        preset_name, preset_changes = random.choice(CHROMATIC_NOISE_TYPES)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Chromatic Noise", "noisy")
+
+    def _mutate_chromatic_temperature_split(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Split warm highlights and cool shadows (or vice versa)."""
+        preset_name, preset_changes = random.choice(CHROMATIC_TEMPERATURE_SPLITS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Chromatic Temperature Split", "temperature-split")
+
+    def _mutate_chromatic_fuse(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Merge several hues into one unified mega-hue."""
+        preset_name, preset_changes = random.choice(CHROMATIC_FUSES)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Chromatic Fuse", "unified")
+
+    def _mutate_chromatic_split(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Separate one hue into sub-hues for palette complexity."""
+        preset_name, preset_changes = random.choice(CHROMATIC_SPLITS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Chromatic Split", "split")
+
+    # === LIGHTING/SHADOW MUTATIONS ===
+    def _mutate_ambient_occlusion_variance(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Alter ambient occlusion softness/darkness."""
+        preset_name, preset_changes = random.choice(AMBIENT_OCCLUSION_VARIANTS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Ambient Occlusion Variance", "AO-modified")
+
+    def _mutate_specular_flip(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Swap matte/glossy behavior."""
+        preset_name, preset_changes = random.choice(SPECULAR_FLIPS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Specular Flip", "specularity-flipped")
+
+    def _mutate_bloom_variance(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Adjust bloom amount/radius/aura."""
+        preset_name, preset_changes = random.choice(BLOOM_VARIANTS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Bloom Variance", "bloom-adjusted")
+
+    def _mutate_desync_lighting_channels(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Independently randomize lighting intensity/color/direction."""
+        preset_name, preset_changes = random.choice(DESYNC_LIGHTING_CHANNELS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Desync Lighting", "desynced")
+
+    def _mutate_highlight_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Modify highlight behavior."""
+        preset_name, preset_changes = random.choice(HIGHLIGHT_SHIFTS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Highlight Shift", "highlight-shifted")
+
+    def _mutate_shadow_recode(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Rewrite shadow behavior/color."""
+        preset_name, preset_changes = random.choice(SHADOW_RECODES)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Shadow Recode", "shadow-recoded")
+
+    def _mutate_lighting_angle_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Move light source direction."""
+        preset_name, preset_changes = random.choice(LIGHTING_ANGLE_SHIFTS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Lighting Angle Shift", "relit")
+
+    def _mutate_highlight_bloom_colorize(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Change highlight bloom color."""
+        preset_name, preset_changes = random.choice(HIGHLIGHT_BLOOM_COLORIZES)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Highlight Bloom Colorize", "bloom-colored")
+
+    def _mutate_micro_shadowing(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Create small crisp micro-shadows."""
+        preset_name, preset_changes = random.choice(MICRO_SHADOWINGS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Micro-Shadowing", "micro-shadowed")
+
+    def _mutate_macro_shadow_pivot(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Reposition large shadow masses."""
+        preset_name, preset_changes = random.choice(MACRO_SHADOW_PIVOTS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Macro Shadow Pivot", "shadow-pivoted")
+
+    # === CONTOUR/EDGE MUTATIONS ===
+    def _mutate_contour_simplify(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Reduce contour lines for poster-like shapes."""
+        preset_name, preset_changes = random.choice(CONTOUR_SIMPLIFIES)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Contour Simplify", "simplified")
+
+    def _mutate_contour_complexify(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Add secondary/tertiary contour lines."""
+        preset_name, preset_changes = random.choice(CONTOUR_COMPLEXIFIES)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Contour Complexify", "complexified")
+
+    def _mutate_line_weight_modulation(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Change outline weight/tapering."""
+        preset_name, preset_changes = random.choice(LINE_WEIGHT_MODULATIONS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Line Weight Modulation", "reweighted")
+
+    def _mutate_edge_behavior_swap(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Swap between soft/hard/broken/feathered edges."""
+        preset_name, preset_changes = random.choice(EDGE_BEHAVIOR_SWAPS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Edge Behavior Swap", "edge-swapped")
+
+    def _mutate_boundary_echo(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Add thin duplicated outlines."""
+        preset_name, preset_changes = random.choice(BOUNDARY_ECHOES)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Boundary Echo", "echoed")
+
+    def _mutate_halo_generation(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Create outline glow around shapes."""
+        preset_name, preset_changes = random.choice(HALO_GENERATIONS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Halo Generation", "haloed")
+
+    # === TEXTURE MUTATIONS ===
+    def _mutate_texture_direction_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Rotate texture direction."""
+        preset_name, preset_changes = random.choice(TEXTURE_DIRECTION_SHIFTS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Texture Direction Shift", "direction-shifted")
+
+    def _mutate_noise_injection(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Add controlled micro-noise."""
+        preset_name, preset_changes = random.choice(NOISE_INJECTIONS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Noise Injection", "noise-injected")
+
+    def _mutate_microfracture_pattern(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Add cracking/crazing lines."""
+        preset_name, preset_changes = random.choice(MICROFRACTURE_PATTERNS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Microfracture Pattern", "fractured")
+
+    def _mutate_crosshatch_density_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Alter crosshatching density."""
+        preset_name, preset_changes = random.choice(CROSSHATCH_DENSITY_SHIFTS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Crosshatch Density Shift", "crosshatch-shifted")
+
+    # === MATERIAL/SURFACE MUTATIONS ===
+    def _mutate_background_material_swap(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Change backdrop material."""
+        preset_name, preset_changes = random.choice(BACKGROUND_MATERIAL_SWAPS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Background Material Swap", "bg-swapped")
+
+    def _mutate_surface_material_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Transform surface feel."""
+        preset_name, preset_changes = random.choice(SURFACE_MATERIAL_SHIFTS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Surface Material Shift", "surface-shifted")
+
+    def _mutate_translucency_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Alter transparency levels."""
+        preset_name, preset_changes = random.choice(TRANSLUCENCY_SHIFTS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Translucency Shift", "translucency-shifted")
+
+    def _mutate_subsurface_scatter_tweak(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Adjust internal glow in translucent materials."""
+        preset_name, preset_changes = random.choice(SUBSURFACE_SCATTER_TWEAKS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Subsurface Scatter Tweak", "SSS-tweaked")
+
+    def _mutate_anisotropy_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Change directional light reflection."""
+        preset_name, preset_changes = random.choice(ANISOTROPY_SHIFTS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Anisotropy Shift", "anisotropic")
+
+    def _mutate_reflectivity_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Change reflectivity without color change."""
+        preset_name, preset_changes = random.choice(REFLECTIVITY_SHIFTS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Reflectivity Shift", "reflectivity-shifted")
+
+    # === TONAL MUTATIONS ===
+    def _mutate_midtone_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Mutate midtones only."""
+        preset_name, preset_changes = random.choice(MIDTONE_SHIFTS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Midtone Shift", "midtone-shifted")
+
+    def _mutate_tonal_compression(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Compress tonal range for flatter look."""
+        preset_name, preset_changes = random.choice(TONAL_COMPRESSIONS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Tonal Compression", "compressed")
+
+    def _mutate_tonal_expansion(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Expand tonal range for deeper contrast."""
+        preset_name, preset_changes = random.choice(TONAL_EXPANSIONS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Tonal Expansion", "expanded")
+
+    def _mutate_microcontrast_tuning(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Adjust small-scale contrast."""
+        preset_name, preset_changes = random.choice(MICROCONTRAST_TUNINGS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Microcontrast Tuning", "microcontrast-tuned")
+
+    def _mutate_contrast_channel_swap(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Modify contrast selectively by channel."""
+        preset_name, preset_changes = random.choice(CONTRAST_CHANNEL_SWAPS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Contrast Channel Swap", "channel-contrast")
+
+    # === BLUR/FOCUS MUTATIONS ===
+    def _mutate_directional_blur(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Apply motion-like blur along vector."""
+        preset_name, preset_changes = random.choice(DIRECTIONAL_BLURS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Directional Blur", "blurred")
+
+    def _mutate_focal_plane_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Move focus point."""
+        preset_name, preset_changes = random.choice(FOCAL_PLANE_SHIFTS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Focal Plane Shift", "refocused")
+
+    def _mutate_mask_boundary_mutation(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Modify mask borders."""
+        preset_name, preset_changes = random.choice(MASK_BOUNDARY_MUTATIONS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Mask Boundary Mutation", "mask-modified")
+
+    # === SILHOUETTE MUTATIONS (EXTENDED) ===
+    def _mutate_silhouette_merge(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Fuse two silhouettes into composite."""
+        preset_name, preset_changes = random.choice(SILHOUETTE_MERGES)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Silhouette Merge", "merged")
+
+    def _mutate_silhouette_subtract(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Remove chunks for negative-space shapes."""
+        preset_name, preset_changes = random.choice(SILHOUETTE_SUBTRACTS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Silhouette Subtract", "subtracted")
+
+    def _mutate_silhouette_distortion(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Stretch/bend/fracture silhouette."""
+        preset_name, preset_changes = random.choice(SILHOUETTE_DISTORTIONS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Silhouette Distortion", "distorted")
+
+    def _mutate_internal_geometry_twist(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Twist inside while keeping silhouette."""
+        preset_name, preset_changes = random.choice(INTERNAL_GEOMETRY_TWISTS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Internal Geometry Twist", "internally-twisted")
+
+    # === DEPTH MUTATIONS ===
+    def _mutate_background_depth_collapse(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Compress background depth."""
+        preset_name, preset_changes = random.choice(BACKGROUND_DEPTH_COLLAPSES)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Background Depth Collapse", "depth-collapsed")
+
+    def _mutate_depth_flattening(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Reduce depth cues."""
+        preset_name, preset_changes = random.choice(DEPTH_FLATTENINGS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Depth Flattening", "flattened")
+
+    def _mutate_depth_expansion(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Exaggerate depth/perspective."""
+        preset_name, preset_changes = random.choice(DEPTH_EXPANSIONS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Depth Expansion", "depth-expanded")
+
+    # === COMPOSITION MUTATIONS (NEW) ===
+    def _mutate_quadrant_mutation(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Mutate only one quadrant."""
+        preset_name, preset_changes = random.choice(QUADRANT_MUTATIONS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Quadrant Mutation", "quadrant-mutated")
+
+    def _mutate_object_alignment_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Rotate/offset/misalign objects."""
+        preset_name, preset_changes = random.choice(OBJECT_ALIGNMENT_SHIFTS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Object Alignment Shift", "realigned")
+
+    def _mutate_spatial_hierarchy_flip(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Reorder visual priority."""
+        preset_name, preset_changes = random.choice(SPATIAL_HIERARCHY_FLIPS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Spatial Hierarchy Flip", "hierarchy-flipped")
+
+    def _mutate_balance_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Shift overall visual weight."""
+        preset_name, preset_changes = random.choice(BALANCE_SHIFTS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Balance Shift", "rebalanced")
+
+    def _mutate_interplay_swap(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Swap dominance between elements."""
+        preset_name, preset_changes = random.choice(INTERPLAY_SWAPS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Interplay Swap", "swapped")
+
+    def _mutate_vignette_modification(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Add/modify vignette."""
+        preset_name, preset_changes = random.choice(VIGNETTE_MODIFICATIONS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Vignette Modification", "vignetted")
+
+    # === MOTIF MUTATIONS (NEW) ===
+    def _mutate_motif_mirroring(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Mirror motif H/V/diagonal."""
+        preset_name, preset_changes = random.choice(MOTIF_MIRRORINGS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Motif Mirroring", "mirrored")
+
+    def _mutate_motif_scaling(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Scale repeated motifs."""
+        preset_name, preset_changes = random.choice(MOTIF_SCALINGS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Motif Scaling", "scaled")
+
+    def _mutate_motif_repetition(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Duplicate and scatter motif."""
+        preset_name, preset_changes = random.choice(MOTIF_REPETITIONS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Motif Repetition", "repeated")
+
+    # === COLOR ROLE MUTATIONS ===
+    def _mutate_color_role_reassignment(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Swap color roles."""
+        preset_name, preset_changes = random.choice(COLOR_ROLE_REASSIGNMENTS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Color Role Reassignment", "role-swapped")
+
+    def _mutate_saturation_scalpel(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Selective saturation (edges/inside)."""
+        preset_name, preset_changes = random.choice(SATURATION_SCALPELS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Saturation Scalpel", "selectively-saturated")
+
+    def _mutate_negative_color_injection(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Apply inverted color accents."""
+        preset_name, preset_changes = random.choice(NEGATIVE_COLOR_INJECTIONS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Negative Color Injection", "inverted-accents")
+
+    def _mutate_ambient_color_suction(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Pull ambient into shadows."""
+        preset_name, preset_changes = random.choice(AMBIENT_COLOR_SUCTIONS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Ambient Color Suction", "ambient-sucked")
+
+    def _mutate_local_color_mutation(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Zone-specific palette changes."""
+        preset_name, preset_changes = random.choice(LOCAL_COLOR_MUTATIONS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Local Color Mutation", "locally-colored")
+
+    # === DETAIL/FORM MUTATIONS ===
+    def _mutate_detail_density_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Where detail clusters."""
+        preset_name, preset_changes = random.choice(DETAIL_DENSITY_SHIFTS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Detail Density Shift", "detail-shifted")
+
+    def _mutate_form_simplification(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Reduce to simpler geometry."""
+        preset_name, preset_changes = random.choice(FORM_SIMPLIFICATIONS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Form Simplification", "simplified")
+
+    def _mutate_form_complication(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Add micro-folds/greebles."""
+        preset_name, preset_changes = random.choice(FORM_COMPLICATIONS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Form Complication", "complicated")
+
+    def _mutate_proportion_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Change element proportions."""
+        preset_name, preset_changes = random.choice(PROPORTION_SHIFTS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Proportion Shift", "proportion-shifted")
+
+    # === FLOW/RHYTHM MUTATIONS ===
+    def _mutate_path_flow_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Alter dominant directional flow."""
+        preset_name, preset_changes = random.choice(PATH_FLOW_SHIFTS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Path Flow Shift", "flow-shifted")
+
+    def _mutate_rhythm_disruption(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Break/introduce repetition intervals."""
+        preset_name, preset_changes = random.choice(RHYTHM_DISRUPTIONS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Rhythm Disruption", "rhythm-disrupted")
+
+    def _mutate_rhythm_rebalance(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Adjust motif spacing."""
+        preset_name, preset_changes = random.choice(RHYTHM_REBALANCES)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Rhythm Rebalance", "rhythm-rebalanced")
+
+    def _mutate_directional_energy_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Alter implied flow."""
+        preset_name, preset_changes = random.choice(DIRECTIONAL_ENERGY_SHIFTS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Directional Energy Shift", "energy-shifted")
+
+    # === PERSPECTIVE MUTATIONS ===
+    def _mutate_local_perspective_bend(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Bend localized perspective."""
+        preset_name, preset_changes = random.choice(LOCAL_PERSPECTIVE_BENDS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Local Perspective Bend", "perspective-bent")
+
+    def _mutate_atmospheric_scatter_shift(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Change light scatter."""
+        preset_name, preset_changes = random.choice(ATMOSPHERIC_SCATTER_SHIFTS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Atmospheric Scatter Shift", "scatter-shifted")
+
+    def _mutate_occlusion_pattern(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Parts hidden behind imagined layers."""
+        preset_name, preset_changes = random.choice(OCCLUSION_PATTERNS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Occlusion Pattern", "occluded")
+
+    def _mutate_opacity_fog(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Translucent fog/haze layer."""
+        preset_name, preset_changes = random.choice(OPACITY_FOGS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Opacity Fog", "fogged")
+
+    # === OVERLAY/PATTERN MUTATIONS ===
+    def _mutate_pattern_overlay(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Apply repeating pattern overlay."""
+        preset_name, preset_changes = random.choice(PATTERN_OVERLAYS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Pattern Overlay", "overlaid")
+
+    def _mutate_gradient_remap(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Reassign gradient behavior."""
+        preset_name, preset_changes = random.choice(GRADIENT_REMAPS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Gradient Remap", "gradient-remapped")
+
+    def _mutate_frame_reinterpretation(self, profile: StyleProfile) -> tuple[StyleProfile, str]:
+        """Alter conceptual border."""
+        preset_name, preset_changes = random.choice(FRAME_REINTERPRETATIONS)
+        return self._apply_preset_mutation(profile, preset_name, preset_changes, "Frame Reinterpretation", "reframed")
+
     def _summarize_profile(self, profile: StyleProfile) -> str:
         """Create a text summary of a style profile for VLM prompts."""
         parts = []
@@ -2748,6 +3623,397 @@ Output ONLY valid JSON:
 
         elif strategy == MutationStrategy.SYMBOLIC_REDUCTION:
             mutated, description = self._mutate_symbolic_reduction(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        # === CHROMATIC MUTATIONS ===
+        elif strategy == MutationStrategy.CHROMA_BAND_SHIFT:
+            mutated, description = self._mutate_chroma_band_shift(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.CHROMATIC_NOISE:
+            mutated, description = self._mutate_chromatic_noise(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.CHROMATIC_TEMPERATURE_SPLIT:
+            mutated, description = self._mutate_chromatic_temperature_split(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.CHROMATIC_FUSE:
+            mutated, description = self._mutate_chromatic_fuse(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.CHROMATIC_SPLIT:
+            mutated, description = self._mutate_chromatic_split(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        # === LIGHTING/SHADOW MUTATIONS ===
+        elif strategy == MutationStrategy.AMBIENT_OCCLUSION_VARIANCE:
+            mutated, description = self._mutate_ambient_occlusion_variance(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.SPECULAR_FLIP:
+            mutated, description = self._mutate_specular_flip(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.BLOOM_VARIANCE:
+            mutated, description = self._mutate_bloom_variance(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.DESYNC_LIGHTING_CHANNELS:
+            mutated, description = self._mutate_desync_lighting_channels(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.HIGHLIGHT_SHIFT:
+            mutated, description = self._mutate_highlight_shift(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.SHADOW_RECODE:
+            mutated, description = self._mutate_shadow_recode(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.LIGHTING_ANGLE_SHIFT:
+            mutated, description = self._mutate_lighting_angle_shift(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.HIGHLIGHT_BLOOM_COLORIZE:
+            mutated, description = self._mutate_highlight_bloom_colorize(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.MICRO_SHADOWING:
+            mutated, description = self._mutate_micro_shadowing(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.MACRO_SHADOW_PIVOT:
+            mutated, description = self._mutate_macro_shadow_pivot(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        # === CONTOUR/EDGE MUTATIONS ===
+        elif strategy == MutationStrategy.CONTOUR_SIMPLIFY:
+            mutated, description = self._mutate_contour_simplify(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.CONTOUR_COMPLEXIFY:
+            mutated, description = self._mutate_contour_complexify(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.LINE_WEIGHT_MODULATION:
+            mutated, description = self._mutate_line_weight_modulation(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.EDGE_BEHAVIOR_SWAP:
+            mutated, description = self._mutate_edge_behavior_swap(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.BOUNDARY_ECHO:
+            mutated, description = self._mutate_boundary_echo(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.HALO_GENERATION:
+            mutated, description = self._mutate_halo_generation(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        # === TEXTURE MUTATIONS ===
+        elif strategy == MutationStrategy.TEXTURE_DIRECTION_SHIFT:
+            mutated, description = self._mutate_texture_direction_shift(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.NOISE_INJECTION:
+            mutated, description = self._mutate_noise_injection(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.MICROFRACTURE_PATTERN:
+            mutated, description = self._mutate_microfracture_pattern(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.CROSSHATCH_DENSITY_SHIFT:
+            mutated, description = self._mutate_crosshatch_density_shift(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        # === MATERIAL/SURFACE MUTATIONS ===
+        elif strategy == MutationStrategy.BACKGROUND_MATERIAL_SWAP:
+            mutated, description = self._mutate_background_material_swap(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.SURFACE_MATERIAL_SHIFT:
+            mutated, description = self._mutate_surface_material_shift(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.TRANSLUCENCY_SHIFT:
+            mutated, description = self._mutate_translucency_shift(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.SUBSURFACE_SCATTER_TWEAK:
+            mutated, description = self._mutate_subsurface_scatter_tweak(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.ANISOTROPY_SHIFT:
+            mutated, description = self._mutate_anisotropy_shift(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.REFLECTIVITY_SHIFT:
+            mutated, description = self._mutate_reflectivity_shift(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        # === TONAL MUTATIONS ===
+        elif strategy == MutationStrategy.MIDTONE_SHIFT:
+            mutated, description = self._mutate_midtone_shift(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.TONAL_COMPRESSION:
+            mutated, description = self._mutate_tonal_compression(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.TONAL_EXPANSION:
+            mutated, description = self._mutate_tonal_expansion(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.MICROCONTRAST_TUNING:
+            mutated, description = self._mutate_microcontrast_tuning(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.CONTRAST_CHANNEL_SWAP:
+            mutated, description = self._mutate_contrast_channel_swap(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        # === BLUR/FOCUS MUTATIONS ===
+        elif strategy == MutationStrategy.DIRECTIONAL_BLUR:
+            mutated, description = self._mutate_directional_blur(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.FOCAL_PLANE_SHIFT:
+            mutated, description = self._mutate_focal_plane_shift(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.MASK_BOUNDARY_MUTATION:
+            mutated, description = self._mutate_mask_boundary_mutation(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        # === SILHOUETTE MUTATIONS (EXTENDED) ===
+        elif strategy == MutationStrategy.SILHOUETTE_MERGE:
+            mutated, description = self._mutate_silhouette_merge(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.SILHOUETTE_SUBTRACT:
+            mutated, description = self._mutate_silhouette_subtract(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.SILHOUETTE_DISTORTION:
+            mutated, description = self._mutate_silhouette_distortion(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.INTERNAL_GEOMETRY_TWIST:
+            mutated, description = self._mutate_internal_geometry_twist(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        # === DEPTH MUTATIONS ===
+        elif strategy == MutationStrategy.BACKGROUND_DEPTH_COLLAPSE:
+            mutated, description = self._mutate_background_depth_collapse(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.DEPTH_FLATTENING:
+            mutated, description = self._mutate_depth_flattening(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.DEPTH_EXPANSION:
+            mutated, description = self._mutate_depth_expansion(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        # === COMPOSITION MUTATIONS (NEW) ===
+        elif strategy == MutationStrategy.QUADRANT_MUTATION:
+            mutated, description = self._mutate_quadrant_mutation(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.OBJECT_ALIGNMENT_SHIFT:
+            mutated, description = self._mutate_object_alignment_shift(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.SPATIAL_HIERARCHY_FLIP:
+            mutated, description = self._mutate_spatial_hierarchy_flip(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.BALANCE_SHIFT:
+            mutated, description = self._mutate_balance_shift(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.INTERPLAY_SWAP:
+            mutated, description = self._mutate_interplay_swap(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.VIGNETTE_MODIFICATION:
+            mutated, description = self._mutate_vignette_modification(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        # === MOTIF MUTATIONS (NEW) ===
+        elif strategy == MutationStrategy.MOTIF_MIRRORING:
+            mutated, description = self._mutate_motif_mirroring(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.MOTIF_SCALING:
+            mutated, description = self._mutate_motif_scaling(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.MOTIF_REPETITION:
+            mutated, description = self._mutate_motif_repetition(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        # === COLOR ROLE MUTATIONS ===
+        elif strategy == MutationStrategy.COLOR_ROLE_REASSIGNMENT:
+            mutated, description = self._mutate_color_role_reassignment(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.SATURATION_SCALPEL:
+            mutated, description = self._mutate_saturation_scalpel(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.NEGATIVE_COLOR_INJECTION:
+            mutated, description = self._mutate_negative_color_injection(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.AMBIENT_COLOR_SUCTION:
+            mutated, description = self._mutate_ambient_color_suction(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.LOCAL_COLOR_MUTATION:
+            mutated, description = self._mutate_local_color_mutation(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        # === DETAIL/FORM MUTATIONS ===
+        elif strategy == MutationStrategy.DETAIL_DENSITY_SHIFT:
+            mutated, description = self._mutate_detail_density_shift(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.FORM_SIMPLIFICATION:
+            mutated, description = self._mutate_form_simplification(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.FORM_COMPLICATION:
+            mutated, description = self._mutate_form_complication(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.PROPORTION_SHIFT:
+            mutated, description = self._mutate_proportion_shift(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        # === FLOW/RHYTHM MUTATIONS ===
+        elif strategy == MutationStrategy.PATH_FLOW_SHIFT:
+            mutated, description = self._mutate_path_flow_shift(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.RHYTHM_DISRUPTION:
+            mutated, description = self._mutate_rhythm_disruption(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.RHYTHM_REBALANCE:
+            mutated, description = self._mutate_rhythm_rebalance(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.DIRECTIONAL_ENERGY_SHIFT:
+            mutated, description = self._mutate_directional_energy_shift(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        # === PERSPECTIVE MUTATIONS ===
+        elif strategy == MutationStrategy.LOCAL_PERSPECTIVE_BEND:
+            mutated, description = self._mutate_local_perspective_bend(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.ATMOSPHERIC_SCATTER_SHIFT:
+            mutated, description = self._mutate_atmospheric_scatter_shift(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.OCCLUSION_PATTERN:
+            mutated, description = self._mutate_occlusion_pattern(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.OPACITY_FOG:
+            mutated, description = self._mutate_opacity_fog(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        # === OVERLAY/PATTERN MUTATIONS ===
+        elif strategy == MutationStrategy.PATTERN_OVERLAY:
+            mutated, description = self._mutate_pattern_overlay(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.GRADIENT_REMAP:
+            mutated, description = self._mutate_gradient_remap(profile)
+            await log(f"Mutation: {description}")
+            return mutated, description
+
+        elif strategy == MutationStrategy.FRAME_REINTERPRETATION:
+            mutated, description = self._mutate_frame_reinterpretation(profile)
             await log(f"Mutation: {description}")
             return mutated, description
 
