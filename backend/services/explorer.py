@@ -1046,19 +1046,17 @@ Analyze the current axis orientation and swap it to create a different compositi
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Alter physical laws (gravity, light behavior, etc.)."""
-        instructions = """BEND PHYSICS - alter the apparent physical laws governing the visual world.
+        instructions = """BEND PHYSICS - look at this image and make something behave impossibly.
 
-Physics bend approaches:
-- Zero gravity: Objects float, hair drifts, fabric billows
-- Heavy gravity: Everything compressed, pressed down
-- Selective gravity: Some things fall, others float
-- Light bending: Impossible shadows, curved light paths
-- Time dilation: Motion blur in still objects, frozen motion
-- Fluid dynamics: Air becomes viscous, solid becomes liquid
-- Magnetic fields: Objects attracted or repelled visually
-- Quantum superposition: Things exist in multiple states
+First identify what's in the image, then pick ONE change that fits:
+- If there are solid forms: make edges droop/melt, or stretch in one direction
+- If there are light/shadows: bend the shadows around corners, make light curve
+- If there are fabrics/hair/organic shapes: make them float upward or hover
+- If there are liquids/particles: freeze them mid-splash with sharp edges
+- If there are reflections: show them from wrong angle
+- If portrait/figure: elongate limbs, compress torso, distort proportions subtly
 
-Analyze the implied physics and bend them to create surreal or impossible physical behavior."""
+The change must be VISIBLE in the final image. Describe what specific element changes and how."""
         return await self._vlm_mutate(
             profile=profile,
             image_b64=image_b64,
@@ -1130,19 +1128,17 @@ Analyze the current materials and transmute them to create surreal material cont
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Alter 'shutter speed' - long exposure, freeze frames, ghosts."""
-        instructions = """Apply TEMPORAL EXPOSURE - alter the implied shutter speed and time capture.
+        instructions = """TEMPORAL EXPOSURE - add time/motion effects appropriate to this image.
 
-Temporal exposure approaches:
-- Long exposure: Motion trails, light streaks, ghost images
-- Freeze frame: Hyper-sharp frozen moment, suspended action
-- Multiple exposure: Same subject in different positions overlaid
-- Time lapse: Compressed time, day-to-night in single frame
-- Bullet time: Matrix-style frozen moment with implied motion
-- Motion blur: Selective blur suggesting movement
-- Temporal echo: Fading afterimages trailing motion
-- Stroboscopic: Discrete repeated positions
+First identify what's in the image, then pick ONE change that fits:
+- If there are light sources: add colored streaks trailing from them
+- If there are figures/objects: add semi-transparent ghost copies offset nearby
+- If there's implied motion: add directional blur in the movement direction
+- If it's a still scene: make everything hyper-sharp with zero soft edges
+- If there are edges/contours: double them slightly offset for motion echo
+- If there's a focal subject: blur everything else radially around it
 
-Analyze the implied motion and time, then alter the temporal exposure to create different time relationships."""
+The change must be VISIBLE. Describe what gets the effect and in what direction."""
         return await self._vlm_mutate(
             profile=profile,
             image_b64=image_b64,
@@ -1188,20 +1184,22 @@ Analyze the style and inject an appropriate recurring motif that adds symbolic o
         image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
-        """Apply tempo-based visual patterns (staccato, legato, syncopated)."""
-        instructions = """OVERLAY RHYTHM - apply musical tempo and beat patterns visually.
+        """Apply repeating visual patterns and rhythmic elements."""
+        instructions = """OVERLAY RHYTHM - add repeating visual patterns and rhythmic elements.
 
-Rhythm overlay approaches:
-- Staccato: Sharp, disconnected, punchy visual beats
-- Legato: Smooth, connected, flowing transitions
-- Syncopated: Off-beat accents, unexpected emphasis
-- Waltz (3/4): Triple groupings, graceful repetition
-- March (4/4): Strong regular beats, military precision
-- Jazz swing: Loose, improvisational, irregular
-- Crescendo: Building intensity, growing elements
-- Diminuendo: Fading away, shrinking presence
+Make CONCRETE visual changes like:
+- Add repeating brush strokes in a regular pattern across the image
+- Create wave-like undulations in textures or colors
+- Introduce pulsing gradients that repeat at intervals
+- Add dotted or dashed line patterns overlaying the composition
+- Create alternating bands of different saturation or value
+- Add ripple effects emanating from focal points
+- Introduce striped or chevron patterns in backgrounds
+- Create rhythmic spacing between visual elements
+- Add concentric rings or spiral patterns
+- Overlay halftone or stipple patterns at varying densities
 
-Analyze the visual rhythm and overlay a musical tempo pattern that creates cadence and movement."""
+Pick ONE specific rhythmic pattern and describe exactly how it will appear visually."""
         return await self._vlm_mutate(
             profile=profile,
             image_b64=image_b64,
@@ -1216,20 +1214,22 @@ Analyze the visual rhythm and overlay a musical tempo pattern that creates caden
         image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
-        """Apply musical composition logic (major/minor, dissonance/harmony)."""
-        instructions = """Apply HARMONIC BALANCE - use musical harmony/dissonance concepts visually.
+        """Adjust color and tonal relationships for harmony or tension."""
+        instructions = """Apply HARMONIC BALANCE - adjust color and tonal relationships.
 
-Harmonic balance approaches:
-- Major key: Bright, uplifting, resolved, harmonious
-- Minor key: Melancholic, tense, emotionally complex
-- Dissonance: Clashing elements, visual tension, unresolved
-- Consonance: Pleasing combinations, visual resolution
-- Chord progressions: Elements that lead to each other
-- Counterpoint: Independent elements in conversation
-- Resolution: Tension releasing to stability
-- Suspension: Held tension, delayed resolution
+Make CONCRETE visual changes like:
+- Shift all colors toward complementary harmony (opposite colors balanced)
+- Create analogous color scheme (adjacent colors on wheel)
+- Introduce split-complementary tension (one color vs two flanking its opposite)
+- Add triadic color balance (three evenly spaced colors)
+- Push toward monochromatic with subtle value variations
+- Create warm/cool contrast with temperature opposition
+- Balance high saturation areas with desaturated rest areas
+- Add a unifying color wash or tint over everything
+- Create visual weight balance through color intensity distribution
+- Introduce an accent color that creates focal tension
 
-Analyze the visual relationships and apply musical harmony concepts to create emotional resonance."""
+Pick ONE specific color harmony change and describe exactly how the palette will shift."""
         return await self._vlm_mutate(
             profile=profile,
             image_b64=image_b64,
@@ -1244,20 +1244,22 @@ Analyze the visual relationships and apply musical harmony concepts to create em
         image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
-        """Break symmetry or force symmetry onto chaos."""
-        instructions = """Apply SYMMETRY BREAK - either break existing symmetry or impose order on chaos.
+        """Add asymmetric elements or impose symmetry patterns."""
+        instructions = """Apply SYMMETRY BREAK - add dramatic asymmetry or impose unexpected symmetry.
 
-Symmetry break approaches:
-- Break bilateral: Disrupt left-right mirror symmetry
-- Break radial: Disrupt circular/rotational symmetry
-- Impose bilateral: Force mirror symmetry onto asymmetric elements
-- Impose radial: Create circular symmetry from chaos
-- Partial symmetry: Symmetry in some areas, chaos in others
-- Near-symmetry: Almost but not quite balanced
-- Rotational shift: Symmetry at unusual angles
-- Translational: Repeat with offset, breaking expected patterns
+Make CONCRETE visual changes like:
+- Add a strong diagonal element cutting across the composition
+- Place a bold color accent only on one side
+- Create a heavy visual weight in one corner
+- Add mirrored/reflected elements where there were none
+- Introduce a radial burst pattern from an off-center point
+- Create a kaleidoscope-like repeated pattern
+- Add asymmetric framing or vignetting
+- Place texture only on half the image
+- Create a split-screen effect with different treatments
+- Add a spiral or vortex pulling to one side
 
-Analyze the current symmetry state and either break it for dynamic tension or impose it for unexpected order."""
+Pick ONE specific symmetry change and describe exactly how it will alter the composition."""
         return await self._vlm_mutate(
             profile=profile,
             image_b64=image_b64,
@@ -1611,19 +1613,18 @@ In your response:
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Apply environmental system changes (dust storm, fog, cosmic vacuum)."""
-        instructions = """Apply CLIMATE MORPH - transform the environmental atmosphere.
+        instructions = """CLIMATE MORPH - change the atmosphere/environment of this image.
 
-Climate morph approaches:
-- Dust storm: Particles in air, reduced visibility, warm tones
-- Dense fog: Soft edges, limited depth, mysterious
-- Cosmic vacuum: No atmosphere, stark contrasts, alien
-- Underwater: Light filtering, caustics, blue-green tints
-- Volcanic ash: Dark particles, orange glow, apocalyptic
-- Arctic freeze: Ice crystals, blue shadows, pristine
-- Tropical humidity: Haze, lush saturation, diffused light
-- Desert heat: Shimmering air, harsh light, washed colors
+First look at the current atmosphere, then pick ONE change that makes visual sense:
+- Add depth haze: distant areas fade to gray/blue, closer areas stay clear
+- Add warmth: shift shadows toward orange/amber, add golden highlight tones
+- Add cold: shift toward blue shadows, desaturate warm colors, add pale highlights
+- Add humidity: soften all edges slightly, add slight haze between layers
+- Add dryness: increase contrast, sharpen edges, make colors more muted/dusty
+- Add particles: small specks in the air (color matches the lighting)
 
-Analyze the current atmosphere and apply a climate transformation that changes the environmental feel."""
+Pick based on what would create the most VISIBLE change from the current state.
+Describe the specific color shifts, edge changes, and where they apply."""
         return await self._vlm_mutate(
             profile=profile,
             image_b64=image_b64,
@@ -1639,19 +1640,18 @@ Analyze the current atmosphere and apply a climate transformation that changes t
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Reframe as a new ecosystem (desert, coral reef, fungal forest)."""
-        instructions = """Apply BIOME SHIFT - transform the environmental ecosystem context.
+        instructions = """BIOME SHIFT - change the color palette and textures to suggest a different environment.
 
-Biome shift approaches:
-- Desert: Arid, sand colors, sparse life, harsh sun
-- Coral reef: Underwater, vibrant colors, organic complexity
-- Fungal forest: Bioluminescence, spores, alien growth
-- Arctic tundra: White expanses, minimal color, survival
-- Rainforest: Dense, layered, green saturation, humidity
-- Deep ocean: Pressure, darkness, bioluminescent accents
-- Volcanic: Molten, destruction and creation, extreme contrast
-- Alien world: Non-Earth biome, impossible life, strange physics
+Look at current colors and textures, then shift them toward ONE of these:
+- Desert palette: tan, ochre, burnt orange; dry cracked textures; harsh white highlights
+- Ocean palette: blue-green, teal, deep navy; smooth flowing textures; scattered light spots
+- Forest palette: deep greens, browns, moss tones; layered organic textures; dappled light
+- Arctic palette: white, pale blue, silver; smooth icy textures; bright even lighting
+- Night palette: deep blues, purples, black; soft edges; scattered bright points
+- Volcanic palette: black, red-orange, amber; rough rocky textures; glowing highlights
 
-Analyze the style and shift it to exist within a different ecosystem context."""
+Apply the color shift to the EXISTING shapes. Don't add new objects.
+Describe which colors change to what, and how textures are modified."""
         return await self._vlm_mutate(
             profile=profile,
             image_b64=image_b64,
@@ -3850,19 +3850,18 @@ Analyze the current proportional relationships and shift them to create a new vi
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Alter the dominant directional flow that guides the eye."""
-        instructions = """SHIFT THE VISUAL PATH FLOW - change how the eye moves through the composition.
+        instructions = """PATH FLOW SHIFT - change the dominant line direction in this image.
 
-Path flow approaches:
-- Diagonal dominance: Strong diagonal lines guide movement
-- Circular/spiral: Eye travels in curves or spirals
-- Z-pattern or S-curve: Classic reading patterns
-- Centripetal: All lines draw toward center
-- Centrifugal: Lines radiate outward from center
-- Vertical cascade: Downward or upward flow
-- Horizontal scan: Left-right movement emphasis
-- Chaotic/scattered: Multiple competing paths
+Look at the current lines/edges, then shift them toward ONE direction:
+- Diagonal: tilt horizontal lines to 30-45 degrees, add diagonal edges
+- Curved: soften straight lines into arcs, add subtle bends to edges
+- Radial inward: edges and lines angle toward a center point
+- Radial outward: edges and lines spread from center toward corners
+- Strong vertical: emphasize up-down lines, reduce horizontal elements
+- Strong horizontal: emphasize left-right lines, reduce vertical elements
 
-Analyze the current visual flow and redirect it. Consider how lines, edges, contrast, and color create implicit paths for the viewer's eye."""
+Apply to EXISTING edges and shapes - adjust their angles and curves.
+Describe which lines change direction and by how much."""
         return await self._vlm_mutate(
             profile=profile,
             image_b64=image_b64,
@@ -3878,18 +3877,18 @@ Analyze the current visual flow and redirect it. Consider how lines, edges, cont
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Break or introduce visual repetition intervals."""
-        instructions = """DISRUPT THE VISUAL RHYTHM - break existing patterns or introduce new intervals.
+        instructions = """RHYTHM DISRUPTION - break up visual patterns or add new repeating elements.
 
-Rhythm disruption approaches:
-- Syncopation: Offset regular intervals, create unexpected beats
-- Break the pattern: Interrupt a repeating element with something different
-- Stutter effect: Repeat elements at irregular, jarring intervals
-- Silence insertion: Add unexpected gaps in visual rhythm
-- Tempo change: Speed up or slow down repetition frequency
-- Polyrhythm: Overlay multiple conflicting rhythmic patterns
-- Accent displacement: Move emphasis to unexpected positions
+Look at any repeating elements (lines, shapes, colors, textures), then pick ONE:
+- Break a pattern: if there's repetition, skip one element or make one different size
+- Add irregularity: vary the spacing between similar elements (some closer, some farther)
+- Insert a gap: add empty space where a repeated element would be expected
+- Double an element: repeat one instance where there was only one
+- Offset alignment: shift one repeated element out of line with the others
+- Change one color: in a repeating color pattern, change one to a different hue
 
-Analyze the current visual rhythm (repeating elements, spacing, intervals) and introduce meaningful disruption that creates tension or interest."""
+If there are no repeating elements, ADD a simple repeated shape or line pattern.
+Describe exactly what changes: which element, where, how much offset/size change."""
         return await self._vlm_mutate(
             profile=profile,
             image_b64=image_b64,
@@ -3905,18 +3904,18 @@ Analyze the current visual rhythm (repeating elements, spacing, intervals) and i
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Rebalance visual rhythm by adjusting motif spacing and intervals."""
-        instructions = """REBALANCE THE VISUAL RHYTHM - adjust spacing and intervals for better flow.
+        instructions = """RHYTHM REBALANCE - adjust spacing and sizing of elements.
 
-Rhythm rebalance approaches:
-- Regularize: Make irregular intervals more consistent
-- Golden ratio spacing: Apply mathematical harmony to intervals
-- Breathing room: Add more space between repeated elements
-- Tighten cadence: Compress spacing for more intensity
-- Progressive spacing: Intervals that gradually increase or decrease
-- Alternating density: Vary spacing in a predictable pattern
-- Weight distribution: Balance heavy and light rhythmic elements
+Look at element distribution, then pick ONE adjustment:
+- Even out spacing: if spacing is irregular, make gaps more consistent
+- Progressive sizing: make similar elements gradually larger or smaller across image
+- Spread apart: increase space between clustered elements
+- Tighten together: decrease space between scattered elements
+- Balance left-right: move visual weight from heavy side toward lighter side
+- Balance top-bottom: shift elements up or down to distribute evenly
 
-Analyze the current motif spacing and repetition intervals, then rebalance them to create a more harmonious or intentionally structured visual rhythm."""
+Apply to EXISTING elements - adjust their positions and relative sizes.
+Describe which elements move/resize and by how much (e.g., "spread 20% more apart")."""
         return await self._vlm_mutate(
             profile=profile,
             image_b64=image_b64,
@@ -3932,19 +3931,20 @@ Analyze the current motif spacing and repetition intervals, then rebalance them 
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Alter the implied directional energy and movement."""
-        instructions = """SHIFT DIRECTIONAL ENERGY - change the implied movement and force vectors.
+        instructions = """DIRECTIONAL ENERGY - change which way things seem to move or point.
 
-Directional energy approaches:
-- Upward thrust: Aspiration, growth, lightness
-- Downward pull: Weight, gravity, grounding
-- Explosive outward: Expansion, release, burst
-- Implosive inward: Compression, focus, concentration
-- Rotational: Spinning, swirling, cyclonic energy
-- Lateral sweep: Horizontal movement, scanning, wind
-- Tension vectors: Opposing forces creating dynamic stability
-- Static equilibrium: Balanced forces, calm, stillness
+Look at the image, then pick ONE directional shift:
+- Upward: tilt tops of elements upward, brighten upper areas, lighten colors going up
+- Downward: tilt bottoms downward, darken lower areas, heavier colors at bottom
+- Outward from center: stretch elements away from middle, lighter at edges
+- Inward to center: squeeze elements toward middle, focal point brightness
+- Clockwise swirl: curve elements to follow clockwise rotation
+- Counter-clockwise: curve elements to follow counter-clockwise rotation
+- Rightward: lean elements right, brighter on right side
+- Leftward: lean elements left, brighter on left side
 
-Analyze the current implied energy direction and shift it to create different emotional and kinetic qualities."""
+Apply through element angles, brightness gradients, and edge directions.
+Describe the specific tilt/gradient direction and how strong the effect is."""
         return await self._vlm_mutate(
             profile=profile,
             image_b64=image_b64,
@@ -3989,19 +3989,19 @@ Analyze the current perspective and apply localized bending that creates visual 
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Change how light scatters through the atmosphere."""
-        instructions = """SHIFT ATMOSPHERIC SCATTER - change how light diffuses and scatters.
+        instructions = """ATMOSPHERIC SCATTER - change how light behaves through depth.
 
-Atmospheric scatter approaches:
-- Rayleigh scatter: Blue skies, warm sunsets, color shifts with distance
-- Mie scatter: Hazy, milky quality, particles in air
-- Tyndall effect: Visible light beams, god rays through particles
-- Clear atmosphere: Minimal scatter, sharp distant details
-- Dense particle: Heavy scatter, reduced visibility, soft everything
-- Chromatic scatter: Different colors scatter differently
-- Volumetric density: Variable scatter in different depth zones
-- Backscatter: Light bouncing back toward viewer
+Look at the current lighting, then pick ONE change:
+- Add light beams: visible rays of light from bright areas into darker areas
+- Add depth fade: distant areas get progressively lighter/hazier
+- Sharpen depth: remove haze, make distant areas as clear as near areas
+- Add color shift with depth: distant areas tint toward blue or purple
+- Add glow around lights: bright spots bleed outward into surrounding areas
+- Add backlight halo: edges facing light source get bright rim glow
+- Soften all light: reduce contrast between lit and shadow areas
 
-Analyze the current atmospheric quality and shift the scatter characteristics to create different depth, mood, and light behavior."""
+Apply based on where light sources appear to be in this image.
+Describe: what lights up, what fades, what color shift, how far the effect reaches."""
         return await self._vlm_mutate(
             profile=profile,
             image_b64=image_b64,
@@ -4017,19 +4017,19 @@ Analyze the current atmospheric quality and shift the scatter characteristics to
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Add imagined layers that partially hide parts of the scene."""
-        instructions = """ADD OCCLUSION PATTERNS - introduce elements that partially hide or layer over the scene.
+        instructions = """OCCLUSION PATTERN - add overlapping layers or partial blocking.
 
-Occlusion pattern approaches:
-- Foreground framing: Branches, windows, doorways partially obscure view
-- Layered depth: Multiple translucent planes stacked
-- Partial reveal: Key elements peek through occluding shapes
-- Shadow occlusion: Dark areas hide detail, suggest depth
-- Atmospheric layers: Fog, smoke, or haze obscure distant elements
-- Geometric masks: Abstract shapes cut across the composition
-- Organic overgrowth: Vines, leaves, or organic forms creep over
-- Architectural screening: Lattice, screens, or grids filter view
+Look at the composition, then pick ONE way to add visual layers:
+- Dark edges: darken the corners/edges to create natural vignette framing
+- Foreground blur: add soft out-of-focus shapes in front layer
+- Silhouette overlap: add dark shapes partially covering edges of frame
+- Grid overlay: add subtle line pattern (horizontal, vertical, or diagonal)
+- Gradient mask: fade one side/corner toward darker or lighter
+- Translucent layer: add semi-transparent color wash over part of image
+- Depth layers: make background elements slightly obscured by middle-ground
 
-Analyze the composition and add occluding elements that create mystery, depth, or visual intrigue through partial concealment."""
+Apply as OVERLAY effects on existing content - don't redesign the image.
+Describe: what shape, what color/darkness, which part of frame, how opaque."""
         return await self._vlm_mutate(
             profile=profile,
             image_b64=image_b64,
@@ -4045,20 +4045,19 @@ Analyze the composition and add occluding elements that create mystery, depth, o
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Add translucent fog or haze layers."""
-        instructions = """ADD OPACITY FOG - introduce translucent atmospheric layers.
+        instructions = """OPACITY FOG - add haze or fog effects to the image.
 
-Fog and haze approaches:
-- Ground fog: Low-lying mist obscuring lower portions
-- High haze: Upper atmosphere softening, sky blending
-- Depth fog: Progressive opacity with distance
-- Volumetric pockets: Localized fog volumes in specific areas
-- Color fog: Tinted atmospheric layers (warm, cool, colored)
-- Light fog: Fog that glows or carries light
-- Morning mist: Soft, romantic, diffused atmosphere
-- Industrial haze: Urban, smoky, pollution-tinged
-- Mystical veil: Ethereal, magical, dreamlike opacity
+Look at the current atmosphere, then pick ONE fog type:
+- Bottom haze: white/gray gradient rising from bottom, fading 30-50% up
+- Top haze: white/gray gradient descending from top
+- Distance fog: background areas fade to gray, foreground stays clear
+- Overall soft haze: entire image gets slight white overlay, reduced contrast
+- Colored haze: tinted fog (warm orange, cool blue, purple) as light overlay
+- Localized cloud: soft white shape in one area of composition
+- Edge fade: all four edges gradually fade to white or gray
 
-Analyze the current atmosphere and add fog/haze that enhances mood, depth, or mystery."""
+Apply as translucent overlay - existing image shows through.
+Describe: fog color, opacity percentage, which areas covered, gradient direction."""
         return await self._vlm_mutate(
             profile=profile,
             image_b64=image_b64,
