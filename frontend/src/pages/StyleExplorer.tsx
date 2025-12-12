@@ -55,6 +55,7 @@ function StyleExplorer() {
   const [batchStrategies, setBatchStrategies] = useState<MutationStrategy[]>(STRATEGY_PRESETS.core.strategies)
   const [batchIterations, setBatchIterations] = useState(1)
   const [showStrategySelectionModal, setShowStrategySelectionModal] = useState(false)
+  const [batchSource, setBatchSource] = useState<'reference' | 'selected' | 'current'>('reference')
 
   const wsRef = useRef<WebSocket | null>(null)
 
@@ -100,7 +101,13 @@ function StyleExplorer() {
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data) as WSMessage
-        console.log('[StyleExplorer] WS message:', data.event)
+        // Log all messages to console for debugging
+        if (data.event === 'log' && data.data) {
+          const { message, level, source } = data.data as { message: string; level: string; source: string }
+          console.log(`[${source || 'explore'}] [${level}] ${message}`)
+        } else {
+          console.log('[StyleExplorer] WS message:', data.event, data.data)
+        }
       } catch (e) {
         console.error('[StyleExplorer] Failed to parse WS message:', e)
       }
@@ -187,7 +194,15 @@ function StyleExplorer() {
     mutationFn: () => {
       setIsExploring(true)
       setShowLog(true)
-      return batchExplore(sessionId!, batchStrategies, batchIterations, selectedSnapshot?.id)
+      // Determine parent based on source selection
+      let parentId: string | undefined
+      if (batchSource === 'reference') {
+        parentId = 'root'  // Special value to use reference image
+      } else if (batchSource === 'selected' && selectedSnapshot) {
+        parentId = selectedSnapshot.id
+      }
+      // 'current' leaves parentId undefined, which uses current_snapshot_id
+      return batchExplore(sessionId!, batchStrategies, batchIterations, parentId)
     },
     onSuccess: (result) => {
       setIsExploring(false)
@@ -195,6 +210,11 @@ function StyleExplorer() {
       queryClient.invalidateQueries({ queryKey: ['exploration', sessionId] })
       queryClient.invalidateQueries({ queryKey: ['exploration-tree', sessionId] })
       console.log(`Batch explore complete: ${result.successful} successful, ${result.failed} failed`)
+      // Log any errors
+      const failures = result.results?.filter((r: Record<string, unknown>) => r.error) || []
+      if (failures.length > 0) {
+        console.error('Failed strategies:', failures)
+      }
     },
     onError: () => {
       setIsExploring(false)
@@ -492,9 +512,49 @@ function StyleExplorer() {
           <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-lg">
             <h3 className="text-lg font-semibold text-slate-800 mb-2">Batch Explore</h3>
             <p className="text-sm text-slate-600 mb-4">
-              Run multiple strategies at once from {selectedSnapshot ? 'selected snapshot' : 'current position'}.
-              Each strategy creates a separate branch.
+              Run multiple strategies at once. Each strategy creates a separate branch.
             </p>
+
+            {/* Source Selection */}
+            <div className="mb-4">
+              <label className="block text-xs font-medium text-slate-500 mb-2">Branch From</label>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBatchSource('reference')}
+                  className={`flex-1 px-3 py-2 text-sm rounded-lg border ${
+                    batchSource === 'reference'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  Reference Image
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBatchSource('selected')}
+                  disabled={!selectedSnapshot}
+                  className={`flex-1 px-3 py-2 text-sm rounded-lg border ${
+                    batchSource === 'selected'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed'
+                  }`}
+                >
+                  Selected Snapshot
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBatchSource('current')}
+                  className={`flex-1 px-3 py-2 text-sm rounded-lg border ${
+                    batchSource === 'current'
+                      ? 'bg-blue-600 text-white border-blue-600'
+                      : 'bg-white text-slate-700 border-slate-300 hover:bg-slate-50'
+                  }`}
+                >
+                  Current Position
+                </button>
+              </div>
+            </div>
 
             {/* Strategy Selection Summary */}
             <div className="border border-slate-200 rounded-lg p-4 bg-slate-50 mb-4">

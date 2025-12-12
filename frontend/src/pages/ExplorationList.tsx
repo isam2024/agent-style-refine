@@ -28,17 +28,22 @@ function ExplorationList() {
   const createMutation = useMutation({
     mutationFn: async () => {
       // Create the session
+      console.log('[ExplorationList] Creating exploration...')
       const session = await createExploration(newName, newImage!, selectedStrategies)
-      // Auto-start first exploration step
-      await exploreStep(session.id)
+      console.log('[ExplorationList] Session created:', session.id)
+      // Navigate immediately - don't wait for first explore step
       return session
     },
     onSuccess: (session) => {
+      console.log('[ExplorationList] Success, navigating to:', `/explore/${session.id}`)
       queryClient.invalidateQueries({ queryKey: ['explorations'] })
       setShowCreate(false)
       setNewName('')
       setNewImage(null)
       navigate(`/explore/${session.id}`)
+    },
+    onError: (error) => {
+      console.error('[ExplorationList] Error creating exploration:', error)
     },
   })
 
