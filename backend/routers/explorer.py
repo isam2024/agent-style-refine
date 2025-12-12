@@ -10,6 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from backend.database import get_db
+from backend.websocket import manager
 from backend.models.schemas import (
     StyleProfile,
     MutationStrategy,
@@ -316,7 +317,7 @@ async def run_exploration_step(
     await db.commit()
 
     try:
-        mutated_profile, mutation_description, image_b64, prompt_used, scores = \
+        mutated_profile, mutation_description, image_b64, prompt_used, scores, strategy_used = \
             await style_explorer.explore_step(
                 current_profile=current_profile,
                 parent_image_b64=parent_image_b64,
@@ -340,7 +341,7 @@ async def run_exploration_step(
             style_profile_json=mutated_profile.model_dump(),
             generated_image_path=str(image_path),
             prompt_used=prompt_used,
-            mutation_strategy=strategy.value if strategy else "random_dimension",
+            mutation_strategy=strategy_used.value,
             mutation_description=mutation_description,
             novelty_score=scores.novelty,
             coherence_score=scores.coherence,
@@ -705,7 +706,7 @@ async def auto_explore(
             subject = current_profile.suggested_test_prompt or current_profile.original_subject or "abstract scene"
 
             # Run exploration step
-            mutated_profile, mutation_description, image_b64, prompt_used, scores = \
+            mutated_profile, mutation_description, image_b64, prompt_used, scores, strategy_used = \
                 await style_explorer.explore_step(
                     current_profile=current_profile,
                     parent_image_b64=parent_image_b64,
@@ -729,7 +730,7 @@ async def auto_explore(
                 style_profile_json=mutated_profile.model_dump(),
                 generated_image_path=str(image_path),
                 prompt_used=prompt_used,
-                mutation_strategy=mutation_description.split(":")[0] if ":" in mutation_description else "random_dimension",
+                mutation_strategy=strategy_used.value,
                 mutation_description=mutation_description,
                 novelty_score=scores.novelty,
                 coherence_score=scores.coherence,
@@ -813,8 +814,8 @@ async def batch_explore(
         raise HTTPException(status_code=400, detail="At least one strategy is required")
 
     total_runs = len(strategies) * iterations
-    if total_runs > 20:
-        raise HTTPException(status_code=400, detail=f"Maximum 20 total runs (you requested {total_runs})")
+    if total_runs > 100:
+        raise HTTPException(status_code=400, detail=f"Maximum 100 total runs (you requested {total_runs})")
 
     # Get session
     result = await db.execute(
@@ -831,19 +832,25 @@ async def batch_explore(
     await db.commit()
 
     # Determine parent
+    # Use "root" to explicitly branch from reference image, or null/undefined to use current snapshot
     parent_snapshot = None
     parent_image_b64 = None
     current_profile = StyleProfile(**session.base_style_profile_json)
     parent_depth = -1
 
-    if parent_snapshot_id:
+    if parent_snapshot_id and parent_snapshot_id != "root":
+        # Branch from specific snapshot
         for snap in session.snapshots:
             if snap.id == parent_snapshot_id:
                 parent_snapshot = snap
                 current_profile = StyleProfile(**snap.style_profile_json)
                 parent_depth = snap.depth
                 break
+    elif parent_snapshot_id == "root":
+        # Explicitly branch from reference image - don't use any snapshot
+        parent_snapshot = None
     elif session.current_snapshot_id:
+        # No parent specified, use current snapshot
         for snap in session.snapshots:
             if snap.id == session.current_snapshot_id:
                 parent_snapshot = snap
@@ -857,26 +864,37 @@ async def batch_explore(
             parent_image_b64 = await storage_service.load_image_raw(
                 parent_snapshot.generated_image_path
             )
+            await manager.broadcast_log(session_id, f"Loaded parent snapshot image", "info", "explore")
         except FileNotFoundError:
-            pass
+            await manager.broadcast_log(session_id, f"Parent snapshot image not found: {parent_snapshot.generated_image_path}", "warning", "explore")
     else:
+        # Use reference image (either explicitly requested via "root" or no snapshots exist)
         try:
+            await manager.broadcast_log(session_id, f"Loading reference image: {session.reference_image_path}", "info", "explore")
             parent_image_b64 = await storage_service.load_image_raw(
                 session.reference_image_path
             )
+            await manager.broadcast_log(session_id, f"Loaded reference image ({len(parent_image_b64)} chars)", "success", "explore")
         except FileNotFoundError:
-            pass
+            await manager.broadcast_log(session_id, f"Reference image not found: {session.reference_image_path}", "error", "explore")
 
     # Get subject
     subject = current_profile.suggested_test_prompt or current_profile.original_subject or "abstract scene"
 
     # Run each strategy for the specified number of iterations
     results = []
+    total_count = len(strategies) * iterations
+    current_index = 0
+
+    await manager.broadcast_log(session_id, f"Starting batch explore: {len(strategies)} strategies x {iterations} iterations = {total_count} total", "info", "explore")
+
     for iteration in range(iterations):
         for strategy in strategies:
+            current_index += 1
+            await manager.broadcast_log(session_id, f"[{current_index}/{total_count}] Starting strategy: {strategy.value}", "info", "explore")
             try:
                 # Run exploration step
-                mutated_profile, mutation_description, image_b64, prompt_used, scores = \
+                mutated_profile, mutation_description, image_b64, prompt_used, scores, strategy_used = \
                     await style_explorer.explore_step(
                         current_profile=current_profile,
                         parent_image_b64=parent_image_b64,
@@ -900,7 +918,7 @@ async def batch_explore(
                     style_profile_json=mutated_profile.model_dump(),
                     generated_image_path=str(image_path),
                     prompt_used=prompt_used,
-                    mutation_strategy=strategy.value,
+                    mutation_strategy=strategy_used.value,
                     mutation_description=mutation_description,
                     novelty_score=scores.novelty,
                     coherence_score=scores.coherence,
@@ -925,7 +943,10 @@ async def batch_explore(
                     "image_b64": image_b64,
                 })
 
+                await manager.broadcast_log(session_id, f"[{current_index}/{total_count}] Completed: {strategy.value} (score: {scores.combined:.2f})", "success", "explore")
+
             except Exception as e:
+                await manager.broadcast_log(session_id, f"[{current_index}/{total_count}] Failed: {strategy.value} - {str(e)}", "error", "explore")
                 results.append({
                     "strategy": strategy.value,
                     "iteration": iteration + 1,

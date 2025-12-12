@@ -5,6 +5,7 @@ Divergent exploration of style space - the opposite of the trainer.
 Instead of converging to match a reference, this service intentionally
 mutates and diverges to discover new aesthetic directions.
 """
+import asyncio
 import json
 import logging
 import random
@@ -54,6 +55,7 @@ class StyleExplorer:
     async def _mutate_random_dimension(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str, str]:
         """
@@ -99,6 +101,7 @@ Push it to a creative extreme - go beyond realistic into stylized territory."""
     async def _mutate_what_if(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """
@@ -197,6 +200,7 @@ Only include the fields you want to change. Be bold and creative!"""
     async def _mutate_crossover(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """
@@ -219,6 +223,7 @@ Describe specifically which elements you're borrowing from the donor style and h
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Crossover",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -227,6 +232,7 @@ Describe specifically which elements you're borrowing from the donor style and h
     async def _mutate_inversion(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """
@@ -259,6 +265,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Characteristic Inversion",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -267,6 +274,7 @@ In your response:
     async def _mutate_amplify(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """
@@ -496,6 +504,7 @@ Output ONLY valid JSON:
     async def _mutate_time_shift(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """
@@ -531,6 +540,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Time Shift",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -539,6 +549,7 @@ In your response:
     async def _mutate_medium_swap(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """
@@ -575,6 +586,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Medium Swap",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -583,6 +595,7 @@ In your response:
     async def _mutate_mood_shift(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """
@@ -619,6 +632,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Mood Shift",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -627,6 +641,7 @@ In your response:
     async def _mutate_scale_warp(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Warp the apparent scale and perspective relationships."""
@@ -645,6 +660,7 @@ Scale warp approaches:
 Analyze the current sense of scale and warp it to create a different relationship between viewer and subject."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Scale Warp",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -653,6 +669,7 @@ Analyze the current sense of scale and warp it to create a different relationshi
     async def _mutate_decay(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Add entropy, age, and weathering effects to the style."""
@@ -672,6 +689,7 @@ Decay approaches:
 Analyze the style and apply appropriate decay that tells a story of time and entropy."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Decay",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -680,6 +698,7 @@ Analyze the style and apply appropriate decay that tells a story of time and ent
     async def _mutate_remix(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Shuffle and swap elements between different style sections."""
@@ -696,6 +715,7 @@ Remix approaches:
 Analyze the style sections and creatively remix them - take qualities from one area and apply them to another, creating unexpected but coherent combinations."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Remix",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -704,6 +724,7 @@ Analyze the style sections and creatively remix them - take qualities from one a
     async def _mutate_constrain(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Apply a strict constraint that limits the style in a specific way."""
@@ -723,6 +744,7 @@ Constraint approaches:
 Analyze the style and apply a meaningful constraint that creates focus through limitation."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Constrain",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -731,6 +753,7 @@ Analyze the style and apply a meaningful constraint that creates focus through l
     async def _mutate_culture_shift(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """
@@ -768,6 +791,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Culture Shift",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -776,6 +800,7 @@ In your response:
     async def _mutate_chaos(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """
@@ -810,6 +835,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Chaos Multi-Mutation",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -818,23 +844,14 @@ In your response:
     async def _mutate_refine(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """
         Apply refine mutation - reduce extremes toward balance.
-
-        Uses VLM to identify extreme traits and moderate them.
         The opposite of amplify.
-
-        Returns:
-            (mutated_profile, mutation_description)
         """
-        profile_summary = self._summarize_profile(profile)
-
-        refine_prompt = f"""Analyze this visual style and identify its MOST EXTREME trait, then moderate it toward balance.
-
-Current style:
-{profile_summary}
+        instructions = """REFINE - identify the MOST EXTREME trait and moderate it toward balance.
 
 Examples of refinement:
 - If hypersaturated → bring saturation to medium-high
@@ -843,65 +860,15 @@ Examples of refinement:
 - If blazing hot colors → warm but not overwhelming
 - If maximum noise/grain → reduce to subtle texture
 
-Find the element that is pushed furthest from center and pull it back toward moderation while keeping the style interesting.
+Find the element that is pushed furthest from center and pull it back toward moderation while keeping the style interesting."""
 
-Output ONLY valid JSON:
-{{
-    "extreme_trait": "what trait is most extreme",
-    "refined_version": "the moderated version",
-    "style_changes": {{
-        "palette": {{"color_descriptions": ["color1", "color2"], "saturation": "level"}},
-        "texture": {{"surface": "new surface description"}},
-        "lighting": {{"lighting_type": "new lighting"}},
-        "line_and_shape": {{"line_quality": "new lines", "shape_language": "new shapes"}}
-    }}
-}}
-
-Only include fields that need to change for the refinement."""
-
-        try:
-            response = await vlm_service.generate_text(
-                prompt=refine_prompt,
-                system="You are a style refiner that brings extreme visual characteristics toward balance while maintaining interest. Output only valid JSON.",
-                use_text_model=True,
-            )
-
-            # Parse response
-            response = response.strip()
-            import re
-            json_match = re.search(r'\{.*\}', response, re.DOTALL)
-            if json_match:
-                data = json.loads(json_match.group(0))
-            else:
-                raise ValueError("No JSON found in response")
-
-            extreme_trait = data.get("extreme_trait", "style element")
-            refined_version = data.get("refined_version", "moderated version")
-            style_changes = data.get("style_changes", {})
-
-            # Apply changes
-            profile_dict = profile.model_dump()
-
-            for section, changes in style_changes.items():
-                if section in profile_dict and isinstance(changes, dict):
-                    for key, value in changes.items():
-                        if key in profile_dict[section] and value:
-                            profile_dict[section][key] = value
-
-            # Update style name
-            original_name = profile_dict.get("style_name", "Style")
-            profile_dict["style_name"] = f"{original_name} (refined)"
-
-            # Add refinement to core invariants
-            profile_dict["core_invariants"] = [refined_version] + profile_dict.get("core_invariants", [])[:4]
-
-            mutation_description = f"Refine: '{extreme_trait}' → '{refined_version}'"
-
-            return StyleProfile(**profile_dict), mutation_description
-
-        except Exception as e:
-            logger.error(f"Refine mutation failed: {e}")
-            raise RuntimeError(f"Refine mutation failed: {e}") from e
+        return await self._vlm_mutate(
+            profile=profile,
+            image_b64=image_b64,
+            mutation_type="Refine",
+            mutation_instructions=instructions,
+            session_id=session_id,
+        )
 
     def _apply_preset_mutation(
         self,
@@ -943,6 +910,7 @@ Only include fields that need to change for the refinement."""
     async def _mutate_topology_fold(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Apply non-Euclidean or impossible geometry distortions."""
@@ -961,6 +929,7 @@ Topology fold approaches:
 Analyze the spatial logic and fold it in impossible ways that create visual intrigue."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Topology Fold",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -969,6 +938,7 @@ Analyze the spatial logic and fold it in impossible ways that create visual intr
     async def _mutate_silhouette_shift(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Modify contour/silhouette while keeping internal style traits."""
@@ -987,6 +957,7 @@ Silhouette shift approaches:
 Analyze the current silhouette language and shift it while maintaining the internal style qualities."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Silhouette Shift",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -995,6 +966,7 @@ Analyze the current silhouette language and shift it while maintaining the inter
     async def _mutate_perspective_drift(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Apply surreal camera angles and perspective distortions."""
@@ -1013,6 +985,7 @@ Perspective drift approaches:
 Analyze the current viewpoint and drift it to create a different psychological relationship with the viewer."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Perspective Drift",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -1021,6 +994,7 @@ Analyze the current viewpoint and drift it to create a different psychological r
     async def _mutate_axis_swap(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Rotate conceptual axes (vertical↔horizontal, center↔edge)."""
@@ -1039,6 +1013,7 @@ Axis swap approaches:
 Analyze the current axis orientation and swap it to create a different compositional dynamic."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Axis Swap",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -1049,6 +1024,7 @@ Analyze the current axis orientation and swap it to create a different compositi
     async def _mutate_physics_bend(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Alter physical laws (gravity, light behavior, etc.)."""
@@ -1067,6 +1043,7 @@ Physics bend approaches:
 Analyze the implied physics and bend them to create surreal or impossible physical behavior."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Physics Bend",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -1075,6 +1052,7 @@ Analyze the implied physics and bend them to create surreal or impossible physic
     async def _mutate_chromatic_gravity(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Make colors cluster or repel in new ways."""
@@ -1093,6 +1071,7 @@ Chromatic gravity approaches:
 Analyze the color distribution and apply gravitational or force-based behavior to create dynamic color movement."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Chromatic Gravity",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -1101,6 +1080,7 @@ Analyze the color distribution and apply gravitational or force-based behavior t
     async def _mutate_material_transmute(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Change surface properties (glass→fur, metal→cloth)."""
@@ -1119,6 +1099,7 @@ Material transmute approaches:
 Analyze the current materials and transmute them to create surreal material contradictions."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Material Transmute",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -1127,6 +1108,7 @@ Analyze the current materials and transmute them to create surreal material cont
     async def _mutate_temporal_exposure(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Alter 'shutter speed' - long exposure, freeze frames, ghosts."""
@@ -1145,6 +1127,7 @@ Temporal exposure approaches:
 Analyze the implied motion and time, then alter the temporal exposure to create different time relationships."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Temporal Exposure",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -1155,6 +1138,7 @@ Analyze the implied motion and time, then alter the temporal exposure to create 
     async def _mutate_motif_splice(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Inject a foreign recurring motif (eyes, keys, spirals, etc.)."""
@@ -1174,6 +1158,7 @@ Motif splice approaches:
 Analyze the style and inject an appropriate recurring motif that adds symbolic or visual intrigue."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Motif Splice",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -1182,6 +1167,7 @@ Analyze the style and inject an appropriate recurring motif that adds symbolic o
     async def _mutate_rhythm_overlay(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Apply tempo-based visual patterns (staccato, legato, syncopated)."""
@@ -1200,6 +1186,7 @@ Rhythm overlay approaches:
 Analyze the visual rhythm and overlay a musical tempo pattern that creates cadence and movement."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Rhythm Overlay",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -1208,6 +1195,7 @@ Analyze the visual rhythm and overlay a musical tempo pattern that creates caden
     async def _mutate_harmonic_balance(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Apply musical composition logic (major/minor, dissonance/harmony)."""
@@ -1226,6 +1214,7 @@ Harmonic balance approaches:
 Analyze the visual relationships and apply musical harmony concepts to create emotional resonance."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Harmonic Balance",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -1234,6 +1223,7 @@ Analyze the visual relationships and apply musical harmony concepts to create em
     async def _mutate_symmetry_break(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Break symmetry or force symmetry onto chaos."""
@@ -1252,6 +1242,7 @@ Symmetry break approaches:
 Analyze the current symmetry state and either break it for dynamic tension or impose it for unexpected order."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Symmetry Break",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -1262,6 +1253,7 @@ Analyze the current symmetry state and either break it for dynamic tension or im
     async def _mutate_density_shift(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Vary visual information density (sparse↔dense)."""
@@ -1280,6 +1272,7 @@ Density shift approaches:
 Analyze the current visual density and shift it to create different levels of visual complexity."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Density Shift",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -1288,6 +1281,7 @@ Analyze the current visual density and shift it to create different levels of vi
     async def _mutate_dimensional_shift(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Flatten or deepen dimensionality (2D↔2.5D↔3D)."""
@@ -1306,6 +1300,7 @@ Dimensional shift approaches:
 Analyze the current dimensionality and shift it to create different spatial perception."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Dimensional Shift",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -1314,6 +1309,7 @@ Analyze the current dimensionality and shift it to create different spatial perc
     async def _mutate_micro_macro_swap(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Switch scales internally (tiny textures→big shapes)."""
@@ -1332,6 +1328,7 @@ Micro/macro swap approaches:
 Analyze the current scale relationships and swap micro and macro elements to create new visual hierarchies."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Micro/Macro Swap",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -1340,6 +1337,7 @@ Analyze the current scale relationships and swap micro and macro elements to cre
     async def _mutate_essence_strip(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Remove secondary features to reveal core essence (more drastic than refine)."""
@@ -1407,6 +1405,7 @@ Output ONLY valid JSON with stripped-down values:
     async def _mutate_narrative_resonance(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Add implied story fragments using VLM analysis."""
@@ -1432,6 +1431,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Narrative Resonance",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -1440,6 +1440,7 @@ In your response:
     async def _mutate_archetype_mask(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Map onto mythological/Jungian archetypes using VLM analysis."""
@@ -1467,6 +1468,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Archetype Mask",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -1475,6 +1477,7 @@ In your response:
     async def _mutate_anomaly_inject(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Add a single deliberate anomaly that violates the style rules."""
@@ -1545,6 +1548,7 @@ Output ONLY valid JSON:
     async def _mutate_spectral_echo(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Add faint ghost-layers as texture using VLM analysis."""
@@ -1574,6 +1578,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Spectral Echo",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -1584,6 +1589,7 @@ In your response:
     async def _mutate_climate_morph(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Apply environmental system changes (dust storm, fog, cosmic vacuum)."""
@@ -1602,6 +1608,7 @@ Climate morph approaches:
 Analyze the current atmosphere and apply a climate transformation that changes the environmental feel."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Climate Morph",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -1610,6 +1617,7 @@ Analyze the current atmosphere and apply a climate transformation that changes t
     async def _mutate_biome_shift(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Reframe as a new ecosystem (desert, coral reef, fungal forest)."""
@@ -1628,6 +1636,7 @@ Biome shift approaches:
 Analyze the style and shift it to exist within a different ecosystem context."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Biome Shift",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -1638,6 +1647,7 @@ Analyze the style and shift it to exist within a different ecosystem context."""
     async def _mutate_algorithmic_wrinkle(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Introduce deterministic computational artifacts (CRT, JPEG, halftone)."""
@@ -1656,6 +1666,7 @@ Algorithmic wrinkle approaches:
 Analyze the style and add appropriate computational artifacts that suggest a specific technical process."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Algorithmic Wrinkle",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -1664,6 +1675,7 @@ Analyze the style and add appropriate computational artifacts that suggest a spe
     async def _mutate_symbolic_reduction(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Turn features into metaphoric/symbolic shapes."""
@@ -1682,6 +1694,7 @@ Symbolic reduction approaches:
 Analyze the style and reduce visual elements to their symbolic essence, creating meaning through simplified representation."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Symbolic Reduction",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -1692,7 +1705,7 @@ Analyze the style and reduce visual elements to their symbolic essence, creating
     # ============================================================
 
     # === CHROMATIC MUTATIONS ===
-    async def _mutate_chroma_band_shift(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
+    async def _mutate_chroma_band_shift(self, profile: StyleProfile, image_b64: str | None = None, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Shift colors only within specific hue band."""
         instructions = """Identify the DOMINANT HUE BAND in this style and shift it in a specific direction.
 
@@ -1716,9 +1729,9 @@ In your response:
 - "analysis": identify the dominant hue band
 - "mutation_applied": describe the hue shift direction
 - "style_changes": apply the hue shift to palette"""
-        return await self._vlm_mutate(profile, "Chroma Band Shift", instructions, session_id)
+        return await self._vlm_mutate(profile, "Chroma Band Shift", instructions, image_b64, session_id)
 
-    async def _mutate_chromatic_noise(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
+    async def _mutate_chromatic_noise(self, profile: StyleProfile, image_b64: str | None = None, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Add color-channel-separated noise like film grain."""
         instructions = """Add CHROMATIC NOISE to this style - color-separated grain effects.
 
@@ -1742,9 +1755,9 @@ In your response:
 - "analysis": describe the current texture quality
 - "mutation_applied": describe the noise type you're adding
 - "style_changes": apply chromatic noise to texture"""
-        return await self._vlm_mutate(profile, "Chromatic Noise", instructions, session_id)
+        return await self._vlm_mutate(profile, "Chromatic Noise", instructions, image_b64, session_id)
 
-    async def _mutate_chromatic_temperature_split(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
+    async def _mutate_chromatic_temperature_split(self, profile: StyleProfile, image_b64: str | None = None, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Split warm highlights and cool shadows (or vice versa)."""
         instructions = """Create a CHROMATIC TEMPERATURE SPLIT - different color temperatures for lights and shadows.
 
@@ -1765,9 +1778,9 @@ In your response:
 - "analysis": describe current temperature balance
 - "mutation_applied": describe the temperature split you're creating
 - "style_changes": apply temperature split to lighting/palette"""
-        return await self._vlm_mutate(profile, "Chromatic Temperature Split", instructions, session_id)
+        return await self._vlm_mutate(profile, "Chromatic Temperature Split", instructions, image_b64, session_id)
 
-    async def _mutate_chromatic_fuse(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
+    async def _mutate_chromatic_fuse(self, profile: StyleProfile, image_b64: str | None = None, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Merge several hues into one unified mega-hue."""
         instructions = """FUSE multiple hues in this style into ONE unified mega-hue.
 
@@ -1787,9 +1800,9 @@ In your response:
 - "analysis": identify the distinct hues present
 - "mutation_applied": describe which hues you're fusing and into what
 - "style_changes": apply the unified palette"""
-        return await self._vlm_mutate(profile, "Chromatic Fuse", instructions, session_id)
+        return await self._vlm_mutate(profile, "Chromatic Fuse", instructions, image_b64, session_id)
 
-    async def _mutate_chromatic_split(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
+    async def _mutate_chromatic_split(self, profile: StyleProfile, image_b64: str | None = None, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Separate one hue into sub-hues for palette complexity."""
         instructions = """SPLIT a dominant hue into multiple sub-hues for palette complexity.
 
@@ -1812,10 +1825,10 @@ In your response:
 - "analysis": identify the dominant hue to split
 - "mutation_applied": describe the sub-hues you're creating
 - "style_changes": apply the split palette"""
-        return await self._vlm_mutate(profile, "Chromatic Split", instructions, session_id)
+        return await self._vlm_mutate(profile, "Chromatic Split", instructions, image_b64, session_id)
 
     # === LIGHTING/SHADOW MUTATIONS ===
-    async def _mutate_ambient_occlusion_variance(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
+    async def _mutate_ambient_occlusion_variance(self, profile: StyleProfile, image_b64: str | None = None, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Alter ambient occlusion softness/darkness."""
         instructions = """Modify the AMBIENT OCCLUSION in this style - how shadows gather in crevices and corners.
 
@@ -1834,9 +1847,9 @@ In your response:
 - "analysis": describe current shadow behavior
 - "mutation_applied": describe the AO change
 - "style_changes": apply to lighting"""
-        return await self._vlm_mutate(profile, "Ambient Occlusion Variance", instructions, session_id)
+        return await self._vlm_mutate(profile, "Ambient Occlusion Variance", instructions, image_b64, session_id)
 
-    async def _mutate_specular_flip(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
+    async def _mutate_specular_flip(self, profile: StyleProfile, image_b64: str | None = None, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Swap matte/glossy behavior."""
         instructions = """FLIP the specular/reflectivity behavior in this style.
 
@@ -1859,9 +1872,9 @@ In your response:
 - "analysis": describe current surface reflectivity
 - "mutation_applied": describe the specular flip
 - "style_changes": apply to texture"""
-        return await self._vlm_mutate(profile, "Specular Flip", instructions, session_id)
+        return await self._vlm_mutate(profile, "Specular Flip", instructions, image_b64, session_id)
 
-    async def _mutate_bloom_variance(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
+    async def _mutate_bloom_variance(self, profile: StyleProfile, image_b64: str | None = None, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Adjust bloom amount/radius/aura."""
         instructions = """Modify the BLOOM effect in this style - the glow around bright areas.
 
@@ -1883,9 +1896,9 @@ In your response:
 - "analysis": describe current bloom/glow behavior
 - "mutation_applied": describe the bloom change
 - "style_changes": apply to lighting"""
-        return await self._vlm_mutate(profile, "Bloom Variance", instructions, session_id)
+        return await self._vlm_mutate(profile, "Bloom Variance", instructions, image_b64, session_id)
 
-    async def _mutate_desync_lighting_channels(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
+    async def _mutate_desync_lighting_channels(self, profile: StyleProfile, image_b64: str | None = None, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Independently randomize lighting intensity/color/direction."""
         instructions = """DESYNC the lighting channels - make different light properties behave independently.
 
@@ -1904,9 +1917,9 @@ In your response:
 - "analysis": describe current lighting coherence
 - "mutation_applied": describe the desync effect
 - "style_changes": apply to lighting"""
-        return await self._vlm_mutate(profile, "Desync Lighting", instructions, session_id)
+        return await self._vlm_mutate(profile, "Desync Lighting", instructions, image_b64, session_id)
 
-    async def _mutate_highlight_shift(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
+    async def _mutate_highlight_shift(self, profile: StyleProfile, image_b64: str | None = None, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Modify highlight behavior."""
         instructions = """SHIFT how highlights behave in this style.
 
@@ -1925,9 +1938,9 @@ In your response:
 - "analysis": describe current highlight behavior
 - "mutation_applied": describe the highlight shift
 - "style_changes": apply to lighting"""
-        return await self._vlm_mutate(profile, "Highlight Shift", instructions, session_id)
+        return await self._vlm_mutate(profile, "Highlight Shift", instructions, image_b64, session_id)
 
-    async def _mutate_shadow_recode(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
+    async def _mutate_shadow_recode(self, profile: StyleProfile, image_b64: str | None = None, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Rewrite shadow behavior/color."""
         instructions = """RECODE how shadows behave in this style.
 
@@ -1946,9 +1959,9 @@ In your response:
 - "analysis": describe current shadow behavior
 - "mutation_applied": describe the shadow recode
 - "style_changes": apply to lighting"""
-        return await self._vlm_mutate(profile, "Shadow Recode", instructions, session_id)
+        return await self._vlm_mutate(profile, "Shadow Recode", instructions, image_b64, session_id)
 
-    async def _mutate_lighting_angle_shift(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
+    async def _mutate_lighting_angle_shift(self, profile: StyleProfile, image_b64: str | None = None, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Move light source direction."""
         instructions = """SHIFT the apparent lighting angle/direction in this style.
 
@@ -1967,9 +1980,9 @@ In your response:
 - "analysis": describe current light direction
 - "mutation_applied": describe the angle shift
 - "style_changes": apply to lighting"""
-        return await self._vlm_mutate(profile, "Lighting Angle Shift", instructions, session_id)
+        return await self._vlm_mutate(profile, "Lighting Angle Shift", instructions, image_b64, session_id)
 
-    async def _mutate_highlight_bloom_colorize(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
+    async def _mutate_highlight_bloom_colorize(self, profile: StyleProfile, image_b64: str | None = None, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Change highlight bloom color."""
         instructions = """COLORIZE the highlight bloom/glow in this style.
 
@@ -1988,9 +2001,9 @@ In your response:
 - "analysis": describe current bloom/highlight color
 - "mutation_applied": describe the color change
 - "style_changes": apply to lighting/palette"""
-        return await self._vlm_mutate(profile, "Highlight Bloom Colorize", instructions, session_id)
+        return await self._vlm_mutate(profile, "Highlight Bloom Colorize", instructions, image_b64, session_id)
 
-    async def _mutate_micro_shadowing(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
+    async def _mutate_micro_shadowing(self, profile: StyleProfile, image_b64: str | None = None, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Create small crisp micro-shadows."""
         instructions = """Add MICRO-SHADOWING to this style - small, detailed shadows that add depth.
 
@@ -2008,9 +2021,9 @@ In your response:
 - "analysis": describe current detail level
 - "mutation_applied": describe the micro-shadows added
 - "style_changes": apply to texture/lighting"""
-        return await self._vlm_mutate(profile, "Micro-Shadowing", instructions, session_id)
+        return await self._vlm_mutate(profile, "Micro-Shadowing", instructions, image_b64, session_id)
 
-    async def _mutate_macro_shadow_pivot(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
+    async def _mutate_macro_shadow_pivot(self, profile: StyleProfile, image_b64: str | None = None, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Reposition large shadow masses."""
         instructions = """PIVOT the large shadow masses in this style - reposition major areas of darkness.
 
@@ -2029,10 +2042,10 @@ In your response:
 - "analysis": describe current shadow mass distribution
 - "mutation_applied": describe the shadow pivot
 - "style_changes": apply to lighting/composition"""
-        return await self._vlm_mutate(profile, "Macro Shadow Pivot", instructions, session_id)
+        return await self._vlm_mutate(profile, "Macro Shadow Pivot", instructions, image_b64, session_id)
 
     # === CONTOUR/EDGE MUTATIONS ===
-    async def _mutate_contour_simplify(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
+    async def _mutate_contour_simplify(self, profile: StyleProfile, image_b64: str | None = None, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Reduce contour lines for poster-like shapes."""
         instructions = """SIMPLIFY contours in this style - reduce to cleaner, bolder shapes.
 
@@ -2050,9 +2063,9 @@ In your response:
 - "analysis": describe current contour complexity
 - "mutation_applied": describe the simplification
 - "style_changes": apply to line_and_shape"""
-        return await self._vlm_mutate(profile, "Contour Simplify", instructions, session_id)
+        return await self._vlm_mutate(profile, "Contour Simplify", instructions, image_b64, session_id)
 
-    async def _mutate_contour_complexify(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
+    async def _mutate_contour_complexify(self, profile: StyleProfile, image_b64: str | None = None, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Add secondary/tertiary contour lines."""
         instructions = """COMPLEXIFY contours in this style - add more detail and line work.
 
@@ -2070,9 +2083,9 @@ In your response:
 - "analysis": describe current contour simplicity
 - "mutation_applied": describe the added complexity
 - "style_changes": apply to line_and_shape"""
-        return await self._vlm_mutate(profile, "Contour Complexify", instructions, session_id)
+        return await self._vlm_mutate(profile, "Contour Complexify", instructions, image_b64, session_id)
 
-    async def _mutate_line_weight_modulation(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
+    async def _mutate_line_weight_modulation(self, profile: StyleProfile, image_b64: str | None = None, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Change outline weight/tapering."""
         instructions = """MODULATE line weights in this style - vary thickness for expression.
 
@@ -2091,9 +2104,9 @@ In your response:
 - "analysis": describe current line weight behavior
 - "mutation_applied": describe the weight modulation
 - "style_changes": apply to line_and_shape"""
-        return await self._vlm_mutate(profile, "Line Weight Modulation", instructions, session_id)
+        return await self._vlm_mutate(profile, "Line Weight Modulation", instructions, image_b64, session_id)
 
-    async def _mutate_edge_behavior_swap(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
+    async def _mutate_edge_behavior_swap(self, profile: StyleProfile, image_b64: str | None = None, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Swap between soft/hard/broken/feathered edges."""
         instructions = """SWAP the edge behavior in this style.
 
@@ -2113,9 +2126,9 @@ In your response:
 - "analysis": describe current edge behavior
 - "mutation_applied": describe the edge swap
 - "style_changes": apply to line_and_shape/texture"""
-        return await self._vlm_mutate(profile, "Edge Behavior Swap", instructions, session_id)
+        return await self._vlm_mutate(profile, "Edge Behavior Swap", instructions, image_b64, session_id)
 
-    async def _mutate_boundary_echo(self, profile: StyleProfile, session_id: str | None = None) -> tuple[StyleProfile, str]:
+    async def _mutate_boundary_echo(self, profile: StyleProfile, image_b64: str | None = None, session_id: str | None = None) -> tuple[StyleProfile, str]:
         """Add thin duplicated outlines."""
         instructions = """Add BOUNDARY ECHOES to this style - duplicated/parallel outline effects.
 
@@ -2134,11 +2147,12 @@ In your response:
 - "analysis": describe current edge treatment
 - "mutation_applied": describe the echo effect
 - "style_changes": apply to line_and_shape"""
-        return await self._vlm_mutate(profile, "Boundary Echo", instructions, session_id)
+        return await self._vlm_mutate(profile, "Boundary Echo", instructions, image_b64, session_id)
 
     async def _mutate_halo_generation(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Create outline glow around shapes."""
@@ -2166,6 +2180,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Halo Generation",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -2175,6 +2190,7 @@ In your response:
     async def _mutate_texture_direction_shift(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Rotate texture direction."""
@@ -2199,6 +2215,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Texture Direction Shift",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -2207,6 +2224,7 @@ In your response:
     async def _mutate_noise_injection(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Add controlled micro-noise."""
@@ -2232,6 +2250,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Noise Injection",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -2240,6 +2259,7 @@ In your response:
     async def _mutate_microfracture_pattern(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Add cracking/crazing lines."""
@@ -2264,6 +2284,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Microfracture Pattern",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -2272,6 +2293,7 @@ In your response:
     async def _mutate_crosshatch_density_shift(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Alter crosshatching density."""
@@ -2296,6 +2318,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Crosshatch Density Shift",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -2305,6 +2328,7 @@ In your response:
     async def _mutate_background_material_swap(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Change backdrop material."""
@@ -2331,6 +2355,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Background Material Swap",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -2339,6 +2364,7 @@ In your response:
     async def _mutate_surface_material_shift(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Transform surface feel."""
@@ -2364,6 +2390,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Surface Material Shift",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -2372,6 +2399,7 @@ In your response:
     async def _mutate_translucency_shift(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Alter transparency levels."""
@@ -2397,6 +2425,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Translucency Shift",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -2405,6 +2434,7 @@ In your response:
     async def _mutate_subsurface_scatter_tweak(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Adjust internal glow in translucent materials."""
@@ -2430,6 +2460,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Subsurface Scatter Tweak",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -2438,6 +2469,7 @@ In your response:
     async def _mutate_anisotropy_shift(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Change directional light reflection."""
@@ -2465,6 +2497,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Anisotropy Shift",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -2473,6 +2506,7 @@ In your response:
     async def _mutate_reflectivity_shift(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Change reflectivity without color change."""
@@ -2500,6 +2534,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Reflectivity Shift",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -2509,6 +2544,7 @@ In your response:
     async def _mutate_midtone_shift(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Mutate midtones only."""
@@ -2535,6 +2571,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Midtone Shift",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -2543,6 +2580,7 @@ In your response:
     async def _mutate_tonal_compression(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Compress tonal range for flatter look."""
@@ -2570,6 +2608,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Tonal Compression",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -2578,6 +2617,7 @@ In your response:
     async def _mutate_tonal_expansion(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Expand tonal range for deeper contrast."""
@@ -2605,6 +2645,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Tonal Expansion",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -2613,6 +2654,7 @@ In your response:
     async def _mutate_microcontrast_tuning(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Adjust small-scale contrast."""
@@ -2639,6 +2681,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Microcontrast Tuning",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -2647,6 +2690,7 @@ In your response:
     async def _mutate_contrast_channel_swap(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Modify contrast selectively by channel."""
@@ -2673,6 +2717,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Contrast Channel Swap",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -2682,6 +2727,7 @@ In your response:
     async def _mutate_directional_blur(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Apply motion-like blur along vector."""
@@ -2710,6 +2756,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Directional Blur",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -2718,6 +2765,7 @@ In your response:
     async def _mutate_focal_plane_shift(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Move focus point."""
@@ -2744,6 +2792,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Focal Plane Shift",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -2752,6 +2801,7 @@ In your response:
     async def _mutate_mask_boundary_mutation(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Modify mask borders."""
@@ -2779,6 +2829,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Mask Boundary Mutation",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -2788,6 +2839,7 @@ In your response:
     async def _mutate_silhouette_merge(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Fuse two silhouettes into composite."""
@@ -2814,6 +2866,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Silhouette Merge",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -2822,6 +2875,7 @@ In your response:
     async def _mutate_silhouette_subtract(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Remove chunks for negative-space shapes."""
@@ -2850,6 +2904,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Silhouette Subtract",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -2858,6 +2913,7 @@ In your response:
     async def _mutate_silhouette_distortion(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Stretch/bend/fracture silhouette."""
@@ -2891,6 +2947,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Silhouette Distortion",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -2899,6 +2956,7 @@ In your response:
     async def _mutate_internal_geometry_twist(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Twist inside while keeping silhouette."""
@@ -2935,6 +2993,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Internal Geometry Twist",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -2944,6 +3003,7 @@ In your response:
     async def _mutate_background_depth_collapse(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Compress background depth."""
@@ -2981,6 +3041,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Background Depth Collapse",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -2989,6 +3050,7 @@ In your response:
     async def _mutate_depth_flattening(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Reduce depth cues."""
@@ -3024,6 +3086,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Depth Flattening",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3032,6 +3095,7 @@ In your response:
     async def _mutate_depth_expansion(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Exaggerate depth/perspective."""
@@ -3067,6 +3131,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Depth Expansion",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3076,6 +3141,7 @@ In your response:
     async def _mutate_quadrant_mutation(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Mutate only one quadrant."""
@@ -3113,6 +3179,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Quadrant Mutation",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3121,6 +3188,7 @@ In your response:
     async def _mutate_object_alignment_shift(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Rotate/offset/misalign objects."""
@@ -3157,6 +3225,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Object Alignment Shift",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3165,6 +3234,7 @@ In your response:
     async def _mutate_spatial_hierarchy_flip(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Reorder visual priority."""
@@ -3207,6 +3277,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Spatial Hierarchy Flip",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3215,6 +3286,7 @@ In your response:
     async def _mutate_balance_shift(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Shift overall visual weight."""
@@ -3257,6 +3329,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Balance Shift",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3265,6 +3338,7 @@ In your response:
     async def _mutate_interplay_swap(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Swap dominance between elements."""
@@ -3300,6 +3374,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Interplay Swap",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3308,6 +3383,7 @@ In your response:
     async def _mutate_vignette_modification(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Add/modify vignette."""
@@ -3350,6 +3426,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Vignette Modification",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3359,6 +3436,7 @@ In your response:
     async def _mutate_motif_mirroring(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Mirror motif H/V/diagonal."""
@@ -3401,6 +3479,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Motif Mirroring",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3409,6 +3488,7 @@ In your response:
     async def _mutate_motif_scaling(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Scale repeated motifs."""
@@ -3449,6 +3529,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Motif Scaling",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3457,6 +3538,7 @@ In your response:
     async def _mutate_motif_repetition(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Duplicate and scatter motif."""
@@ -3495,6 +3577,7 @@ In your response:
 
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Motif Repetition",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3504,6 +3587,7 @@ In your response:
     async def _mutate_color_role_reassignment(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Swap color roles - reassign which colors serve as dominant, accent, background."""
@@ -3524,6 +3608,7 @@ Possible reassignments:
 Analyze the current color hierarchy and perform a meaningful role swap that transforms the visual impact."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Color Role Reassignment",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3532,6 +3617,7 @@ Analyze the current color hierarchy and perform a meaningful role swap that tran
     async def _mutate_saturation_scalpel(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Apply selective saturation changes to specific areas or color ranges."""
@@ -3548,6 +3634,7 @@ Selective saturation approaches:
 Analyze which areas or colors currently carry the most saturation, then apply a selective adjustment that creates visual interest through contrast."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Saturation Scalpel",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3556,6 +3643,7 @@ Analyze which areas or colors currently carry the most saturation, then apply a 
     async def _mutate_negative_color_injection(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Inject inverted or complementary color accents into the style."""
@@ -3572,6 +3660,7 @@ Negative color injection approaches:
 Analyze the current palette and identify where injecting inverted/complementary colors would create maximum visual tension or interest."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Negative Color Injection",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3580,6 +3669,7 @@ Analyze the current palette and identify where injecting inverted/complementary 
     async def _mutate_ambient_color_suction(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Pull ambient environmental colors into shadow areas."""
@@ -3596,6 +3686,7 @@ Ambient color suction approaches:
 Analyze the current lighting and palette, then define how ambient colors should infiltrate shadow regions to create richer, more atmospheric color interactions."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Ambient Color Suction",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3604,6 +3695,7 @@ Analyze the current lighting and palette, then define how ambient colors should 
     async def _mutate_local_color_mutation(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Apply zone-specific palette changes - different colors in different areas."""
@@ -3620,6 +3712,7 @@ Local color mutation approaches:
 Analyze the composition's spatial structure and apply distinct color mutations to different zones while maintaining overall visual coherence."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Local Color Mutation",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3629,6 +3722,7 @@ Analyze the composition's spatial structure and apply distinct color mutations t
     async def _mutate_detail_density_shift(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Shift where detail clusters - redistribute visual complexity."""
@@ -3645,6 +3739,7 @@ Detail density patterns to consider:
 Analyze the current detail distribution and shift it to a different pattern. Consider how this affects visual weight, eye movement, and compositional balance."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Detail Density Shift",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3653,6 +3748,7 @@ Analyze the current detail distribution and shift it to a different pattern. Con
     async def _mutate_form_simplification(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Reduce forms to simpler, more essential geometry."""
@@ -3669,6 +3765,7 @@ Form simplification approaches:
 Analyze the current form complexity and apply meaningful simplification that retains the essence while reducing visual complexity."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Form Simplification",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3677,6 +3774,7 @@ Analyze the current form complexity and apply meaningful simplification that ret
     async def _mutate_form_complication(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Add complexity to forms - micro-folds, greebles, intricate detail."""
@@ -3693,6 +3791,7 @@ Form complication approaches:
 Analyze the current form simplicity and add meaningful complexity that enriches the visual without overwhelming the composition."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Form Complication",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3701,6 +3800,7 @@ Analyze the current form simplicity and add meaningful complexity that enriches 
     async def _mutate_proportion_shift(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Alter the proportional relationships between elements."""
@@ -3718,6 +3818,7 @@ Proportion shift approaches:
 Analyze the current proportional relationships and shift them to create a new visual dynamic. Consider how proportion affects mood, emphasis, and style character."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Proportion Shift",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3727,6 +3828,7 @@ Analyze the current proportional relationships and shift them to create a new vi
     async def _mutate_path_flow_shift(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Alter the dominant directional flow that guides the eye."""
@@ -3745,6 +3847,7 @@ Path flow approaches:
 Analyze the current visual flow and redirect it. Consider how lines, edges, contrast, and color create implicit paths for the viewer's eye."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Path Flow Shift",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3753,6 +3856,7 @@ Analyze the current visual flow and redirect it. Consider how lines, edges, cont
     async def _mutate_rhythm_disruption(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Break or introduce visual repetition intervals."""
@@ -3770,6 +3874,7 @@ Rhythm disruption approaches:
 Analyze the current visual rhythm (repeating elements, spacing, intervals) and introduce meaningful disruption that creates tension or interest."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Rhythm Disruption",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3778,6 +3883,7 @@ Analyze the current visual rhythm (repeating elements, spacing, intervals) and i
     async def _mutate_rhythm_rebalance(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Rebalance visual rhythm by adjusting motif spacing and intervals."""
@@ -3795,6 +3901,7 @@ Rhythm rebalance approaches:
 Analyze the current motif spacing and repetition intervals, then rebalance them to create a more harmonious or intentionally structured visual rhythm."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Rhythm Rebalance",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3803,6 +3910,7 @@ Analyze the current motif spacing and repetition intervals, then rebalance them 
     async def _mutate_directional_energy_shift(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Alter the implied directional energy and movement."""
@@ -3821,6 +3929,7 @@ Directional energy approaches:
 Analyze the current implied energy direction and shift it to create different emotional and kinetic qualities."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Directional Energy Shift",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3830,6 +3939,7 @@ Analyze the current implied energy direction and shift it to create different em
     async def _mutate_local_perspective_bend(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Apply localized perspective distortions."""
@@ -3848,6 +3958,7 @@ Local perspective bend approaches:
 Analyze the current perspective and apply localized bending that creates visual interest or surreal qualities without completely breaking spatial coherence."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Local Perspective Bend",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3856,6 +3967,7 @@ Analyze the current perspective and apply localized bending that creates visual 
     async def _mutate_atmospheric_scatter_shift(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Change how light scatters through the atmosphere."""
@@ -3874,6 +3986,7 @@ Atmospheric scatter approaches:
 Analyze the current atmospheric quality and shift the scatter characteristics to create different depth, mood, and light behavior."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Atmospheric Scatter Shift",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3882,6 +3995,7 @@ Analyze the current atmospheric quality and shift the scatter characteristics to
     async def _mutate_occlusion_pattern(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Add imagined layers that partially hide parts of the scene."""
@@ -3900,6 +4014,7 @@ Occlusion pattern approaches:
 Analyze the composition and add occluding elements that create mystery, depth, or visual intrigue through partial concealment."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Occlusion Pattern",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3908,6 +4023,7 @@ Analyze the composition and add occluding elements that create mystery, depth, o
     async def _mutate_opacity_fog(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Add translucent fog or haze layers."""
@@ -3927,6 +4043,7 @@ Fog and haze approaches:
 Analyze the current atmosphere and add fog/haze that enhances mood, depth, or mystery."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Opacity Fog",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3936,6 +4053,7 @@ Analyze the current atmosphere and add fog/haze that enhances mood, depth, or my
     async def _mutate_pattern_overlay(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Apply a repeating pattern overlay to the style."""
@@ -3954,6 +4072,7 @@ Pattern overlay approaches:
 Analyze the style and choose an appropriate pattern overlay that complements or contrasts with the existing visual language."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Pattern Overlay",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3962,6 +4081,7 @@ Analyze the style and choose an appropriate pattern overlay that complements or 
     async def _mutate_gradient_remap(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Reassign how gradients behave throughout the style."""
@@ -3980,6 +4100,7 @@ Gradient remap approaches:
 Analyze the current gradient behavior (color transitions, value falloffs, blending) and remap them to create different visual dynamics."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Gradient Remap",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -3988,6 +4109,7 @@ Analyze the current gradient behavior (color transitions, value falloffs, blendi
     async def _mutate_frame_reinterpretation(
         self,
         profile: StyleProfile,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """Reinterpret the conceptual frame or border of the image."""
@@ -4007,6 +4129,7 @@ Frame reinterpretation approaches:
 Analyze the current edge treatment and reinterpret how the frame functions in the composition."""
         return await self._vlm_mutate(
             profile=profile,
+            image_b64=image_b64,
             mutation_type="Frame Reinterpretation",
             mutation_instructions=instructions,
             session_id=session_id,
@@ -4050,17 +4173,20 @@ Analyze the current edge treatment and reinterpret how the frame functions in th
         profile: StyleProfile,
         mutation_type: str,
         mutation_instructions: str,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """
         Generic VLM-powered mutation helper.
 
         All mutation strategies use this to get intelligent, context-aware mutations.
+        When an image is provided, the VLM analyzes the actual visual content.
 
         Args:
             profile: Current style profile to mutate
             mutation_type: Name of the mutation (e.g., "Chroma Band Shift")
             mutation_instructions: Specific instructions for this mutation type
+            image_b64: Optional base64 image to analyze (if provided, VLM sees the actual image)
             session_id: Optional session ID for logging
 
         Returns:
@@ -4068,9 +4194,17 @@ Analyze the current edge treatment and reinterpret how the frame functions in th
         """
         profile_summary = self._summarize_profile(profile)
 
-        prompt = f"""Analyze this visual style and apply a {mutation_type} mutation.
+        # If we have an image, tell the VLM to analyze it
+        image_context = ""
+        if image_b64:
+            image_context = """
+I'm showing you the actual image. Analyze what you SEE in this image - the actual colors, lighting, textures, composition, and visual elements. Base your mutation on the real visual content, not just the text description.
 
-Current style:
+"""
+
+        prompt = f"""Analyze this visual style and apply a {mutation_type} mutation.
+{image_context}
+Current style profile (for reference):
 {profile_summary}
 
 {mutation_instructions}
@@ -4120,19 +4254,86 @@ IMPORTANT:
 - Be specific and descriptive in your changes
 - The mutation should be noticeable but coherent"""
 
-        response = await vlm_service.generate_text(
-            prompt=prompt,
-            system=f"You are a style mutation expert specializing in {mutation_type}. Analyze the given style and apply intelligent, contextual mutations. Output only valid JSON.",
-            use_text_model=True,
-        )
+        system_prompt = f"You are a style mutation expert specializing in {mutation_type}. Analyze the given style and apply intelligent, contextual mutations. Output only valid JSON."
 
-        # Parse response
-        response = response.strip()
-        json_match = re.search(r'\{.*\}', response, re.DOTALL)
-        if not json_match:
-            raise ValueError(f"No JSON found in VLM response for {mutation_type}")
+        # Retry loop for VLM call + JSON parsing
+        max_retries = 3
+        last_error = None
+        data = None
 
-        data = json.loads(json_match.group(0))
+        for attempt in range(max_retries):
+            try:
+                # Use vision model if we have an image, otherwise text model
+                if image_b64:
+                    response = await vlm_service.analyze(
+                        prompt=prompt,
+                        images=[image_b64],
+                        system=system_prompt,
+                        force_json=True,
+                        max_retries=1,  # VLM has its own retry, we handle retry at this level
+                    )
+                else:
+                    response = await vlm_service.generate_text(
+                        prompt=prompt,
+                        system=system_prompt,
+                        use_text_model=True,
+                        force_json=True,
+                    )
+
+                # Parse response
+                response = response.strip()
+                json_match = re.search(r'\{.*\}', response, re.DOTALL)
+                if not json_match:
+                    raise ValueError(f"No JSON found in VLM response")
+
+                json_str = json_match.group(0)
+
+                # Try to parse JSON, with fallback fixes for common VLM errors
+                try:
+                    data = json.loads(json_str)
+                except json.JSONDecodeError as e:
+                    # Try to fix common JSON errors from VLM
+                    logger.warning(f"JSON parse error for {mutation_type}: {e}. Attempting fixes...")
+
+                    # Fix 1: Remove trailing commas before } or ]
+                    fixed = re.sub(r',(\s*[}\]])', r'\1', json_str)
+
+                    # Fix 2: Add missing commas between values
+                    fixed = re.sub(r'"\s*\n\s*"', '",\n"', fixed)
+                    fixed = re.sub(r'}\s*\n\s*"', '},\n"', fixed)
+                    fixed = re.sub(r']\s*\n\s*"', '],\n"', fixed)
+
+                    # Fix 3: Remove any non-JSON text after the closing brace
+                    brace_count = 0
+                    end_idx = 0
+                    for i, c in enumerate(fixed):
+                        if c == '{':
+                            brace_count += 1
+                        elif c == '}':
+                            brace_count -= 1
+                            if brace_count == 0:
+                                end_idx = i + 1
+                                break
+                    if end_idx > 0:
+                        fixed = fixed[:end_idx]
+
+                    data = json.loads(fixed)
+                    logger.info(f"JSON fixed successfully for {mutation_type}")
+
+                # Success - break out of retry loop
+                break
+
+            except Exception as e:
+                last_error = e
+                if attempt < max_retries - 1:
+                    logger.warning(f"Mutation {mutation_type} attempt {attempt + 1}/{max_retries} failed: {e}. Retrying...")
+                    await asyncio.sleep(1)  # Brief pause before retry
+                else:
+                    logger.error(f"Mutation {mutation_type} failed after {max_retries} attempts")
+                    raise ValueError(f"Mutation {mutation_type} failed after {max_retries} attempts: {e}")
+
+        if data is None:
+            raise ValueError(f"Mutation {mutation_type} failed: no valid response")
 
         analysis = data.get("analysis", "")
         mutation_applied = data.get("mutation_applied", mutation_type)
@@ -4151,7 +4352,17 @@ IMPORTANT:
             if section in profile_dict and isinstance(changes, dict):
                 for key, value in changes.items():
                     if key in profile_dict[section] and value is not None:
-                        # For lists, replace entirely; for strings, replace
+                        existing = profile_dict[section][key]
+                        # Coerce types to match existing schema
+                        if isinstance(existing, str) and not isinstance(value, str):
+                            # Convert non-string to string
+                            if isinstance(value, list):
+                                value = ", ".join(str(v) for v in value)
+                            else:
+                                value = str(value)
+                        elif isinstance(existing, list) and not isinstance(value, list):
+                            # Convert non-list to list
+                            value = [value] if value else []
                         profile_dict[section][key] = value
 
         # Update style name
@@ -4170,6 +4381,7 @@ IMPORTANT:
         self,
         profile: StyleProfile,
         strategy: MutationStrategy,
+        image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[StyleProfile, str]:
         """
@@ -4178,6 +4390,7 @@ IMPORTANT:
         Args:
             profile: The current style profile to mutate
             strategy: Which mutation strategy to use
+            image_b64: The current image to analyze for mutations
             session_id: Optional session ID for WebSocket logging
 
         Returns:
@@ -4191,27 +4404,27 @@ IMPORTANT:
         await log(f"Applying mutation strategy: {strategy.value}")
 
         if strategy == MutationStrategy.RANDOM_DIMENSION:
-            mutated, description, _ = await self._mutate_random_dimension(profile, session_id)
+            mutated, description, _ = await self._mutate_random_dimension(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.WHAT_IF:
-            mutated, description = await self._mutate_what_if(profile, session_id)
+            mutated, description = await self._mutate_what_if(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.CROSSOVER:
-            mutated, description = await self._mutate_crossover(profile, session_id)
+            mutated, description = await self._mutate_crossover(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.INVERSION:
-            mutated, description = await self._mutate_inversion(profile, session_id)
+            mutated, description = await self._mutate_inversion(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.AMPLIFY:
-            mutated, description = await self._mutate_amplify(profile, session_id)
+            mutated, description = await self._mutate_amplify(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
@@ -4221,570 +4434,570 @@ IMPORTANT:
             return mutated, description
 
         elif strategy == MutationStrategy.TIME_SHIFT:
-            mutated, description = await self._mutate_time_shift(profile, session_id)
+            mutated, description = await self._mutate_time_shift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.MEDIUM_SWAP:
-            mutated, description = await self._mutate_medium_swap(profile, session_id)
+            mutated, description = await self._mutate_medium_swap(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.MOOD_SHIFT:
-            mutated, description = await self._mutate_mood_shift(profile, session_id)
+            mutated, description = await self._mutate_mood_shift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.SCALE_WARP:
-            mutated, description = await self._mutate_scale_warp(profile, session_id)
+            mutated, description = await self._mutate_scale_warp(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.DECAY:
-            mutated, description = await self._mutate_decay(profile, session_id)
+            mutated, description = await self._mutate_decay(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.REMIX:
-            mutated, description = await self._mutate_remix(profile, session_id)
+            mutated, description = await self._mutate_remix(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.CONSTRAIN:
-            mutated, description = await self._mutate_constrain(profile, session_id)
+            mutated, description = await self._mutate_constrain(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.CULTURE_SHIFT:
-            mutated, description = await self._mutate_culture_shift(profile, session_id)
+            mutated, description = await self._mutate_culture_shift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.CHAOS:
-            mutated, description = await self._mutate_chaos(profile, session_id)
+            mutated, description = await self._mutate_chaos(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.REFINE:
-            mutated, description = await self._mutate_refine(profile, session_id)
+            mutated, description = await self._mutate_refine(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === SPATIAL MUTATIONS ===
         elif strategy == MutationStrategy.TOPOLOGY_FOLD:
-            mutated, description = await self._mutate_topology_fold(profile, session_id)
+            mutated, description = await self._mutate_topology_fold(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.SILHOUETTE_SHIFT:
-            mutated, description = await self._mutate_silhouette_shift(profile, session_id)
+            mutated, description = await self._mutate_silhouette_shift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.PERSPECTIVE_DRIFT:
-            mutated, description = await self._mutate_perspective_drift(profile, session_id)
+            mutated, description = await self._mutate_perspective_drift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.AXIS_SWAP:
-            mutated, description = await self._mutate_axis_swap(profile, session_id)
+            mutated, description = await self._mutate_axis_swap(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === PHYSICS MUTATIONS ===
         elif strategy == MutationStrategy.PHYSICS_BEND:
-            mutated, description = await self._mutate_physics_bend(profile, session_id)
+            mutated, description = await self._mutate_physics_bend(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.CHROMATIC_GRAVITY:
-            mutated, description = await self._mutate_chromatic_gravity(profile, session_id)
+            mutated, description = await self._mutate_chromatic_gravity(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.MATERIAL_TRANSMUTE:
-            mutated, description = await self._mutate_material_transmute(profile, session_id)
+            mutated, description = await self._mutate_material_transmute(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.TEMPORAL_EXPOSURE:
-            mutated, description = await self._mutate_temporal_exposure(profile, session_id)
+            mutated, description = await self._mutate_temporal_exposure(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === PATTERN MUTATIONS ===
         elif strategy == MutationStrategy.MOTIF_SPLICE:
-            mutated, description = await self._mutate_motif_splice(profile, session_id)
+            mutated, description = await self._mutate_motif_splice(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.RHYTHM_OVERLAY:
-            mutated, description = await self._mutate_rhythm_overlay(profile, session_id)
+            mutated, description = await self._mutate_rhythm_overlay(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.HARMONIC_BALANCE:
-            mutated, description = await self._mutate_harmonic_balance(profile, session_id)
+            mutated, description = await self._mutate_harmonic_balance(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.SYMMETRY_BREAK:
-            mutated, description = await self._mutate_symmetry_break(profile, session_id)
+            mutated, description = await self._mutate_symmetry_break(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === DENSITY MUTATIONS ===
         elif strategy == MutationStrategy.DENSITY_SHIFT:
-            mutated, description = await self._mutate_density_shift(profile, session_id)
+            mutated, description = await self._mutate_density_shift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.DIMENSIONAL_SHIFT:
-            mutated, description = await self._mutate_dimensional_shift(profile, session_id)
+            mutated, description = await self._mutate_dimensional_shift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.MICRO_MACRO_SWAP:
-            mutated, description = await self._mutate_micro_macro_swap(profile, session_id)
+            mutated, description = await self._mutate_micro_macro_swap(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.ESSENCE_STRIP:
-            mutated, description = await self._mutate_essence_strip(profile, session_id)
+            mutated, description = await self._mutate_essence_strip(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === NARRATIVE MUTATIONS ===
         elif strategy == MutationStrategy.NARRATIVE_RESONANCE:
-            mutated, description = await self._mutate_narrative_resonance(profile, session_id)
+            mutated, description = await self._mutate_narrative_resonance(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.ARCHETYPE_MASK:
-            mutated, description = await self._mutate_archetype_mask(profile, session_id)
+            mutated, description = await self._mutate_archetype_mask(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.ANOMALY_INJECT:
-            mutated, description = await self._mutate_anomaly_inject(profile, session_id)
+            mutated, description = await self._mutate_anomaly_inject(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.SPECTRAL_ECHO:
-            mutated, description = await self._mutate_spectral_echo(profile, session_id)
+            mutated, description = await self._mutate_spectral_echo(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === ENVIRONMENT MUTATIONS ===
         elif strategy == MutationStrategy.CLIMATE_MORPH:
-            mutated, description = await self._mutate_climate_morph(profile, session_id)
+            mutated, description = await self._mutate_climate_morph(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.BIOME_SHIFT:
-            mutated, description = await self._mutate_biome_shift(profile, session_id)
+            mutated, description = await self._mutate_biome_shift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === TECHNICAL MUTATIONS ===
         elif strategy == MutationStrategy.ALGORITHMIC_WRINKLE:
-            mutated, description = await self._mutate_algorithmic_wrinkle(profile, session_id)
+            mutated, description = await self._mutate_algorithmic_wrinkle(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.SYMBOLIC_REDUCTION:
-            mutated, description = await self._mutate_symbolic_reduction(profile, session_id)
+            mutated, description = await self._mutate_symbolic_reduction(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === CHROMATIC MUTATIONS ===
         elif strategy == MutationStrategy.CHROMA_BAND_SHIFT:
-            mutated, description = await self._mutate_chroma_band_shift(profile, session_id)
+            mutated, description = await self._mutate_chroma_band_shift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.CHROMATIC_NOISE:
-            mutated, description = await self._mutate_chromatic_noise(profile, session_id)
+            mutated, description = await self._mutate_chromatic_noise(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.CHROMATIC_TEMPERATURE_SPLIT:
-            mutated, description = await self._mutate_chromatic_temperature_split(profile, session_id)
+            mutated, description = await self._mutate_chromatic_temperature_split(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.CHROMATIC_FUSE:
-            mutated, description = await self._mutate_chromatic_fuse(profile, session_id)
+            mutated, description = await self._mutate_chromatic_fuse(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.CHROMATIC_SPLIT:
-            mutated, description = await self._mutate_chromatic_split(profile, session_id)
+            mutated, description = await self._mutate_chromatic_split(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === LIGHTING/SHADOW MUTATIONS ===
         elif strategy == MutationStrategy.AMBIENT_OCCLUSION_VARIANCE:
-            mutated, description = await self._mutate_ambient_occlusion_variance(profile, session_id)
+            mutated, description = await self._mutate_ambient_occlusion_variance(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.SPECULAR_FLIP:
-            mutated, description = await self._mutate_specular_flip(profile, session_id)
+            mutated, description = await self._mutate_specular_flip(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.BLOOM_VARIANCE:
-            mutated, description = await self._mutate_bloom_variance(profile, session_id)
+            mutated, description = await self._mutate_bloom_variance(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.DESYNC_LIGHTING_CHANNELS:
-            mutated, description = await self._mutate_desync_lighting_channels(profile, session_id)
+            mutated, description = await self._mutate_desync_lighting_channels(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.HIGHLIGHT_SHIFT:
-            mutated, description = await self._mutate_highlight_shift(profile, session_id)
+            mutated, description = await self._mutate_highlight_shift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.SHADOW_RECODE:
-            mutated, description = await self._mutate_shadow_recode(profile, session_id)
+            mutated, description = await self._mutate_shadow_recode(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.LIGHTING_ANGLE_SHIFT:
-            mutated, description = await self._mutate_lighting_angle_shift(profile, session_id)
+            mutated, description = await self._mutate_lighting_angle_shift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.HIGHLIGHT_BLOOM_COLORIZE:
-            mutated, description = await self._mutate_highlight_bloom_colorize(profile, session_id)
+            mutated, description = await self._mutate_highlight_bloom_colorize(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.MICRO_SHADOWING:
-            mutated, description = await self._mutate_micro_shadowing(profile, session_id)
+            mutated, description = await self._mutate_micro_shadowing(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.MACRO_SHADOW_PIVOT:
-            mutated, description = await self._mutate_macro_shadow_pivot(profile, session_id)
+            mutated, description = await self._mutate_macro_shadow_pivot(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === CONTOUR/EDGE MUTATIONS ===
         elif strategy == MutationStrategy.CONTOUR_SIMPLIFY:
-            mutated, description = await self._mutate_contour_simplify(profile, session_id)
+            mutated, description = await self._mutate_contour_simplify(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.CONTOUR_COMPLEXIFY:
-            mutated, description = await self._mutate_contour_complexify(profile, session_id)
+            mutated, description = await self._mutate_contour_complexify(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.LINE_WEIGHT_MODULATION:
-            mutated, description = await self._mutate_line_weight_modulation(profile, session_id)
+            mutated, description = await self._mutate_line_weight_modulation(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.EDGE_BEHAVIOR_SWAP:
-            mutated, description = await self._mutate_edge_behavior_swap(profile, session_id)
+            mutated, description = await self._mutate_edge_behavior_swap(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.BOUNDARY_ECHO:
-            mutated, description = await self._mutate_boundary_echo(profile, session_id)
+            mutated, description = await self._mutate_boundary_echo(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.HALO_GENERATION:
-            mutated, description = await self._mutate_halo_generation(profile, session_id)
+            mutated, description = await self._mutate_halo_generation(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === TEXTURE MUTATIONS ===
         elif strategy == MutationStrategy.TEXTURE_DIRECTION_SHIFT:
-            mutated, description = await self._mutate_texture_direction_shift(profile, session_id)
+            mutated, description = await self._mutate_texture_direction_shift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.NOISE_INJECTION:
-            mutated, description = await self._mutate_noise_injection(profile, session_id)
+            mutated, description = await self._mutate_noise_injection(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.MICROFRACTURE_PATTERN:
-            mutated, description = await self._mutate_microfracture_pattern(profile, session_id)
+            mutated, description = await self._mutate_microfracture_pattern(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.CROSSHATCH_DENSITY_SHIFT:
-            mutated, description = await self._mutate_crosshatch_density_shift(profile, session_id)
+            mutated, description = await self._mutate_crosshatch_density_shift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === MATERIAL/SURFACE MUTATIONS ===
         elif strategy == MutationStrategy.BACKGROUND_MATERIAL_SWAP:
-            mutated, description = await self._mutate_background_material_swap(profile, session_id)
+            mutated, description = await self._mutate_background_material_swap(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.SURFACE_MATERIAL_SHIFT:
-            mutated, description = await self._mutate_surface_material_shift(profile, session_id)
+            mutated, description = await self._mutate_surface_material_shift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.TRANSLUCENCY_SHIFT:
-            mutated, description = await self._mutate_translucency_shift(profile, session_id)
+            mutated, description = await self._mutate_translucency_shift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.SUBSURFACE_SCATTER_TWEAK:
-            mutated, description = await self._mutate_subsurface_scatter_tweak(profile, session_id)
+            mutated, description = await self._mutate_subsurface_scatter_tweak(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.ANISOTROPY_SHIFT:
-            mutated, description = await self._mutate_anisotropy_shift(profile, session_id)
+            mutated, description = await self._mutate_anisotropy_shift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.REFLECTIVITY_SHIFT:
-            mutated, description = await self._mutate_reflectivity_shift(profile, session_id)
+            mutated, description = await self._mutate_reflectivity_shift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === TONAL MUTATIONS ===
         elif strategy == MutationStrategy.MIDTONE_SHIFT:
-            mutated, description = await self._mutate_midtone_shift(profile, session_id)
+            mutated, description = await self._mutate_midtone_shift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.TONAL_COMPRESSION:
-            mutated, description = await self._mutate_tonal_compression(profile, session_id)
+            mutated, description = await self._mutate_tonal_compression(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.TONAL_EXPANSION:
-            mutated, description = await self._mutate_tonal_expansion(profile, session_id)
+            mutated, description = await self._mutate_tonal_expansion(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.MICROCONTRAST_TUNING:
-            mutated, description = await self._mutate_microcontrast_tuning(profile, session_id)
+            mutated, description = await self._mutate_microcontrast_tuning(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.CONTRAST_CHANNEL_SWAP:
-            mutated, description = await self._mutate_contrast_channel_swap(profile, session_id)
+            mutated, description = await self._mutate_contrast_channel_swap(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === BLUR/FOCUS MUTATIONS ===
         elif strategy == MutationStrategy.DIRECTIONAL_BLUR:
-            mutated, description = await self._mutate_directional_blur(profile, session_id)
+            mutated, description = await self._mutate_directional_blur(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.FOCAL_PLANE_SHIFT:
-            mutated, description = await self._mutate_focal_plane_shift(profile, session_id)
+            mutated, description = await self._mutate_focal_plane_shift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.MASK_BOUNDARY_MUTATION:
-            mutated, description = await self._mutate_mask_boundary_mutation(profile, session_id)
+            mutated, description = await self._mutate_mask_boundary_mutation(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === SILHOUETTE MUTATIONS (EXTENDED) ===
         elif strategy == MutationStrategy.SILHOUETTE_MERGE:
-            mutated, description = await self._mutate_silhouette_merge(profile, session_id)
+            mutated, description = await self._mutate_silhouette_merge(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.SILHOUETTE_SUBTRACT:
-            mutated, description = await self._mutate_silhouette_subtract(profile, session_id)
+            mutated, description = await self._mutate_silhouette_subtract(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.SILHOUETTE_DISTORTION:
-            mutated, description = await self._mutate_silhouette_distortion(profile, session_id)
+            mutated, description = await self._mutate_silhouette_distortion(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.INTERNAL_GEOMETRY_TWIST:
-            mutated, description = await self._mutate_internal_geometry_twist(profile, session_id)
+            mutated, description = await self._mutate_internal_geometry_twist(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === DEPTH MUTATIONS ===
         elif strategy == MutationStrategy.BACKGROUND_DEPTH_COLLAPSE:
-            mutated, description = await self._mutate_background_depth_collapse(profile, session_id)
+            mutated, description = await self._mutate_background_depth_collapse(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.DEPTH_FLATTENING:
-            mutated, description = await self._mutate_depth_flattening(profile, session_id)
+            mutated, description = await self._mutate_depth_flattening(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.DEPTH_EXPANSION:
-            mutated, description = await self._mutate_depth_expansion(profile, session_id)
+            mutated, description = await self._mutate_depth_expansion(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === COMPOSITION MUTATIONS (NEW) ===
         elif strategy == MutationStrategy.QUADRANT_MUTATION:
-            mutated, description = await self._mutate_quadrant_mutation(profile, session_id)
+            mutated, description = await self._mutate_quadrant_mutation(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.OBJECT_ALIGNMENT_SHIFT:
-            mutated, description = await self._mutate_object_alignment_shift(profile, session_id)
+            mutated, description = await self._mutate_object_alignment_shift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.SPATIAL_HIERARCHY_FLIP:
-            mutated, description = await self._mutate_spatial_hierarchy_flip(profile, session_id)
+            mutated, description = await self._mutate_spatial_hierarchy_flip(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.BALANCE_SHIFT:
-            mutated, description = await self._mutate_balance_shift(profile, session_id)
+            mutated, description = await self._mutate_balance_shift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.INTERPLAY_SWAP:
-            mutated, description = await self._mutate_interplay_swap(profile, session_id)
+            mutated, description = await self._mutate_interplay_swap(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.VIGNETTE_MODIFICATION:
-            mutated, description = await self._mutate_vignette_modification(profile, session_id)
+            mutated, description = await self._mutate_vignette_modification(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === MOTIF MUTATIONS (NEW) ===
         elif strategy == MutationStrategy.MOTIF_MIRRORING:
-            mutated, description = await self._mutate_motif_mirroring(profile, session_id)
+            mutated, description = await self._mutate_motif_mirroring(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.MOTIF_SCALING:
-            mutated, description = await self._mutate_motif_scaling(profile, session_id)
+            mutated, description = await self._mutate_motif_scaling(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.MOTIF_REPETITION:
-            mutated, description = await self._mutate_motif_repetition(profile, session_id)
+            mutated, description = await self._mutate_motif_repetition(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === COLOR ROLE MUTATIONS ===
         elif strategy == MutationStrategy.COLOR_ROLE_REASSIGNMENT:
-            mutated, description = await self._mutate_color_role_reassignment(profile, session_id)
+            mutated, description = await self._mutate_color_role_reassignment(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.SATURATION_SCALPEL:
-            mutated, description = await self._mutate_saturation_scalpel(profile, session_id)
+            mutated, description = await self._mutate_saturation_scalpel(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.NEGATIVE_COLOR_INJECTION:
-            mutated, description = await self._mutate_negative_color_injection(profile, session_id)
+            mutated, description = await self._mutate_negative_color_injection(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.AMBIENT_COLOR_SUCTION:
-            mutated, description = await self._mutate_ambient_color_suction(profile, session_id)
+            mutated, description = await self._mutate_ambient_color_suction(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.LOCAL_COLOR_MUTATION:
-            mutated, description = await self._mutate_local_color_mutation(profile, session_id)
+            mutated, description = await self._mutate_local_color_mutation(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === DETAIL/FORM MUTATIONS ===
         elif strategy == MutationStrategy.DETAIL_DENSITY_SHIFT:
-            mutated, description = await self._mutate_detail_density_shift(profile, session_id)
+            mutated, description = await self._mutate_detail_density_shift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.FORM_SIMPLIFICATION:
-            mutated, description = await self._mutate_form_simplification(profile, session_id)
+            mutated, description = await self._mutate_form_simplification(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.FORM_COMPLICATION:
-            mutated, description = await self._mutate_form_complication(profile, session_id)
+            mutated, description = await self._mutate_form_complication(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.PROPORTION_SHIFT:
-            mutated, description = await self._mutate_proportion_shift(profile, session_id)
+            mutated, description = await self._mutate_proportion_shift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === FLOW/RHYTHM MUTATIONS ===
         elif strategy == MutationStrategy.PATH_FLOW_SHIFT:
-            mutated, description = await self._mutate_path_flow_shift(profile, session_id)
+            mutated, description = await self._mutate_path_flow_shift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.RHYTHM_DISRUPTION:
-            mutated, description = await self._mutate_rhythm_disruption(profile, session_id)
+            mutated, description = await self._mutate_rhythm_disruption(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.RHYTHM_REBALANCE:
-            mutated, description = await self._mutate_rhythm_rebalance(profile, session_id)
+            mutated, description = await self._mutate_rhythm_rebalance(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.DIRECTIONAL_ENERGY_SHIFT:
-            mutated, description = await self._mutate_directional_energy_shift(profile, session_id)
+            mutated, description = await self._mutate_directional_energy_shift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === PERSPECTIVE MUTATIONS ===
         elif strategy == MutationStrategy.LOCAL_PERSPECTIVE_BEND:
-            mutated, description = await self._mutate_local_perspective_bend(profile, session_id)
+            mutated, description = await self._mutate_local_perspective_bend(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.ATMOSPHERIC_SCATTER_SHIFT:
-            mutated, description = await self._mutate_atmospheric_scatter_shift(profile, session_id)
+            mutated, description = await self._mutate_atmospheric_scatter_shift(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.OCCLUSION_PATTERN:
-            mutated, description = await self._mutate_occlusion_pattern(profile, session_id)
+            mutated, description = await self._mutate_occlusion_pattern(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.OPACITY_FOG:
-            mutated, description = await self._mutate_opacity_fog(profile, session_id)
+            mutated, description = await self._mutate_opacity_fog(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         # === OVERLAY/PATTERN MUTATIONS ===
         elif strategy == MutationStrategy.PATTERN_OVERLAY:
-            mutated, description = await self._mutate_pattern_overlay(profile, session_id)
+            mutated, description = await self._mutate_pattern_overlay(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.GRADIENT_REMAP:
-            mutated, description = await self._mutate_gradient_remap(profile, session_id)
+            mutated, description = await self._mutate_gradient_remap(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
         elif strategy == MutationStrategy.FRAME_REINTERPRETATION:
-            mutated, description = await self._mutate_frame_reinterpretation(profile, session_id)
+            mutated, description = await self._mutate_frame_reinterpretation(profile, image_b64, session_id)
             await log(f"Mutation: {description}")
             return mutated, description
 
@@ -4844,6 +5057,7 @@ IMPORTANT:
         self,
         profile: StyleProfile,
         subject: str,
+        parent_image_b64: str | None = None,
         session_id: str | None = None,
     ) -> tuple[str, str]:
         """
@@ -4851,7 +5065,8 @@ IMPORTANT:
 
         Args:
             profile: The mutated style profile
-            subject: What to generate
+            subject: What to generate (fallback if no image)
+            parent_image_b64: The parent image to analyze for prompt generation
             session_id: Optional session ID for logging
 
         Returns:
@@ -4862,9 +5077,74 @@ IMPORTANT:
             if session_id:
                 await manager.broadcast_log(session_id, msg, level, "explore")
 
-        # Build prompt from mutated profile
-        prompt = self._build_exploration_prompt(profile, subject)
-        await log(f"Generating with prompt: {prompt[:100]}...")
+        # Generate prompt by combining detailed image description with mutated style
+        if parent_image_b64:
+            await log("Analyzing parent image...")
+
+            # Step 1: Get rich description of the image
+            analysis_prompt = """Analyze this image comprehensively in 400-500 words as flowing prose.
+
+Describe the main subjects, characters, and objects with their appearance, position, and distinctive details. Cover the composition including layout, framing, and spatial arrangement. Note the artistic style, technique, and medium. Detail the color palette with dominant colors, relationships, and temperature. Describe the lighting including sources, shadows, highlights, and mood it creates. Mention visible textures and surface qualities. Convey the emotional tone and atmosphere.
+
+Write as one continuous flowing description - do NOT use bullet points, numbered lists, or section headers. Be specific and detailed."""
+
+            base_description = await vlm_service.analyze(
+                prompt=analysis_prompt,
+                images=[parent_image_b64],
+                system="You are an expert at describing images for AI image generation. Write detailed, evocative descriptions.",
+                force_json=False,
+            )
+            base_description = base_description.strip()
+            await log(f"Base description: {base_description[:150]}...")
+
+            # Step 2: Build style modifiers from the MUTATED profile
+            style_modifiers = []
+
+            if profile.palette:
+                p = profile.palette
+                if p.dominant_colors:
+                    style_modifiers.append(f"color palette of {p.dominant_colors}")
+                if p.color_mood:
+                    style_modifiers.append(f"{p.color_mood} color mood")
+                if p.saturation_level:
+                    style_modifiers.append(f"{p.saturation_level} saturation")
+
+            if profile.texture:
+                t = profile.texture
+                if t.surface_quality:
+                    style_modifiers.append(f"{t.surface_quality} surfaces")
+                if t.noise_characteristics:
+                    style_modifiers.append(f"{t.noise_characteristics} texture")
+
+            if profile.lighting:
+                l = profile.lighting
+                if l.light_source:
+                    style_modifiers.append(f"{l.light_source} lighting")
+                if l.shadow_style:
+                    style_modifiers.append(f"{l.shadow_style} shadows")
+                if l.contrast_level:
+                    style_modifiers.append(f"{l.contrast_level} contrast")
+
+            if profile.line_and_shape:
+                ls = profile.line_and_shape
+                if ls.edge_treatment:
+                    style_modifiers.append(f"{ls.edge_treatment} edges")
+                if ls.shape_language:
+                    style_modifiers.append(f"{ls.shape_language} shapes")
+
+            # Step 3: Append style modifiers to the base description
+            if style_modifiers:
+                style_suffix = ", ".join(style_modifiers)
+                prompt = f"{base_description} Style emphasis: {style_suffix}."
+                await log(f"Added style modifiers: {style_suffix[:100]}...")
+            else:
+                prompt = base_description
+        else:
+            # Fallback to mechanical prompt building
+            await log("No parent image, using fallback prompt building")
+            prompt = self._build_exploration_prompt(profile, subject)
+
+        await log(f"FULL PROMPT: {prompt[:200]}...", "warning")
 
         # Generate image
         image_b64 = await comfyui_service.generate(
@@ -5059,7 +5339,7 @@ Output ONLY a JSON object: {"interest_score": <number>}"""
         strategy: MutationStrategy | None = None,
         preferred_strategies: list[MutationStrategy] | None = None,
         session_id: str | None = None,
-    ) -> tuple[StyleProfile, str, str, str, ExplorationScores]:
+    ) -> tuple[StyleProfile, str, str, str, ExplorationScores, MutationStrategy]:
         """
         Run one complete exploration step.
 
@@ -5077,7 +5357,7 @@ Output ONLY a JSON object: {"interest_score": <number>}"""
             session_id: Optional session ID for logging
 
         Returns:
-            (mutated_profile, mutation_description, image_b64, prompt_used, scores)
+            (mutated_profile, mutation_description, image_b64, prompt_used, scores, strategy_used)
         """
         async def log(msg: str, level: str = "info"):
             logger.info(f"[explorer] {msg}")
@@ -5095,17 +5375,19 @@ Output ONLY a JSON object: {"interest_score": <number>}"""
 
         await log(f"Selected strategy: {strategy.value}")
 
-        # Step 1: Mutate the profile
+        # Step 1: Mutate the profile (pass image so VLM can analyze it)
         mutated_profile, mutation_description = await self.mutate(
             profile=current_profile,
             strategy=strategy,
+            image_b64=parent_image_b64,
             session_id=session_id,
         )
 
-        # Step 2: Generate image
+        # Step 2: Generate image (pass parent image for VLM analysis)
         image_b64, prompt_used = await self.generate_exploration_image(
             profile=mutated_profile,
             subject=subject,
+            parent_image_b64=parent_image_b64,
             session_id=session_id,
         )
 
@@ -5119,7 +5401,7 @@ Output ONLY a JSON object: {"interest_score": <number>}"""
 
         await log(f"Exploration step complete. Novelty: {scores.novelty:.1f}", "success")
 
-        return mutated_profile, mutation_description, image_b64, prompt_used, scores
+        return mutated_profile, mutation_description, image_b64, prompt_used, scores, strategy
 
 
 # Singleton instance
