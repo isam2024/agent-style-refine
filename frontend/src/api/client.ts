@@ -551,6 +551,38 @@ export async function getExplorationTree(sessionId: string): Promise<Exploration
   return fetchJson<ExplorationTree>(`${API_BASE}/explorer/sessions/${sessionId}/tree`);
 }
 
+export interface ChainExploreResult {
+  session_id: string;
+  snapshots_created: number;
+  snapshots: Array<{ id: string; depth: number; combined_score: number; mutation: string }>;
+  best_snapshot_id: string | null;
+  best_score: number;
+  final_depth: number;
+}
+
+export async function chainExplore(
+  sessionId: string,
+  numSteps: number = 5,
+  parentSnapshotId?: string,
+  strategy?: string
+): Promise<ChainExploreResult> {
+  const params = new URLSearchParams();
+  params.append('num_steps', numSteps.toString());
+  if (parentSnapshotId) {
+    params.append('parent_snapshot_id', parentSnapshotId);
+  }
+  if (strategy) {
+    params.append('strategy', strategy);
+  }
+  return fetchJson<ChainExploreResult>(
+    `${API_BASE}/explorer/sessions/${sessionId}/chain-explore?${params.toString()}`,
+    {
+      method: 'POST',
+      timeout: LONG_TIMEOUT * numSteps,
+    }
+  );
+}
+
 export interface BatchExploreResult {
   session_id: string;
   parent_snapshot_id: string | null;

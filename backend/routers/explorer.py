@@ -157,6 +157,7 @@ async def get_exploration_session(
             "id": snap.id,
             "parent_id": snap.parent_id,
             "style_profile": snap.style_profile_json,
+            "generated_image_path": snap.generated_image_path,
             "prompt_used": snap.prompt_used,
             "mutation_strategy": snap.mutation_strategy,
             "mutation_description": snap.mutation_description,
@@ -256,13 +257,18 @@ async def run_exploration_step(
     current_profile = StyleProfile(**session.base_style_profile_json)
     parent_depth = -1
 
+    # Log what we received
+    await manager.broadcast_log(session_id, f"[Explore Step] Received parent_snapshot_id={data.parent_snapshot_id}, session.current_snapshot_id={session.current_snapshot_id}", "info", "explore")
+
     if data.parent_snapshot_id:
         # Branch from specific snapshot
+        await manager.broadcast_log(session_id, f"[Explore Step] Looking for parent snapshot: {data.parent_snapshot_id}", "info", "explore")
         for snap in session.snapshots:
             if snap.id == data.parent_snapshot_id:
                 parent_snapshot = snap
                 current_profile = StyleProfile(**snap.style_profile_json)
                 parent_depth = snap.depth
+                await manager.broadcast_log(session_id, f"[Explore Step] Found parent at depth {parent_depth}", "info", "explore")
                 break
 
         if parent_snapshot is None:
@@ -274,7 +280,7 @@ async def run_exploration_step(
                 parent_snapshot.generated_image_path
             )
         except FileNotFoundError:
-            pass
+            await manager.broadcast_log(session_id, f"[Explore Step] Parent image not found: {parent_snapshot.generated_image_path}", "warning", "explore")
 
     elif session.current_snapshot_id:
         # Continue from current snapshot
@@ -335,6 +341,8 @@ async def run_exploration_step(
         )
 
         # Create snapshot record
+        new_depth = parent_depth + 1
+        await manager.broadcast_log(session_id, f"[Explore Step] Creating snapshot at depth {new_depth} (parent_depth={parent_depth})", "info", "explore")
         snapshot = ExplorationSnapshot(
             session_id=session_id,
             parent_id=parent_snapshot.id if parent_snapshot else None,
@@ -347,7 +355,7 @@ async def run_exploration_step(
             coherence_score=scores.coherence,
             interest_score=scores.interest,
             combined_score=scores.combined,
-            depth=parent_depth + 1,
+            depth=new_depth,
         )
         db.add(snapshot)
 
@@ -622,6 +630,13 @@ async def auto_explore(
     Returns:
         Summary of the auto-exploration run
     """
+    import traceback
+
+    try:
+        await manager.broadcast_log(session_id, f"Auto-explore starting: {num_steps} steps, strategy={strategy}", "info", "explore")
+    except:
+        pass  # WebSocket might not be connected yet
+
     if num_steps < 1 or num_steps > 20:
         raise HTTPException(status_code=400, detail="num_steps must be between 1 and 20")
 
@@ -666,11 +681,12 @@ async def auto_explore(
             current_profile = StyleProfile(**session.base_style_profile_json)
             parent_depth = -1
 
-            # For first step, use starting_snapshot_id; for subsequent steps, use current_snapshot_id
-            target_snapshot_id = starting_snapshot_id if step == 0 else session.current_snapshot_id
+            # Always use starting_snapshot_id as parent - we want parallel branches, not a chain
+            target_snapshot_id = starting_snapshot_id
             await manager.broadcast_log(session_id, f"Target snapshot: {target_snapshot_id} (starting={starting_snapshot_id}, current={session.current_snapshot_id})", "info", "explore")
 
             if target_snapshot_id:
+                # First check session.snapshots from DB
                 for snap in session.snapshots:
                     if snap.id == target_snapshot_id:
                         parent_snapshot = snap
@@ -679,13 +695,28 @@ async def auto_explore(
                         await manager.broadcast_log(session_id, f"Using parent snapshot at depth {parent_depth}", "info", "explore")
                         break
 
+                # If not found in session.snapshots, it might be a snapshot we just created
+                # Query directly from the database
+                if parent_snapshot is None:
+                    await manager.broadcast_log(session_id, f"Snapshot {target_snapshot_id} not in session.snapshots, querying DB directly", "info", "explore")
+                    snap_result = await db.execute(
+                        select(ExplorationSnapshot).where(ExplorationSnapshot.id == target_snapshot_id)
+                    )
+                    parent_snapshot = snap_result.scalar_one_or_none()
+                    if parent_snapshot:
+                        current_profile = StyleProfile(**parent_snapshot.style_profile_json)
+                        parent_depth = parent_snapshot.depth
+                        await manager.broadcast_log(session_id, f"Found snapshot in DB at depth {parent_depth}", "info", "explore")
+
                 if parent_snapshot:
                     try:
                         parent_image_b64 = await storage_service.load_image_raw(
                             parent_snapshot.generated_image_path
                         )
                     except FileNotFoundError:
-                        await manager.broadcast_log(session_id, f"Parent snapshot image not found!", "warning", "explore")
+                        await manager.broadcast_log(session_id, f"Parent snapshot image not found: {parent_snapshot.generated_image_path}", "warning", "explore")
+                else:
+                    await manager.broadcast_log(session_id, f"WARNING: Could not find snapshot {target_snapshot_id} anywhere!", "error", "explore")
             else:
                 try:
                     parent_image_b64 = await storage_service.load_image_raw(
@@ -710,6 +741,7 @@ async def auto_explore(
             subject = current_profile.suggested_test_prompt or current_profile.original_subject or "abstract scene"
 
             # Run exploration step
+            await manager.broadcast_log(session_id, f"Running explore_step with strategy={use_strategy}", "info", "explore")
             mutated_profile, mutation_description, image_b64, prompt_used, scores, strategy_used = \
                 await style_explorer.explore_step(
                     current_profile=current_profile,
@@ -719,15 +751,21 @@ async def auto_explore(
                     preferred_strategies=preferred_strategies,
                     session_id=session_id,
                 )
+            await manager.broadcast_log(session_id, f"explore_step returned: strategy_used={strategy_used.value}, desc={mutation_description[:50]}", "info", "explore")
 
-            # Save generated image
+            # Save generated image with unique filename (include timestamp to prevent overwrites)
+            import time
             snapshot_num = session.total_snapshots + 1
-            image_filename = f"snapshot_{snapshot_num:03d}.png"
+            timestamp = int(time.time() * 1000)  # milliseconds
+            image_filename = f"snapshot_{snapshot_num:03d}_{timestamp}.png"
+            await manager.broadcast_log(session_id, f"Saving image as {image_filename} (total_snapshots was {session.total_snapshots})", "info", "explore")
             image_path = await storage_service.save_image(
                 session_id, image_b64, image_filename
             )
 
             # Create snapshot
+            new_depth = parent_depth + 1
+            await manager.broadcast_log(session_id, f"Creating snapshot: parent_id={parent_snapshot.id if parent_snapshot else None}, parent_depth={parent_depth}, new_depth={new_depth}", "info", "explore")
             snapshot = ExplorationSnapshot(
                 session_id=session_id,
                 parent_id=parent_snapshot.id if parent_snapshot else None,
@@ -740,7 +778,7 @@ async def auto_explore(
                 coherence_score=scores.coherence,
                 interest_score=scores.interest,
                 combined_score=scores.combined,
-                depth=parent_depth + 1,
+                depth=new_depth,
             )
             db.add(snapshot)
 
@@ -774,11 +812,14 @@ async def auto_explore(
                 break
 
     except Exception as e:
+        error_trace = traceback.format_exc()
+        await manager.broadcast_log(session_id, f"Auto-explore error: {str(e)}", "error", "explore")
+        await manager.broadcast_log(session_id, f"Traceback: {error_trace[:500]}", "error", "explore")
         session.status = ExplorationStatus.PAUSED.value
         await db.commit()
         raise HTTPException(
             status_code=500,
-            detail=f"Auto-explore failed at step {len(snapshots_created) + 1}: {str(e)}"
+            detail=f"Auto-explore failed at step {len(snapshots_created) + 1}: {str(e)}\n{error_trace}"
         )
 
     # Set status to paused (ready for more exploration) when complete
@@ -792,6 +833,197 @@ async def auto_explore(
         "best_snapshot_id": best_snapshot_id,
         "best_score": best_score,
         "stopped_reason": stopped_reason,
+    }
+
+
+@router.post("/sessions/{session_id}/chain-explore", response_model=dict)
+async def chain_explore(
+    session_id: str,
+    num_steps: int = Query(5, ge=1, le=20, description="Number of chained steps"),
+    parent_snapshot_id: str | None = Query(None, description="Snapshot to start chain from"),
+    strategy: str | None = Query(None, description="Specific strategy to use"),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Chain exploration - each step builds on the previous.
+
+    Creates a sequential chain: D1 → D2 → D3 → D4 → D5
+    Each new snapshot uses the previous one as its parent.
+    """
+    import traceback
+
+    try:
+        await manager.broadcast_log(session_id, f"Chain-explore starting: {num_steps} steps, strategy={strategy}", "info", "explore")
+    except:
+        pass
+
+    # Get session
+    result = await db.execute(
+        select(ExplorationSession)
+        .options(selectinload(ExplorationSession.snapshots))
+        .where(ExplorationSession.id == session_id)
+    )
+    session = result.scalar_one_or_none()
+
+    if not session:
+        raise HTTPException(status_code=404, detail="Exploration session not found")
+
+    # Start from specified snapshot or current
+    current_parent_id = parent_snapshot_id or session.current_snapshot_id
+
+    session.status = ExplorationStatus.EXPLORING.value
+    await db.commit()
+
+    snapshots_created = []
+    best_snapshot_id = None
+    best_score = 0.0
+
+    try:
+        for step in range(num_steps):
+            await manager.broadcast_log(session_id, f"[Chain step {step + 1}/{num_steps}]", "info", "explore")
+
+            # Reload session to get fresh data
+            result = await db.execute(
+                select(ExplorationSession)
+                .options(selectinload(ExplorationSession.snapshots))
+                .where(ExplorationSession.id == session_id)
+            )
+            session = result.scalar_one()
+
+            # Find current parent
+            parent_snapshot = None
+            parent_image_b64 = None
+            current_profile = StyleProfile(**session.base_style_profile_json)
+            parent_depth = -1
+
+            if current_parent_id:
+                # First check session.snapshots
+                for snap in session.snapshots:
+                    if snap.id == current_parent_id:
+                        parent_snapshot = snap
+                        current_profile = StyleProfile(**snap.style_profile_json)
+                        parent_depth = snap.depth
+                        break
+
+                # Query DB directly if not found
+                if parent_snapshot is None:
+                    snap_result = await db.execute(
+                        select(ExplorationSnapshot).where(ExplorationSnapshot.id == current_parent_id)
+                    )
+                    parent_snapshot = snap_result.scalar_one_or_none()
+                    if parent_snapshot:
+                        current_profile = StyleProfile(**parent_snapshot.style_profile_json)
+                        parent_depth = parent_snapshot.depth
+
+                if parent_snapshot:
+                    await manager.broadcast_log(session_id, f"Chaining from depth {parent_depth}", "info", "explore")
+                    try:
+                        parent_image_b64 = await storage_service.load_image_raw(
+                            parent_snapshot.generated_image_path
+                        )
+                    except FileNotFoundError:
+                        await manager.broadcast_log(session_id, f"Parent image not found!", "warning", "explore")
+            else:
+                # Use reference image
+                try:
+                    parent_image_b64 = await storage_service.load_image_raw(
+                        session.reference_image_path
+                    )
+                except FileNotFoundError:
+                    pass
+
+            # Determine strategy
+            use_strategy = None
+            preferred_strategies = None
+            if strategy:
+                use_strategy = MutationStrategy(strategy)
+            else:
+                preferred_strategies = [
+                    MutationStrategy(s) for s in session.preferred_strategies_json
+                ]
+
+            # Get subject
+            subject = current_profile.suggested_test_prompt or current_profile.original_subject or "abstract scene"
+
+            # Run exploration step
+            mutated_profile, mutation_description, image_b64, prompt_used, scores, strategy_used = \
+                await style_explorer.explore_step(
+                    current_profile=current_profile,
+                    parent_image_b64=parent_image_b64,
+                    subject=subject,
+                    strategy=use_strategy,
+                    preferred_strategies=preferred_strategies,
+                    session_id=session_id,
+                )
+
+            # Save image
+            import time
+            snapshot_num = session.total_snapshots + 1
+            timestamp = int(time.time() * 1000)
+            image_filename = f"snapshot_{snapshot_num:03d}_{timestamp}.png"
+            image_path = await storage_service.save_image(
+                session_id, image_b64, image_filename
+            )
+
+            # Create snapshot
+            new_depth = parent_depth + 1
+            snapshot = ExplorationSnapshot(
+                session_id=session_id,
+                parent_id=parent_snapshot.id if parent_snapshot else None,
+                style_profile_json=mutated_profile.model_dump(),
+                generated_image_path=str(image_path),
+                prompt_used=prompt_used,
+                mutation_strategy=strategy_used.value,
+                mutation_description=mutation_description,
+                novelty_score=scores.novelty,
+                coherence_score=scores.coherence,
+                interest_score=scores.interest,
+                combined_score=scores.combined,
+                depth=new_depth,
+            )
+            db.add(snapshot)
+            session.total_snapshots = snapshot_num
+            await db.commit()
+            await db.refresh(snapshot)
+
+            # Update current_snapshot_id AND current_parent_id for next iteration
+            session.current_snapshot_id = snapshot.id
+            current_parent_id = snapshot.id  # Chain to this snapshot
+            await db.commit()
+
+            await manager.broadcast_log(session_id, f"Created D{new_depth} snapshot", "success", "explore")
+
+            snapshots_created.append({
+                "id": snapshot.id,
+                "depth": new_depth,
+                "combined_score": scores.combined,
+                "mutation": mutation_description[:50],
+            })
+
+            if scores.combined > best_score:
+                best_score = scores.combined
+                best_snapshot_id = snapshot.id
+
+    except Exception as e:
+        error_trace = traceback.format_exc()
+        await manager.broadcast_log(session_id, f"Chain-explore error: {str(e)}", "error", "explore")
+        session.status = ExplorationStatus.PAUSED.value
+        await db.commit()
+        raise HTTPException(
+            status_code=500,
+            detail=f"Chain-explore failed at step {len(snapshots_created) + 1}: {str(e)}"
+        )
+
+    session.status = ExplorationStatus.PAUSED.value
+    await db.commit()
+
+    return {
+        "session_id": session_id,
+        "snapshots_created": len(snapshots_created),
+        "snapshots": snapshots_created,
+        "best_snapshot_id": best_snapshot_id,
+        "best_score": best_score,
+        "final_depth": snapshots_created[-1]["depth"] if snapshots_created else 0,
     }
 
 

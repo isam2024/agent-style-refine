@@ -334,6 +334,11 @@ Only include fields that need to change for the amplification."""
 
             distinctive_trait = data.get("distinctive_trait", "style element")
             amplified_version = data.get("amplified_version", "extreme version")
+            # Ensure these are strings
+            if not isinstance(distinctive_trait, str):
+                distinctive_trait = str(distinctive_trait) if distinctive_trait else "style element"
+            if not isinstance(amplified_version, str):
+                amplified_version = str(amplified_version) if amplified_version else "extreme version"
             style_changes = data.get("style_changes", {})
 
             # Apply changes
@@ -342,14 +347,26 @@ Only include fields that need to change for the amplification."""
             for section, changes in style_changes.items():
                 if section in profile_dict and isinstance(changes, dict):
                     for key, value in changes.items():
-                        if key in profile_dict[section] and value:
+                        if key in profile_dict[section] and value is not None:
+                            existing = profile_dict[section][key]
+                            # Coerce types to match schema
+                            if isinstance(existing, str) and not isinstance(value, str):
+                                if isinstance(value, list):
+                                    value = ", ".join(str(v) for v in value)
+                                elif isinstance(value, dict):
+                                    # Extract description if it's a dict
+                                    value = value.get("description", str(value))
+                                else:
+                                    value = str(value)
+                            elif isinstance(existing, list) and not isinstance(value, list):
+                                value = [value] if value else []
                             profile_dict[section][key] = value
 
             # Update style name
             original_name = profile_dict.get("style_name", "Style")
             profile_dict["style_name"] = f"{original_name} (amplified)"
 
-            # Add amplification to core invariants
+            # Add amplification to core invariants (must be strings)
             profile_dict["core_invariants"] = [amplified_version] + profile_dict.get("core_invariants", [])[:4]
 
             mutation_description = f"Amplify: '{distinctive_trait}' → '{amplified_version}'"
@@ -4296,15 +4313,24 @@ IMPORTANT:
                     # Try to fix common JSON errors from VLM
                     logger.warning(f"JSON parse error for {mutation_type}: {e}. Attempting fixes...")
 
+                    fixed = json_str
+
                     # Fix 1: Remove trailing commas before } or ]
-                    fixed = re.sub(r',(\s*[}\]])', r'\1', json_str)
+                    fixed = re.sub(r',(\s*[}\]])', r'\1', fixed)
 
                     # Fix 2: Add missing commas between values
                     fixed = re.sub(r'"\s*\n\s*"', '",\n"', fixed)
                     fixed = re.sub(r'}\s*\n\s*"', '},\n"', fixed)
                     fixed = re.sub(r']\s*\n\s*"', '],\n"', fixed)
 
-                    # Fix 3: Remove any non-JSON text after the closing brace
+                    # Fix 3: Fix missing commas after closing braces/brackets
+                    fixed = re.sub(r'}\s*"', '}, "', fixed)
+                    fixed = re.sub(r']\s*"', '], "', fixed)
+
+                    # Fix 4: Remove control characters
+                    fixed = re.sub(r'[\x00-\x1f\x7f-\x9f]', ' ', fixed)
+
+                    # Fix 5: Remove any non-JSON text after the closing brace
                     brace_count = 0
                     end_idx = 0
                     for i, c in enumerate(fixed):
@@ -4338,9 +4364,27 @@ IMPORTANT:
 
         analysis = data.get("analysis", "")
         mutation_applied = data.get("mutation_applied", mutation_type)
-        # Ensure mutation_applied is a string (VLM sometimes returns dicts)
+        # Ensure mutation_applied is a string (VLM sometimes returns lists/dicts for chaos mutations)
         if not isinstance(mutation_applied, str):
-            mutation_applied = str(mutation_applied) if mutation_applied else mutation_type
+            if isinstance(mutation_applied, list):
+                # For chaos mutations that return a list of changes
+                descriptions = []
+                for item in mutation_applied:
+                    if isinstance(item, dict):
+                        desc = item.get("description", item.get("change", str(item)))
+                        dim = item.get("dimension", "")
+                        if dim:
+                            descriptions.append(f"{dim}: {desc}")
+                        else:
+                            descriptions.append(str(desc))
+                    else:
+                        descriptions.append(str(item))
+                mutation_applied = "; ".join(descriptions) if descriptions else mutation_type
+            elif isinstance(mutation_applied, dict):
+                # Single dict mutation
+                mutation_applied = mutation_applied.get("description", str(mutation_applied))
+            else:
+                mutation_applied = str(mutation_applied) if mutation_applied else mutation_type
         style_changes = data.get("style_changes", {})
 
         if not style_changes:

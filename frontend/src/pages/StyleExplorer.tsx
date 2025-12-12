@@ -6,6 +6,7 @@ import {
   getExplorationTree,
   exploreStep,
   autoExplore,
+  chainExplore,
   batchExplore,
   toggleSnapshotFavorite,
   snapshotToStyle,
@@ -56,6 +57,7 @@ function StyleExplorer() {
   const [batchIterations, setBatchIterations] = useState(1)
   const [showStrategySelectionModal, setShowStrategySelectionModal] = useState(false)
   const [batchSource, setBatchSource] = useState<'reference' | 'selected' | 'current'>('reference')
+  const [lightboxSnapshot, setLightboxSnapshot] = useState<ExplorationSnapshot | null>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
 
@@ -144,7 +146,7 @@ function StyleExplorer() {
     },
   })
 
-  // Auto exploration
+  // Auto exploration (parallel branches from same parent)
   const autoExploreMutation = useMutation({
     mutationFn: () => {
       setIsExploring(true)
@@ -153,10 +155,27 @@ function StyleExplorer() {
     },
     onSuccess: (result) => {
       setIsExploring(false)
-      // Invalidate and refetch to get fresh data
       queryClient.invalidateQueries({ queryKey: ['exploration', sessionId] })
       queryClient.invalidateQueries({ queryKey: ['exploration-tree', sessionId] })
       console.log(`Auto-explore complete: ${result.snapshots_created} snapshots, best score: ${result.best_score}`)
+    },
+    onError: () => {
+      setIsExploring(false)
+    },
+  })
+
+  // Chain exploration (sequential D1→D2→D3...)
+  const chainExploreMutation = useMutation({
+    mutationFn: () => {
+      setIsExploring(true)
+      setShowLog(true)
+      return chainExplore(sessionId!, autoSteps, selectedSnapshot?.id, selectedStrategy)
+    },
+    onSuccess: (result) => {
+      setIsExploring(false)
+      queryClient.invalidateQueries({ queryKey: ['exploration', sessionId] })
+      queryClient.invalidateQueries({ queryKey: ['exploration-tree', sessionId] })
+      console.log(`Chain-explore complete: ${result.snapshots_created} snapshots, final depth: ${result.final_depth}`)
     },
     onError: () => {
       setIsExploring(false)
@@ -354,8 +373,17 @@ function StyleExplorer() {
               onClick={() => autoExploreMutation.mutate()}
               disabled={isExploring}
               className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Create parallel branches from the same parent"
             >
-              Auto-Explore
+              Branch
+            </button>
+            <button
+              onClick={() => chainExploreMutation.mutate()}
+              disabled={isExploring}
+              className="px-4 py-2 bg-teal-600 text-white rounded-lg hover:bg-teal-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              title="Create sequential chain: D1→D2→D3..."
+            >
+              Chain
             </button>
           </div>
 
@@ -449,6 +477,7 @@ function StyleExplorer() {
                   setSelectedSnapshot(snapshot)
                   setExportModalOpen(true)
                 }}
+                onViewFull={() => setLightboxSnapshot(snapshot)}
               />
             ))}
           </div>
@@ -663,6 +692,105 @@ function StyleExplorer() {
         title="Select Batch Strategies"
         description="Choose which strategies to run in batch exploration"
       />
+
+      {/* Lightbox Modal */}
+      {lightboxSnapshot && (
+        <div
+          className="fixed inset-0 bg-black/90 flex items-center justify-center z-50 p-8"
+          onClick={() => setLightboxSnapshot(null)}
+        >
+          <div className="relative flex flex-col items-center max-w-full max-h-full" onClick={(e) => e.stopPropagation()}>
+            {/* Close button */}
+            <button
+              onClick={() => setLightboxSnapshot(null)}
+              className="absolute -top-2 -right-2 z-10 w-8 h-8 bg-white text-black rounded-full hover:bg-gray-200 flex items-center justify-center text-xl font-bold"
+            >
+              ×
+            </button>
+
+            {/* Image */}
+            <img
+              src={
+                lightboxSnapshot.image_b64
+                  ? `data:image/png;base64,${lightboxSnapshot.image_b64}`
+                  : `/api/files/${extractRelativePath(lightboxSnapshot.generated_image_path || '')}`
+              }
+              alt={lightboxSnapshot.mutation_description || 'Snapshot'}
+              className="max-w-full max-h-[70vh] object-contain rounded-lg"
+              onError={(e) => {
+                console.error('Lightbox image failed to load:', lightboxSnapshot.generated_image_path)
+                e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="400" height="400"%3E%3Crect fill="%23333" width="400" height="400"/%3E%3Ctext x="200" y="200" fill="%23999" text-anchor="middle"%3EImage failed to load%3C/text%3E%3C/svg%3E'
+              }}
+            />
+
+            {/* Info panel */}
+            <div className="mt-4 bg-white/10 text-white p-4 rounded-lg w-full max-w-2xl">
+              <div className="flex items-center gap-3 mb-2 flex-wrap">
+                <span className="px-2 py-1 bg-purple-600 rounded text-sm font-medium">
+                  {getStrategyDisplayName(lightboxSnapshot.mutation_strategy)}
+                </span>
+                <span className="text-gray-300 text-sm">Depth: {lightboxSnapshot.depth}</span>
+                {lightboxSnapshot.scores && (
+                  <span className="text-gray-300 text-sm">
+                    Score: {Math.round(lightboxSnapshot.scores.combined)}
+                  </span>
+                )}
+              </div>
+              <p className="text-gray-200 text-sm">{lightboxSnapshot.mutation_description}</p>
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-400 text-xs">ID:</span>
+                  <code className="text-gray-200 text-xs bg-black/30 px-2 py-1 rounded select-all">{lightboxSnapshot.id}</code>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(lightboxSnapshot.id)}
+                    className="text-xs px-2 py-1 bg-white/20 hover:bg-white/30 rounded"
+                  >
+                    Copy
+                  </button>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-gray-400 text-xs">File:</span>
+                  <code className="text-gray-200 text-xs bg-black/30 px-2 py-1 rounded select-all">{lightboxSnapshot.generated_image_path?.split('/').pop() || 'N/A'}</code>
+                  <button
+                    onClick={() => navigator.clipboard.writeText(lightboxSnapshot.generated_image_path?.split('/').pop() || '')}
+                    className="text-xs px-2 py-1 bg-white/20 hover:bg-white/30 rounded"
+                  >
+                    Copy
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            {/* Navigation arrows - positioned at sides of image */}
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                const currentIndex = sortedSnapshots.findIndex(s => s.id === lightboxSnapshot.id)
+                if (currentIndex < sortedSnapshots.length - 1) {
+                  setLightboxSnapshot(sortedSnapshots[currentIndex + 1])
+                }
+              }}
+              disabled={sortedSnapshots.findIndex(s => s.id === lightboxSnapshot.id) >= sortedSnapshots.length - 1}
+              className="absolute left-4 top-1/2 -translate-y-1/2 p-3 bg-white/20 text-white rounded-full hover:bg-white/40 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              ←
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                const currentIndex = sortedSnapshots.findIndex(s => s.id === lightboxSnapshot.id)
+                if (currentIndex > 0) {
+                  setLightboxSnapshot(sortedSnapshots[currentIndex - 1])
+                }
+              }}
+              disabled={sortedSnapshots.findIndex(s => s.id === lightboxSnapshot.id) <= 0}
+              className="absolute right-4 top-1/2 -translate-y-1/2 p-3 bg-white/20 text-white rounded-full hover:bg-white/40 disabled:opacity-30 disabled:cursor-not-allowed"
+            >
+              →
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -675,6 +803,7 @@ interface SnapshotCardProps {
   onFavorite: () => void
   onSetCurrent: () => void
   onExport: () => void
+  onViewFull: () => void
 }
 
 function SnapshotCard({
@@ -685,6 +814,7 @@ function SnapshotCard({
   onFavorite,
   onSetCurrent,
   onExport,
+  onViewFull,
 }: SnapshotCardProps) {
   const strategyName = getStrategyDisplayName(snapshot.mutation_strategy)
 
@@ -740,6 +870,15 @@ function SnapshotCard({
 
         {/* Hover actions */}
         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2">
+          <button
+            onClick={(e) => { e.stopPropagation(); onViewFull() }}
+            className="p-2 bg-white rounded-full hover:bg-blue-100"
+            title="View full size"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/>
+            </svg>
+          </button>
           <button
             onClick={(e) => { e.stopPropagation(); onFavorite() }}
             className="p-2 bg-white rounded-full hover:bg-yellow-100"
