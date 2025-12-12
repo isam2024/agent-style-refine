@@ -86,6 +86,7 @@ Push it to a creative extreme - go beyond realistic into stylized territory."""
             profile=profile,
             mutation_type="Random Dimension Push",
             mutation_instructions=instructions,
+            image_b64=image_b64,
             session_id=session_id,
         )
 
@@ -5102,33 +5103,37 @@ Write as one continuous flowing description - do NOT use bullet points, numbered
 
             if profile.palette:
                 p = profile.palette
-                if p.dominant_colors:
-                    style_modifiers.append(f"color palette of {p.dominant_colors}")
-                if p.color_mood:
-                    style_modifiers.append(f"{p.color_mood} color mood")
-                if p.saturation_level:
-                    style_modifiers.append(f"{p.saturation_level} saturation")
+                if p.color_descriptions:
+                    colors = ", ".join(p.color_descriptions) if isinstance(p.color_descriptions, list) else p.color_descriptions
+                    style_modifiers.append(f"color palette of {colors}")
+                if p.saturation:
+                    style_modifiers.append(f"{p.saturation} saturation")
+                if p.value_range:
+                    style_modifiers.append(f"{p.value_range} tonal range")
 
             if profile.texture:
                 t = profile.texture
-                if t.surface_quality:
-                    style_modifiers.append(f"{t.surface_quality} surfaces")
-                if t.noise_characteristics:
-                    style_modifiers.append(f"{t.noise_characteristics} texture")
+                if t.surface:
+                    style_modifiers.append(f"{t.surface} surfaces")
+                if t.noise_level:
+                    style_modifiers.append(f"{t.noise_level} noise/grain")
+                if t.special_effects:
+                    effects = ", ".join(t.special_effects) if isinstance(t.special_effects, list) else t.special_effects
+                    style_modifiers.append(f"{effects}")
 
             if profile.lighting:
                 l = profile.lighting
-                if l.light_source:
-                    style_modifiers.append(f"{l.light_source} lighting")
-                if l.shadow_style:
-                    style_modifiers.append(f"{l.shadow_style} shadows")
-                if l.contrast_level:
-                    style_modifiers.append(f"{l.contrast_level} contrast")
+                if l.lighting_type:
+                    style_modifiers.append(f"{l.lighting_type} lighting")
+                if l.shadows:
+                    style_modifiers.append(f"{l.shadows} shadows")
+                if l.highlights:
+                    style_modifiers.append(f"{l.highlights} highlights")
 
             if profile.line_and_shape:
                 ls = profile.line_and_shape
-                if ls.edge_treatment:
-                    style_modifiers.append(f"{ls.edge_treatment} edges")
+                if ls.line_quality:
+                    style_modifiers.append(f"{ls.line_quality} lines")
                 if ls.shape_language:
                     style_modifiers.append(f"{ls.shape_language} shapes")
 

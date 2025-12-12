@@ -649,6 +649,8 @@ async def auto_explore(
 
     try:
         for step in range(num_steps):
+            await manager.broadcast_log(session_id, f"[Auto-explore step {step + 1}/{num_steps}]", "info", "explore")
+
             # Reload session to get updated snapshots (need fresh query for relationships)
             result = await db.execute(
                 select(ExplorationSession)
@@ -666,6 +668,7 @@ async def auto_explore(
 
             # For first step, use starting_snapshot_id; for subsequent steps, use current_snapshot_id
             target_snapshot_id = starting_snapshot_id if step == 0 else session.current_snapshot_id
+            await manager.broadcast_log(session_id, f"Target snapshot: {target_snapshot_id} (starting={starting_snapshot_id}, current={session.current_snapshot_id})", "info", "explore")
 
             if target_snapshot_id:
                 for snap in session.snapshots:
@@ -673,6 +676,7 @@ async def auto_explore(
                         parent_snapshot = snap
                         current_profile = StyleProfile(**snap.style_profile_json)
                         parent_depth = snap.depth
+                        await manager.broadcast_log(session_id, f"Using parent snapshot at depth {parent_depth}", "info", "explore")
                         break
 
                 if parent_snapshot:
@@ -681,7 +685,7 @@ async def auto_explore(
                             parent_snapshot.generated_image_path
                         )
                     except FileNotFoundError:
-                        pass
+                        await manager.broadcast_log(session_id, f"Parent snapshot image not found!", "warning", "explore")
             else:
                 try:
                     parent_image_b64 = await storage_service.load_image_raw(
@@ -740,12 +744,16 @@ async def auto_explore(
             )
             db.add(snapshot)
 
-            # Update session
+            # Update session count
             session.total_snapshots = snapshot_num
-            session.current_snapshot_id = snapshot.id
 
+            # Commit to get the snapshot ID
             await db.commit()
             await db.refresh(snapshot)
+
+            # NOW update current_snapshot_id with the actual ID
+            session.current_snapshot_id = snapshot.id
+            await db.commit()
 
             snapshots_created.append({
                 "id": snapshot.id,
